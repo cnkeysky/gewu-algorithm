@@ -1,0 +1,11 @@
+[package]
+name = "gewu-practice"
+version = "0.1.0"
+description = "Deterministic practice state machines for gewu-algorithm"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gewu-domain = { path = "../domain" }
+thiserror.workspace = true

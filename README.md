@@ -80,7 +80,7 @@ Directories are introduced as implementation begins. The intended architecture i
 
 ## Contributing
 
-The implementation has not started. Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) and the relevant architecture decision records. Changes to public schemas, the core protocol, practice scoring, or template semantics require an ADR and compatibility analysis.
+The Rust domain, template-validation, and Shadow Typing practice foundations are implemented; editor integration remains pre-alpha work. Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) and the relevant architecture decision records. Changes to public schemas, the core protocol, practice scoring, or template semantics require an ADR and compatibility analysis.
 
 ## License
 

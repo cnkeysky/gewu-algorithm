@@ -15,7 +15,7 @@ Exit when one BFS unit and one contrasting unit can be represented without arbit
 
 ## Stage 1: Practice Engine Spike
 
-Status: next.
+Status: complete as of 2026-08-04.
 
 - implement deterministic Shadow Typing state transitions;
 - define normalization and editor mutation behavior;
@@ -25,6 +25,8 @@ Status: next.
 Exit when event replay is deterministic and attempt facts are stable.
 
 ## Stage 2: VS Code Interaction Spike
+
+Status: next.
 
 - compare native document, custom document, and Webview approaches;
 - test Undo/Redo, multi-cursor, formatting, input methods, Tab, and external edits;

@@ -12,6 +12,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "gewu-practice"
+version = "0.1.0"
+dependencies = [
+ "gewu-domain",
+ "thiserror",
+]
+
+[[package]]
 name = "gewu-template"
 version = "0.1.0"
 dependencies = [
