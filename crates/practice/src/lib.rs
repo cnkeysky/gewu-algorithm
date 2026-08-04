@@ -510,13 +510,9 @@ impl ShadowTypingSession {
     fn delete_range_indices(
         &mut self,
         start: usize,
-        end: usize,
+        _end: usize,
     ) -> Result<TransitionOutcome, TransitionError> {
-        let candidate = replace_char_range(&self.accepted, start, end, "");
-        if !self.target.starts_with(&candidate) {
-            return Err(TransitionError::WouldBreakCanonicalPrefix);
-        }
-        self.accepted = candidate;
+        self.accepted = self.accepted.chars().take(start).collect();
         self.correction_count += 1;
         Ok(TransitionOutcome::Accepted)
     }
@@ -533,9 +529,6 @@ impl ShadowTypingSession {
         let candidate = replace_char_range(&self.accepted, range.start, range.end, &text);
         if candidate == self.accepted {
             return Err(TransitionError::NoOpReplacement);
-        }
-        if text.is_empty() && !self.target.starts_with(&candidate) {
-            return Err(TransitionError::WouldBreakCanonicalPrefix);
         }
         let outcome = self.try_candidate(candidate, text.chars().count(), range.start)?;
         if outcome == TransitionOutcome::Accepted {

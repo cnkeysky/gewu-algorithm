@@ -36,6 +36,7 @@ temp/
 
 # Editors
 .idea/
+.cph/
 *.swp
 *.swo
 .vscode/*

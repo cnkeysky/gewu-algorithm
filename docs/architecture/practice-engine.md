@@ -66,7 +66,7 @@ Paste and multi-character edits are `InsertText` or `ReplaceRange`, not special 
 The Stage 1 state keeps only a canonical accepted prefix:
 
 - `InsertText` appends at the prefix cursor. A single character and a multi-character paste use the same atomic comparison; the whole input is accepted or rejected.
-- `DeleteBackward` and `DeleteRange` are accepted only when the resulting text is still a canonical prefix. A range that would leave a gap returns a typed error.
+- `DeleteBackward` removes the requested suffix. `DeleteRange` rewinds the accepted prefix to the range start, discarding all later accepted text so no gap can remain.
 - `ReplaceRange` is one atomic transaction. Replacement text must produce a canonical prefix; mismatching replacement input is rejected without partially changing state.
 - `Restart` clears the accepted prefix but retains accumulated facts for the same session.
 - `Stop` creates a terminal stopped attempt. Exact completion creates a terminal completed attempt automatically.

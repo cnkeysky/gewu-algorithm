@@ -26,13 +26,15 @@ Exit when event replay is deterministic and attempt facts are stable.
 
 ## Stage 2: VS Code Interaction Spike
 
-Status: next.
+Status: in progress; the host-free TypeScript spike and design decision are complete, but the real extension-host checklist remains.
 
 - compare native document, custom document, and Webview approaches;
 - test Undo/Redo, multi-cursor, formatting, input methods, Tab, and external edits;
 - select the lowest-complexity reliable design in a new ADR.
 
-Exit when repeated sessions do not corrupt documents or engine state.
+The current evidence selects a native editor with a dedicated untitled practice document and decorations. See [the spike report](architecture/vscode-interaction-spike.md), [the manual checklist](development/vscode-spike-checklist.md), and [ADR 0007](decisions/0007-vscode-native-practice-document.md).
+
+Exit when repeated sessions do not corrupt documents or engine state and the manual host checklist passes.
 
 ## Stage 3: Local MVP
 

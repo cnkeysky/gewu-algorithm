@@ -1,6 +1,6 @@
 # Development Setup
 
-The Rust workspace is scaffolded with the `gewu-domain` and `gewu-template` crates. Node.js and editor workspaces will be added only when their roadmap stages begin.
+The Rust workspace contains the domain, template, and practice crates. The Stage 2 VS Code spike lives under `editors/vscode` and includes a minimal extension host entry point; it does not yet launch the Rust core.
 
 ## Expected Toolchain
 
@@ -24,6 +24,20 @@ cargo test --workspace
 ```
 
 `Cargo.lock` is committed because this repository produces applications and editor tooling, not only reusable libraries.
+
+## VS Code Spike Checks
+
+From `editors/vscode`, using the system-provided Node.js `v24.15.0` and npm `11.17.0`:
+
+```bash
+npm install
+npm run format
+npm run lint
+npm run typecheck
+npm test
+```
+
+Open the repository root in VS Code and press F5 with `Run GEWU Interaction Spike` to run the extension-development-host entry point. Host and IME behavior remains a manual release check; the current environment may not provide a working VS Code host.
 
 ## Required Repository Commands
 

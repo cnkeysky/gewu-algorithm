@@ -184,19 +184,18 @@ fn deletion_and_replacement_preserve_the_canonical_prefix() {
 }
 
 #[test]
-fn deleting_inside_a_prefix_is_an_explicit_error_and_does_not_mutate_state() {
+fn deleting_inside_a_prefix_rewinds_to_the_edit_position() {
     let mut session = started("abcd");
     assert_eq!(
         session.apply(timed(ShadowTypingEvent::InsertText("abc".to_owned()), 1, 1)),
         Ok(TransitionOutcome::Accepted)
     );
-    let before = session.clone();
-
     assert_eq!(
         session.apply(timed(ShadowTypingEvent::DeleteRange(range(1, 2)), 2, 2)),
-        Err(TransitionError::WouldBreakCanonicalPrefix)
+        Ok(TransitionOutcome::Accepted)
     );
-    assert_eq!(session, before);
+    assert_eq!(session.accepted_text(), "a");
+    assert_eq!(session.correction_count(), 1);
 }
 
 #[test]

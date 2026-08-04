@@ -1,0 +1,45 @@
+{
+  "name": "gewu-algorithm",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "cnkeysky",
+  "displayName": "GEWU Algorithm (Interaction Spike)",
+  "description": "Stage 2 VS Code interaction spike for gewu-algorithm",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "main": "./dist/src/extension.js",
+  "extensionKind": ["workspace"],
+  "categories": ["Other"],
+  "activationEvents": [
+    "onCommand:gewuAlgorithm.startShadowTyping",
+    "onCommand:gewuAlgorithm.stopShadowTyping"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "gewuAlgorithm.startShadowTyping",
+        "title": "GEWU: Start Shadow Typing (Spike)"
+      },
+      {
+        "command": "gewuAlgorithm.stopShadowTyping",
+        "title": "GEWU: Stop Shadow Typing (Spike)"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "format": "prettier --check src test",
+    "format:write": "prettier --write src test",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node dist/test/interaction.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "prettier": "^3.6.0",
+    "typescript": "^5.9.0"
+  }
+}

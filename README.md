@@ -80,7 +80,7 @@ Directories are introduced as implementation begins. The intended architecture i
 
 ## Contributing
 
-The Rust domain, template-validation, and Shadow Typing practice foundations are implemented; editor integration remains pre-alpha work. Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) and the relevant architecture decision records. Changes to public schemas, the core protocol, practice scoring, or template semantics require an ADR and compatibility analysis.
+The Rust domain, template-validation, and Shadow Typing practice foundations are implemented. The Stage 2 host-free VS Code interaction spike selects a native editor with a dedicated untitled practice document; real extension-host and IME checks remain before editor integration is considered complete. Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) and the relevant architecture decision records. Changes to public schemas, the core protocol, practice scoring, or template semantics require an ADR and compatibility analysis.
 
 ## License
 

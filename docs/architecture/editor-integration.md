@@ -22,9 +22,9 @@ TypeScript is the primary implementation language for the VS Code extension. The
 2. controlled virtual or custom document;
 3. Webview only when required for reliable behavior.
 
-The implementation must define behavior for paste, multi-cursor, Undo/Redo, formatting, completion providers, snippets, Tab, input methods, line endings, and external mutations.
+The Stage 2 spike compares the three options and selects native text editor plus decorations backed by a dedicated untitled practice document. See [the spike report](vscode-interaction-spike.md) and [ADR 0007](../decisions/0007-vscode-native-practice-document.md). The implementation defines behavior for paste, multi-cursor, Undo/Redo, formatting, completion providers, snippets, Tab, input methods, line endings, and external mutations. IME composition remains a manual real-host check until a reliable VS Code automation boundary is established.
 
-The extension launches a packaged core binary compatible with the host platform and performs a protocol handshake before enabling practice commands.
+The production extension will launch a packaged core binary compatible with the host platform and perform a protocol handshake before enabling practice commands. The Stage 2 spike intentionally uses a built-in target and does not launch the core; this keeps the interaction evidence independent from the not-yet-implemented protocol boundary.
 
 ## Zed
 
