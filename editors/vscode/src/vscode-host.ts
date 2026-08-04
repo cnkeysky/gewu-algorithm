@@ -228,13 +228,14 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
 export async function openPracticeDocument(
   sessionId: string,
   viewColumn: vscode.ViewColumn = vscode.ViewColumn.Active,
+  initialText = "",
 ): Promise<VsCodePracticeHost> {
   // VS Code allocates the untitled URI; the logical session ID remains in the
   // controller URI/diagnostic path until a production URI policy is defined.
   void sessionId;
   const document = await vscode.workspace.openTextDocument({
     language: "plaintext",
-    content: "",
+    content: initialText,
   });
   const editor = await vscode.window.showTextDocument(document, {
     viewColumn,

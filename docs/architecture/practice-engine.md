@@ -102,7 +102,7 @@ The deterministic core never reads a clock. Timed events carry caller-observed c
 
 ## Flow Recall (`flow_recall`)
 
-The MVP Flow Recall mode uses reviewed ordered concepts with optional aliases. It checks whether required states or steps are reconstructed in an acceptable order. It must not require exact prose matching.
+The MVP Flow Recall mode uses reviewed ordered concepts with optional aliases. It accepts a reviewed stable step ID, an exact reviewed alias after case/punctuation normalization, or an answer containing every reviewed concept token. It checks steps in order and records prompt reveals separately from rejected answers. It must not require exact prose matching.
 
 Semantic LLM grading is out of scope for deterministic completion. An LLM may later provide non-authoritative feedback alongside a deterministic result.
 

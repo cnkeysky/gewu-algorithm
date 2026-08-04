@@ -3,6 +3,29 @@
 version = 4
 
 [[package]]
+name = "gewu-cli"
+version = "0.1.0"
+dependencies = [
+ "gewu-core",
+ "gewu-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "gewu-core"
+version = "0.1.0"
+dependencies = [
+ "gewu-domain",
+ "gewu-practice",
+ "gewu-protocol",
+ "gewu-storage",
+ "gewu-template",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "gewu-domain"
 version = "0.1.0"
 dependencies = [
@@ -16,6 +39,24 @@ name = "gewu-practice"
 version = "0.1.0"
 dependencies = [
  "gewu-domain",
+ "thiserror",
+]
+
+[[package]]
+name = "gewu-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "gewu-storage"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

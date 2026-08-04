@@ -1,6 +1,13 @@
 #![forbid(unsafe_code)]
 //! Deterministic, editor-independent practice state machines.
 
+mod flow;
+
+pub use flow::{
+    FlowRecallAttempt, FlowRecallConfig, FlowRecallEvent, FlowRecallOutcome, FlowRecallSession,
+    FlowRecallStartError, FlowRecallTransitionError,
+};
+
 use std::time::Duration;
 
 use gewu_domain::{Normalization, PracticeMode, Revision, UnitId};

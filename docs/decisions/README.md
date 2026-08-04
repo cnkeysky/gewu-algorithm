@@ -13,3 +13,4 @@ Statuses are `proposed`, `accepted`, `deprecated`, and `superseded`.
 | [0005](0005-directory-naming.md) | Use concise internal directories and branded external package names | Accepted |
 | [0006](0006-practice-mode-terminology.md) | Use precise practice-mode identifiers instead of Code, Flow, Thinking, and Transfer | Accepted |
 | [0007](0007-vscode-native-practice-document.md) | Use a native editor with a dedicated practice document for Shadow Typing | Accepted for Stage 2 spike |
+| [0008](0008-local-checkpoints.md) | Keep interrupted practice separate from terminal attempts | Accepted |

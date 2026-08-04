@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "publisher": "cnkeysky",
-  "displayName": "GEWU Algorithm (Interaction Spike)",
-  "description": "Stage 2 VS Code interaction spike for gewu-algorithm",
+  "displayName": "GEWU Algorithm",
+  "description": "Offline deliberate algorithm practice through the GEWU Rust core",
   "license": "MIT",
   "engines": {
     "vscode": "^1.96.0"
@@ -14,19 +14,43 @@
   "categories": ["Other"],
   "activationEvents": [
     "onCommand:gewuAlgorithm.startShadowTyping",
-    "onCommand:gewuAlgorithm.stopShadowTyping"
+    "onCommand:gewuAlgorithm.startFlowRecall",
+    "onCommand:gewuAlgorithm.submitFlowRecall",
+    "onCommand:gewuAlgorithm.revealFlowPrompt",
+    "onCommand:gewuAlgorithm.resumePractice",
+    "onCommand:gewuAlgorithm.discardCheckpoint",
+    "onCommand:gewuAlgorithm.showHistory",
+    "onCommand:gewuAlgorithm.deleteHistory",
+    "onCommand:gewuAlgorithm.stopShadowTyping",
+    "onCommand:gewuAlgorithm.stopPractice",
+    "onCommand:gewuAlgorithm.restartPractice"
   ],
   "contributes": {
     "commands": [
       {
         "command": "gewuAlgorithm.startShadowTyping",
-        "title": "GEWU: Start Shadow Typing (Spike)"
+        "title": "GEWU: Start Shadow Typing"
       },
+      { "command": "gewuAlgorithm.startFlowRecall", "title": "GEWU: Start Flow Recall" },
+      { "command": "gewuAlgorithm.submitFlowRecall", "title": "GEWU: Submit Flow Recall Answer" },
+      { "command": "gewuAlgorithm.revealFlowPrompt", "title": "GEWU: Reveal Flow Recall Prompt" },
+      { "command": "gewuAlgorithm.resumePractice", "title": "GEWU: Resume Interrupted Practice" },
+      { "command": "gewuAlgorithm.discardCheckpoint", "title": "GEWU: Discard Interrupted Practice" },
+      { "command": "gewuAlgorithm.showHistory", "title": "GEWU: Show Recent Attempts" },
+      { "command": "gewuAlgorithm.deleteHistory", "title": "GEWU: Delete Local History" },
       {
         "command": "gewuAlgorithm.stopShadowTyping",
-        "title": "GEWU: Stop Shadow Typing (Spike)"
+        "title": "GEWU: Stop Shadow Typing"
+      },
+      { "command": "gewuAlgorithm.stopPractice", "title": "GEWU: Stop Practice" },
+      { "command": "gewuAlgorithm.restartPractice", "title": "GEWU: Restart Practice" }
+    ],
+    "configuration": {
+      "title": "GEWU Algorithm",
+      "properties": {
+        "gewuAlgorithm.cargoPath": { "type": "string", "default": "cargo", "description": "Path to the Rust cargo executable used by the local development core." }
       }
-    ]
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -34,7 +58,7 @@
     "format:write": "prettier --write src test",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node dist/test/interaction.js"
+    "test": "npm run build && node dist/test/interaction.js && node dist/test/core-session.js"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

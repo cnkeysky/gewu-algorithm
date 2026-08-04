@@ -1,0 +1,12 @@
+[package]
+name = "gewu-protocol"
+version = "0.1.0"
+description = "Versioned JSON-RPC contracts for gewu-algorithm clients"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

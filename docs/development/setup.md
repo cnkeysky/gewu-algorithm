@@ -1,6 +1,6 @@
 # Development Setup
 
-The Rust workspace contains the domain, template, and practice crates. The Stage 2 VS Code spike lives under `editors/vscode` and includes a minimal extension host entry point; it does not yet launch the Rust core.
+The Rust workspace contains domain, template, practice, protocol, storage, and core crates plus the `gewu` CLI. The Stage 3 VS Code client starts the local Rust core over stdio during development.
 
 ## Expected Toolchain
 
@@ -37,7 +37,7 @@ npm run typecheck
 npm test
 ```
 
-Open the repository root in VS Code and press F5 with `Run GEWU Interaction Spike` to run the extension-development-host entry point. Host and IME behavior remains a manual release check; the current environment may not provide a working VS Code host.
+Open the repository root in VS Code and press F5 with `Run GEWU Local MVP`. The development host uses an isolated `.vscode-test/user-data` profile so it does not restore a prior `Untitled-*` editor. Run `GEWU: Start Shadow Typing`, select BFS or Binary Search, and use `GEWU: Resume Interrupted Practice` after a controlled restart. Host and IME behavior remains a manual release check.
 
 ## Required Repository Commands
 

@@ -2,8 +2,8 @@
 
 Run this checklist in a real extension host before Stage 2 is marked complete. Record the VS Code version, operating system, keyboard layout, and result in the issue or release notes.
 
-- Open the repository root in VS Code, press F5 with `Run GEWU Interaction Spike`, and confirm the extension host activates without errors.
-- Run `GEWU: Start Shadow Typing (Spike)` and confirm the command opens a dedicated untitled practice editor.
+- Open the repository root in VS Code, press F5 with `Run GEWU Local MVP`, and confirm the extension host activates without errors.
+- Run `GEWU: Start Shadow Typing`, select a local fixture, and confirm the command opens a dedicated untitled practice editor.
 - Confirm the current canonical line is visible as ghost text and advances after accepted input. A leading indentation first shows compact `4sp` and/or `Tab` guidance, then the line body; a newline boundary shows `Enter`.
 
 - Start a session from a source document and confirm the source document remains byte-for-byte unchanged.

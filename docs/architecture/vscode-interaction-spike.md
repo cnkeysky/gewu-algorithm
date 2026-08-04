@@ -2,7 +2,7 @@
 
 ## Scope
 
-This Stage 2 spike validates the editor boundary for exact-match Shadow Typing. It includes a minimal runnable extension entry point and command, but it does not launch the Rust core, persist attempts, score sessions, or provide a complete product workflow. The implementation under `editors/vscode` contains a pure TypeScript transaction policy and a small VS Code API host adapter.
+This Stage 2 report records the editor-boundary decision for exact-match Shadow Typing. Stage 3 retains its native untitled-document adapter, but now launches the Rust core over stdio, persists through the core, and renders core-returned state. The pure TypeScript transaction policy remains regression evidence for host event translation; it is not the production scoring owner.
 
 ## Options Compared
 

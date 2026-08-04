@@ -42,7 +42,7 @@ The first usable milestone will provide:
 - local, versioned `AlgorithmUnit` content;
 - exact-match shadow typing for one supported editor;
 - deterministic progress and error feedback;
-- Code and Flow practice modes;
+- serialized `shadow_typing` and `flow_recall` practice modes;
 - local practice history;
 - a Rust core with a versioned client protocol;
 - a VS Code extension as the first complete editor integration.
@@ -53,7 +53,8 @@ Zed integration remains a later compatibility target because its extension surfa
 
 ```text
 gewu-algorithm/
-├── crates/          # Rust domain, practice, template, review, and protocol crates
+├── crates/          # Rust domain, template, practice, protocol, storage, and core crates
+├── apps/            # CLI and stdio core host
 ├── editors/         # VS Code and future editor adapters
 ├── schemas/         # Versioned public data schemas
 ├── packs/           # Built-in content packs during the pre-v1 phase
@@ -71,6 +72,8 @@ Directories are introduced as implementation begins. The intended architecture i
 - [MVP scope](docs/product/mvp.md)
 - [Domain terminology](docs/architecture/terminology.md)
 - [Architecture overview](docs/architecture/overview.md)
+- [Local protocol](docs/architecture/protocol.md)
+- [Local persistence](docs/architecture/persistence.md)
 - [Domain model](docs/architecture/domain-model.md)
 - [Template system](docs/architecture/template-system.md)
 - [Coding standards](docs/development/coding-standards.md)
@@ -80,7 +83,7 @@ Directories are introduced as implementation begins. The intended architecture i
 
 ## Contributing
 
-The Rust domain, template-validation, and Shadow Typing practice foundations are implemented. The Stage 2 host-free VS Code interaction spike selects a native editor with a dedicated untitled practice document; real extension-host and IME checks remain before editor integration is considered complete. Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) and the relevant architecture decision records. Changes to public schemas, the core protocol, practice scoring, or template semantics require an ADR and compatibility analysis.
+The Stage 3 local MVP implementation provides a Rust core, JSON-RPC stdio host, local attempt/checkpoint persistence, deterministic `shadow_typing` and `flow_recall`, and a VS Code client. Extension-host, IME, and packaged-binary verification remain manual release checks. Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) and the relevant architecture decision records. Changes to public schemas, the core protocol, practice scoring, or template semantics require an ADR and compatibility analysis.
 
 ## License
 

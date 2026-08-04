@@ -2,12 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run GEWU Interaction Spike",
+      "name": "Run GEWU Local MVP",
       "type": "extensionHost",
       "request": "launch",
       "runtimeExecutable": "${execPath}",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode"
+        "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
+        "--user-data-dir=${workspaceFolder}/.vscode-test/user-data",
+        "--new-window"
       ],
       "outFiles": [
         "${workspaceFolder}/editors/vscode/dist/**/*.js"

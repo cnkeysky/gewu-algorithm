@@ -1,0 +1,17 @@
+[package]
+name = "gewu-cli"
+version = "0.1.0"
+description = "Local CLI and stdio JSON-RPC host for gewu-algorithm"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "gewu"
+path = "src/main.rs"
+
+[dependencies]
+gewu-core = { path = "../../crates/core" }
+gewu-protocol = { path = "../../crates/protocol" }
+serde.workspace = true
+serde_json.workspace = true

@@ -12,6 +12,8 @@ import {
   transactionEvent,
   translateHostTransaction,
 } from "../src/interaction.js";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -61,6 +63,27 @@ function run(name: string, test: () => void): void {
     throw error;
   }
 }
+
+run("shares the v1 handshake golden request with Rust", () => {
+  const fixture = readFileSync(
+    resolve(process.cwd(), "../../fixtures/protocol/v1-handshake.ndjson"),
+    "utf8",
+  );
+  const request = JSON.parse(fixture.split("\n")[0] ?? "") as {
+    jsonrpc?: string;
+    method?: string;
+    params?: {
+      protocol_min?: number;
+      protocol_max?: number;
+      client_version?: string;
+    };
+  };
+  equal(request.jsonrpc, "2.0", "golden JSON-RPC version");
+  equal(request.method, "gewu/handshake", "golden handshake method");
+  equal(request.params?.protocol_min, 1, "golden minimum protocol version");
+  equal(request.params?.protocol_max, 1, "golden maximum protocol version");
+  equal(request.params?.client_version, "0.1.0", "golden client version");
+});
 
 run("accepts exact inserts and exposes decorations", () => {
   const session = new ShadowTypingEditorSession("ab");

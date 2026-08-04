@@ -1,0 +1,16 @@
+[package]
+name = "gewu-core"
+version = "0.1.0"
+description = "Application services for offline gewu-algorithm practice"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gewu-domain = { path = "../domain" }
+gewu-practice = { path = "../practice" }
+gewu-protocol = { path = "../protocol" }
+gewu-storage = { path = "../storage" }
+gewu-template = { path = "../template" }
+serde_json.workspace = true
+thiserror.workspace = true

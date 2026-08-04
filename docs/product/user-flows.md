@@ -16,6 +16,18 @@ Open template view
 
 Failure states must identify whether the problem is invalid content, an unavailable core process, unsupported editor behavior, or persistence failure.
 
+## Resume Interrupted Practice
+
+```text
+VS Code closes or core process exits while session remains active
+  -> core has saved a versioned-unit checkpoint after each accepted/rejected event
+  -> no terminal attempt is created
+  -> user chooses Resume Interrupted Practice or Discard Interrupted Practice
+  -> core verifies the content revision before replaying typed events
+```
+
+Explicit Stop creates a stopped attempt and clears the checkpoint. Completion creates a completed attempt and clears it. Arbitrary selected editor text is not saved as an MVP checkpoint.
+
 ## Practice Flow Recall
 
 ```text

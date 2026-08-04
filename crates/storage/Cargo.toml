@@ -1,0 +1,12 @@
+[package]
+name = "gewu-storage"
+version = "0.1.0"
+description = "Offline atomic local persistence for gewu-algorithm"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
