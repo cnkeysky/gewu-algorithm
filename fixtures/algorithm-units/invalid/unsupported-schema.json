@@ -1,0 +1,11 @@
+{
+  "schema_version": "2", "id": "graph.invalid", "revision": 1, "status": "draft", "title": "Unsupported schema",
+  "position": {"domain": "graph", "category": "traversal", "prerequisites": []},
+  "problem": {"question": "Question", "scope": ["Scope"], "out_of_scope": []},
+  "understanding": {"summary": "Summary", "confidence": "low", "alternatives": [], "failure_conditions": []},
+  "implementations": [{"key": "python-teaching", "language": "python", "source": "code/python.py", "purpose": "teaching", "normalization": {"line_endings": "lf", "trailing_newline": true, "whitespace": "strict"}}],
+  "patterns": [], "relationships": [],
+  "practice": {"shadow_typing": [{"implementation": "python-teaching", "strict": true}], "flow_recall": {"steps": [{"id": "first-step", "prompt": "Prompt", "concepts": ["concept"], "aliases": []}]}},
+  "validation": {"schema": "passed", "code": "pending", "content_review": "pending", "transfer_review": "pending", "last_validated_at": null},
+  "provenance": {"authors": ["maintainer"], "generated_by": null, "reviewed_by": [], "sources": [], "license": "MIT"}, "supersedes": []
+}

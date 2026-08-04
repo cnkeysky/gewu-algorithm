@@ -4,6 +4,8 @@ The roadmap is evidence-driven. Dates may guide planning, but each stage exits o
 
 ## Stage 0: Repository and Model Baseline
 
+Status: complete as of 2026-08-04. The schema remains pre-v1 and may still evolve through explicit compatibility review.
+
 - establish requirements, architecture, ADRs, and engineering standards;
 - draft the `AlgorithmUnit` schema;
 - create representative valid and invalid fixtures;
@@ -12,6 +14,8 @@ The roadmap is evidence-driven. Dates may guide planning, but each stage exits o
 Exit when one BFS unit and one contrasting unit can be represented without arbitrary required fields.
 
 ## Stage 1: Practice Engine Spike
+
+Status: next.
 
 - implement deterministic Shadow Typing state transitions;
 - define normalization and editor mutation behavior;

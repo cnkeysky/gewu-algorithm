@@ -1,17 +1,29 @@
 # Development Setup
 
-The implementation workspace has not been scaffolded. This document defines the setup contract that the first code change must make executable.
+The Rust workspace is scaffolded with the `gewu-domain` and `gewu-template` crates. Node.js and editor workspaces will be added only when their roadmap stages begin.
 
 ## Expected Toolchain
 
-- stable Rust installed through `rustup`;
+- the system's current stable Rust toolchain installed through `rustup` (1.97.1 when this workspace was initialized), selected by `rust-toolchain.toml`;
 - `rustfmt` and `clippy` components;
 - an active Node.js LTS release for VS Code development;
 - one repository-selected Node package manager with a committed lockfile;
 - VS Code for extension integration tests;
 - Git.
 
-Exact minimum versions must be pinned when the corresponding workspace is created, using repository files such as `rust-toolchain.toml`, `.nvmrc`, and `package.json#engines`.
+The repository initially uses the tool versions available in the development environment and selects them through files such as `rust-toolchain.toml`, `.nvmrc`, and `package.json#engines`. Supporting an older Rust MSRV requires a separate compatibility decision and CI coverage; the selected toolchain must not be lowered speculatively.
+
+## Current Rust Checks
+
+Run the complete current Rust gate from the repository root:
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+```
+
+`Cargo.lock` is committed because this repository produces applications and editor tooling, not only reusable libraries.
 
 ## Required Repository Commands
 

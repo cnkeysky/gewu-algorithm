@@ -1,0 +1,111 @@
+use std::{error::Error, path::PathBuf};
+
+use gewu_domain::{CheckStatus, Confidence, RelationshipType};
+use gewu_template::{LoadError, load_algorithm_unit};
+
+fn fixture(path: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/algorithm-units")
+        .join(path)
+}
+
+#[test]
+fn loads_bfs_with_a_contained_source_file() -> Result<(), Box<dyn Error>> {
+    let unit = load_algorithm_unit(fixture("valid/graph/bfs/unit.json"))?;
+
+    assert_eq!(unit.id.as_str(), "graph.bfs");
+    assert_eq!(unit.revision.get(), 1);
+    assert_eq!(unit.tags, ["graph", "queue", "traversal"]);
+    assert_eq!(unit.position.domain, "graph");
+    assert_eq!(
+        unit.position.prerequisites[0].as_str(),
+        "graph.representation"
+    );
+    assert!(unit.problem.question.contains("nondecreasing distance"));
+    assert_eq!(unit.understanding.confidence, Confidence::Medium);
+    assert_eq!(unit.implementations.len(), 1);
+    assert_eq!(unit.implementations[0].source, "code/python.py");
+    assert_eq!(unit.implementations[0].purpose, "teaching");
+    assert!(unit.implementations[0].normalization.trailing_newline);
+    assert!(
+        unit.implementations[0]
+            .source_path
+            .ends_with("code/python.py")
+    );
+    assert_eq!(
+        unit.practice.shadow_typing[0].implementation,
+        "python-teaching"
+    );
+    assert_eq!(unit.patterns[0].id, "frontier-expansion");
+    assert_eq!(
+        unit.relationships[0].relationship_type,
+        RelationshipType::ContrastsWith
+    );
+    assert!(unit.relationships[0].boundary.contains("DFS"));
+    assert_eq!(unit.validation.schema, CheckStatus::Passed);
+    assert_eq!(unit.provenance.license, "MIT");
+    Ok(())
+}
+
+#[test]
+fn loads_a_contrasting_binary_search_unit() -> Result<(), Box<dyn Error>> {
+    let unit = load_algorithm_unit(fixture("valid/search/binary-search/unit.json"))?;
+
+    assert_eq!(unit.id.as_str(), "search.binary-search");
+    assert_eq!(unit.practice.flow_recall_steps.len(), 2);
+    assert_eq!(unit.patterns[0].id, "interval-halving");
+    assert_eq!(
+        unit.relationships[0].target.as_str(),
+        "search.linear-search"
+    );
+    Ok(())
+}
+
+#[test]
+fn rejects_a_non_dotted_unit_id() {
+    let result = load_algorithm_unit(fixture("invalid/invalid-id.json"));
+
+    match result {
+        Err(LoadError::Validation { path, .. }) => assert_eq!(path, "id"),
+        other => panic!("expected an ID validation error, got {other:?}"),
+    }
+}
+
+#[test]
+fn rejects_an_unsupported_schema_version() {
+    let result = load_algorithm_unit(fixture("invalid/unsupported-schema.json"));
+
+    match result {
+        Err(LoadError::UnsupportedSchemaVersion { found }) => assert_eq!(found, "2"),
+        other => panic!("expected an unsupported schema error, got {other:?}"),
+    }
+}
+
+#[test]
+fn rejects_a_missing_implementation_source() {
+    let result = load_algorithm_unit(fixture("invalid/missing-source.json"));
+
+    assert!(matches!(result, Err(LoadError::SourceUnavailable { .. })));
+}
+
+#[test]
+fn rejects_a_traversing_implementation_source() {
+    let result = load_algorithm_unit(fixture("invalid/traversing-source.json"));
+
+    match result {
+        Err(LoadError::Validation { path, .. }) => assert_eq!(path, "implementations[0].source"),
+        other => panic!("expected a source path validation error, got {other:?}"),
+    }
+}
+
+#[test]
+fn rejects_shadow_typing_that_references_an_unknown_implementation() {
+    let result = load_algorithm_unit(fixture("invalid/unknown-shadow/unit.json"));
+
+    match result {
+        Err(LoadError::Validation { path, .. }) => {
+            assert_eq!(path, "practice.shadow_typing[0].implementation");
+        }
+        other => panic!("expected a shadow typing reference error, got {other:?}"),
+    }
+}

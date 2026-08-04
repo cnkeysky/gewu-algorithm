@@ -1,0 +1,13 @@
+[package]
+name = "gewu-template"
+version = "0.1.0"
+description = "AlgorithmUnit JSON loading and validation for gewu-algorithm"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gewu-domain = { path = "../domain" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

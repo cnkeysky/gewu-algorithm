@@ -1,0 +1,14 @@
+[package]
+name = "gewu-domain"
+version = "0.1.0"
+description = "Core domain types for gewu-algorithm"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

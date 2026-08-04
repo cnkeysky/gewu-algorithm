@@ -1,0 +1,49 @@
+{
+  "schema_version": "1",
+  "id": "search.binary-search",
+  "revision": 1,
+  "status": "draft",
+  "title": "Binary Search",
+  "tags": ["search", "sorted-array"],
+  "position": {"domain": "search", "category": "ordered-data", "prerequisites": ["data-structure.array"]},
+  "problem": {
+    "question": "How can a value be located in sorted data by discarding half of the remaining range?",
+    "scope": ["Ascending sorted arrays", "Exact value lookup"],
+    "out_of_scope": ["Searching unsorted data", "Finding every duplicate occurrence"]
+  },
+  "understanding": {
+    "summary": "Comparing the middle value preserves a contiguous candidate interval and eliminates one half each iteration.",
+    "confidence": "medium",
+    "alternatives": ["Linear search avoids sorted-input assumptions but uses linear time."],
+    "failure_conditions": ["Incorrect inclusive bounds can skip the final candidate element."]
+  },
+  "implementations": [{
+    "key": "python-iterative",
+    "language": "python",
+    "source": "code/python.py",
+    "purpose": "iterative",
+    "normalization": {"line_endings": "lf", "trailing_newline": true, "whitespace": "strict"}
+  }],
+  "patterns": [{
+    "id": "interval-halving",
+    "summary": "Maintain an ordered candidate interval and remove the half ruled out by a comparison.",
+    "applicability": ["The search space has a monotonic ordering."],
+    "boundaries": ["The ordering relation and midpoint update must preserve the target when present."]
+  }],
+  "relationships": [{
+    "target": "search.linear-search",
+    "type": "contrasts_with",
+    "reason": "Both locate a target, but binary search depends on ordering to reduce the candidate range.",
+    "boundary": "Linear search remains applicable when no useful ordering exists."
+  }],
+  "practice": {
+    "shadow_typing": [{"implementation": "python-iterative", "strict": true}],
+    "flow_recall": {"steps": [
+      {"id": "set-bounds", "prompt": "Set inclusive left and right bounds around the candidate interval.", "concepts": ["left", "right", "interval"], "aliases": ["initialize the search bounds"]},
+      {"id": "compare-middle", "prompt": "Compare the middle value and retain only the possible half.", "concepts": ["middle", "comparison"], "aliases": ["halve the candidate interval"]}
+    ]}
+  },
+  "validation": {"schema": "passed", "code": "pending", "content_review": "pending", "transfer_review": "pending", "last_validated_at": null},
+  "provenance": {"authors": ["gewu-algorithm maintainers"], "generated_by": null, "reviewed_by": [], "sources": [], "license": "MIT"},
+  "supersedes": []
+}
