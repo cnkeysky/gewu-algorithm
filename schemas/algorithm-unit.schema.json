@@ -1,0 +1,439 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cnkeysky/gewu-algorithm/schemas/algorithm-unit.schema.json",
+  "title": "GEWU AlgorithmUnit",
+  "description": "A versioned, reusable algorithm learning and practice unit.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "revision",
+    "status",
+    "title",
+    "position",
+    "problem",
+    "understanding",
+    "implementations",
+    "patterns",
+    "relationships",
+    "practice",
+    "validation",
+    "provenance",
+    "supersedes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1"
+    },
+    "id": {
+      "$ref": "#/$defs/unitId"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": ["draft", "reviewed", "validated", "deprecated", "revised"]
+    },
+    "title": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/slug"
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "category", "prerequisites"],
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/slug"
+        },
+        "category": {
+          "$ref": "#/$defs/slug"
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/unitId"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "problem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "scope", "out_of_scope"],
+      "properties": {
+        "question": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "scope": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "out_of_scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "understanding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "confidence", "alternatives", "failure_conditions"],
+      "properties": {
+        "summary": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "confidence": {
+          "enum": ["low", "medium", "high"]
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "failure_conditions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "implementations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/implementation"
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pattern"
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relationship"
+      }
+    },
+    "practice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shadow_typing", "flow_recall"],
+      "properties": {
+        "shadow_typing": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["implementation", "strict"],
+            "properties": {
+              "implementation": {
+                "$ref": "#/$defs/slug"
+              },
+              "strict": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "flow_recall": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["steps"],
+          "properties": {
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/flowStep"
+              }
+            }
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "code", "content_review", "transfer_review", "last_validated_at"],
+      "properties": {
+        "schema": {
+          "$ref": "#/$defs/checkStatus"
+        },
+        "code": {
+          "$ref": "#/$defs/checkStatus"
+        },
+        "content_review": {
+          "$ref": "#/$defs/checkStatus"
+        },
+        "transfer_review": {
+          "$ref": "#/$defs/checkStatus"
+        },
+        "last_validated_at": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authors", "generated_by", "reviewed_by", "sources", "license"],
+      "properties": {
+        "authors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "generated_by": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/generator"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reviewed_by": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        },
+        "license": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision", "reason"],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "unitId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "checkStatus": {
+      "enum": ["pending", "passed", "failed", "not-applicable"]
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "language", "source", "purpose", "normalization"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/slug"
+        },
+        "language": {
+          "$ref": "#/$defs/slug"
+        },
+        "source": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "purpose": {
+          "enum": ["teaching", "concise", "iterative", "recursive", "optimized"]
+        },
+        "normalization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["line_endings", "trailing_newline", "whitespace"],
+          "properties": {
+            "line_endings": {
+              "const": "lf"
+            },
+            "trailing_newline": {
+              "type": "boolean"
+            },
+            "whitespace": {
+              "const": "strict"
+            }
+          }
+        }
+      }
+    },
+    "pattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "summary", "applicability", "boundaries"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "summary": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "applicability": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "boundaries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "type", "reason", "boundary"],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/unitId"
+        },
+        "type": {
+          "enum": [
+            "depends_on",
+            "influences",
+            "analogous_to",
+            "contrasts_with",
+            "composes_with",
+            "generalizes",
+            "specializes",
+            "supersedes"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "boundary": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "flowStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "prompt", "concepts", "aliases"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "prompt": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "concepts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/slug"
+          }
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "task_version", "generated_at"],
+      "properties": {
+        "provider": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "model": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "task_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "url", "role", "accessed_at"],
+      "properties": {
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "role": {
+          "enum": ["primary", "synthesis", "lead"]
+        },
+        "accessed_at": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    }
+  }
+}

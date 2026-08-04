@@ -1,0 +1,56 @@
+# Rust build output
+/target/
+
+# Node.js and extension build output
+node_modules/
+dist/
+out/
+coverage/
+.nyc_output/
+.vscode-test/
+*.vsix
+
+# Python template and test artifacts
+__pycache__/
+*.py[cod]
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Personal practice data and unreviewed generated content
+/practice/
+/drafts/
+/.local/
+/data/local/
+
+# Logs, caches, and temporary files
+*.log
+.cache/
+.tmp/
+tmp/
+temp/
+
+# Editors
+.idea/
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# Operating systems
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+/test-results/
+/playwright-report/
+
+# Keep application lockfiles committed:
+# Cargo.lock, package-lock.json, pnpm-lock.yaml, and yarn.lock.

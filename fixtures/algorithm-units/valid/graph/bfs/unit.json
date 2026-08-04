@@ -1,0 +1,128 @@
+{
+  "schema_version": "1",
+  "id": "graph.bfs",
+  "revision": 1,
+  "status": "draft",
+  "title": "Breadth-First Search",
+  "tags": ["graph", "queue", "traversal"],
+  "position": {
+    "domain": "graph",
+    "category": "traversal",
+    "prerequisites": ["graph.representation", "data-structure.queue"]
+  },
+  "problem": {
+    "question": "How can states be explored in nondecreasing distance from a starting state?",
+    "scope": [
+      "Graph traversal from one start vertex",
+      "Shortest edge count in an unweighted graph"
+    ],
+    "out_of_scope": [
+      "Shortest paths with arbitrary edge weights",
+      "Memory-constrained traversal where the frontier cannot be retained"
+    ]
+  },
+  "understanding": {
+    "summary": "A FIFO frontier preserves discovery order by distance when every transition has equal cost.",
+    "confidence": "medium",
+    "alternatives": [
+      "Bidirectional BFS may reduce the explored state space when both endpoints are known.",
+      "DFS can traverse the same reachable component but does not preserve shortest edge count."
+    ],
+    "failure_conditions": [
+      "Marking vertices only when dequeued can enqueue the same vertex repeatedly.",
+      "Unequal transition costs invalidate the ordinary BFS shortest-path argument."
+    ]
+  },
+  "implementations": [
+    {
+      "key": "python-teaching",
+      "language": "python",
+      "source": "code/python.py",
+      "purpose": "teaching",
+      "normalization": {
+        "line_endings": "lf",
+        "trailing_newline": true,
+        "whitespace": "strict"
+      }
+    }
+  ],
+  "patterns": [
+    {
+      "id": "frontier-expansion",
+      "summary": "Maintain a frontier of discovered states whose outgoing transitions still need examination.",
+      "applicability": [
+        "The state space can be represented through neighboring transitions.",
+        "Previously discovered states can be recognized."
+      ],
+      "boundaries": [
+        "The frontier ordering determines what guarantees the traversal provides.",
+        "A visited set may be replaceable only when the state representation carries equivalent information."
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "target": "graph.dfs",
+      "type": "contrasts_with",
+      "reason": "Both expand reachable graph states, but they select the next pending state in different orders.",
+      "boundary": "They can both establish reachability, but ordinary DFS does not guarantee the fewest edges from the start."
+    },
+    {
+      "target": "graph.dijkstra",
+      "type": "specializes",
+      "reason": "BFS is sufficient for shortest paths when every transition has the same cost.",
+      "boundary": "Arbitrary nonnegative edge weights require a priority-based frontier instead of FIFO order."
+    }
+  ],
+  "practice": {
+    "shadow_typing": [
+      {
+        "implementation": "python-teaching",
+        "strict": true
+      }
+    ],
+    "flow_recall": {
+      "steps": [
+        {
+          "id": "initialize-frontier",
+          "prompt": "Initialize the frontier with the starting state.",
+          "concepts": ["queue", "start"],
+          "aliases": ["enqueue the start vertex"]
+        },
+        {
+          "id": "mark-discovered",
+          "prompt": "Record the starting state as already discovered.",
+          "concepts": ["visited", "start"],
+          "aliases": ["mark the start as visited"]
+        },
+        {
+          "id": "consume-frontier",
+          "prompt": "Repeatedly take the next state from the FIFO frontier.",
+          "concepts": ["dequeue", "loop"],
+          "aliases": ["pop from the left while the queue is not empty"]
+        },
+        {
+          "id": "discover-neighbors",
+          "prompt": "Add each undiscovered neighboring state and mark it immediately.",
+          "concepts": ["neighbor", "visited", "enqueue"],
+          "aliases": ["visit and enqueue unseen neighbors"]
+        }
+      ]
+    }
+  },
+  "validation": {
+    "schema": "passed",
+    "code": "pending",
+    "content_review": "pending",
+    "transfer_review": "pending",
+    "last_validated_at": null
+  },
+  "provenance": {
+    "authors": ["gewu-algorithm maintainers"],
+    "generated_by": null,
+    "reviewed_by": [],
+    "sources": [],
+    "license": "MIT"
+  },
+  "supersedes": []
+}
