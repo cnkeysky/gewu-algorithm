@@ -11,7 +11,10 @@ import {
 } from "./interaction.js";
 import { CoreEvent, CoreSession, GewuCoreClient } from "./core-client.js";
 
-type PracticeCoreClient = Pick<GewuCoreClient, "applyEvent" | "stopSession">;
+type PracticeCoreClient = Pick<
+  GewuCoreClient,
+  "applyEvent" | "restartSession" | "stopSession"
+>;
 
 /**
  * Editor adapter for a Rust-owned shadow-typing session. It translates native
@@ -57,16 +60,21 @@ export class CorePracticeDocumentController implements Disposable {
     return this.#document.uri;
   }
 
-  public stop(): void {
+  public async stop(): Promise<void> {
     if (this.#closed || this.#commandPending) return;
     this.#commandPending = true;
     this.#transactionTail = this.#transactionTail.then(async () => {
       if (this.#closed) return;
-      await this.#client
-        .stopSession(this.#session.session_id, this.#elapsed())
-        .catch(() => undefined);
+      await this.#client.stopSession(this.#session.session_id, this.#elapsed());
       this.#close();
     });
+    try {
+      await this.#transactionTail;
+    } catch (error: unknown) {
+      this.#commandPending = false;
+      this.#restoreWithError(error);
+      throw error;
+    }
   }
 
   public restart(): void {
@@ -75,10 +83,8 @@ export class CorePracticeDocumentController implements Disposable {
     this.#transactionTail = this.#transactionTail
       .then(async () => {
         if (this.#closed) return;
-        this.#session = await this.#client.applyEvent(
+        this.#session = await this.#client.restartSession(
           this.#session.session_id,
-          { type: "restart" },
-          this.#elapsed(),
         );
         this.#completionPrompted = false;
         this.#document.replace(this.#session.accepted_text);
@@ -180,7 +186,11 @@ function coreEvent(
   event: ReturnType<typeof transactionEvent>,
 ): CoreEvent | undefined {
   if (event === undefined) return undefined;
-  if (event.type === "insert") return { type: "insert_text", text: event.text };
+  if (event.type === "insert")
+    return {
+      type: "insert_text",
+      text: event.text,
+    };
   if (event.type === "delete")
     return {
       type: "delete_range",

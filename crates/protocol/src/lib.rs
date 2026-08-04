@@ -197,12 +197,15 @@ pub struct StopSessionParams {
 pub struct SessionView {
     pub session_id: String,
     pub unit_id: String,
+    pub unit_title: String,
+    pub problem_question: String,
     pub revision: u64,
     pub mode: PracticeModeDto,
     pub status: SessionStatusDto,
     pub accepted_text: String,
     pub target_text: String,
     pub current_prompt: Option<String>,
+    pub completed_prompts: Vec<String>,
     pub completed_steps: usize,
     pub total_steps: usize,
     pub accepted_input_count: u64,
@@ -265,6 +268,11 @@ pub struct DeleteHistoryResult {
     pub deleted_attempts: usize,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DeleteAttemptsParams {
+    pub ids: Vec<String>,
+}
+
 /// Saves, restores, or discards the one active versioned-unit checkpoint.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CheckpointParams {
@@ -273,6 +281,7 @@ pub struct CheckpointParams {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ResumeCheckpointResult {
     pub session: Option<SessionView>,
+    pub saved_at: Option<String>,
 }
 
 /// Protocol serialization or frame validation failure.

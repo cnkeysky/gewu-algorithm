@@ -24,7 +24,10 @@ The strict MVP transaction policy is:
 - user insert, paste, delete, and replace are atomic and accepted only when the resulting text is a prefix of the canonical target;
 - mismatches, multi-cursor edits, Undo/Redo, formatting, and external mutations request restoration of the accepted prefix;
 - decorations expose accepted and remaining ranges, plus the first mismatch range when available;
-- a ghost-text decoration shows the remaining current line, but leading indentation is summarized first as concise `4sp` and/or `Tab` tokens; `Enter` is shown when the next canonical character is a newline;
+- a ghost-text decoration shows the remaining current line. Leading indentation
+  is summarized first as a remaining-space count such as `8sp`; ordinary editor
+  Tab input advances by the user's configured indentation width. The line body
+  remains hidden until indentation is complete, and `Enter` is shown at a newline;
 - matching auto-closed pairs such as `()` are normalized to the user-entered opening character, and the practice document is restored to that accepted canonical prefix without changing user-level VS Code settings;
 - an Enter transaction containing only a newline plus host-generated indentation is normalized to one newline; indentation remains an explicit following practice step;
 - the final canonical newline remains required when the target includes one; accepting it shows `GEWU: Complete` with `Close` and `Restart`, and the document remains controlled until the user chooses;

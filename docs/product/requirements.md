@@ -46,12 +46,16 @@ It is not initially a problem judge, a complete spaced-repetition platform, a so
 - **FR-106:** The MVP shall provide `shadow_typing` and `flow_recall` modes with independent completion records.
 - **FR-107:** Practice scoring shall record prompt usage separately from accuracy and speed.
 - **FR-108:** A practice session shall remain usable without an LLM provider or network connection.
+- **FR-109:** Flow Recall shall ask the learner to reconstruct reviewed ordered steps in natural language; stable step IDs shall not be ordinary learning content.
+- **FR-110:** Flow Recall shall retain problem context, completed steps, current progress, and explicit Reveal, Restart, and Stop actions in one structured view.
 
 ### History and Review
 
 - **FR-200:** The system shall store practice attempts locally by default.
 - **FR-201:** The user shall be able to inspect recent attempts and the content revision used.
 - **FR-202:** The system shall support deletion of local practice history.
+- **FR-204:** Resume and discard shall identify the checkpoint unit, mode, revision, progress, and saved time before applying the action.
+- **FR-205:** Starting a new practice shall not silently replace an existing active checkpoint.
 - **FR-203:** Future review scheduling shall consume attempt data through a stable domain interface rather than editor-specific storage.
 
 ### Editor Integration
@@ -109,7 +113,7 @@ The first MVP is acceptable when:
 ## 8. Open Questions
 
 - Should whitespace normalization be a separate mode or remain strict in the MVP?
-- Should Flow Recall use ordered steps, state transitions, or both?
+- When should Flow Recall evolve from ordered steps with optional state descriptions to explicit state-transition diagrams?
 - Which attempt data is necessary to evaluate delayed retention without collecting excessive personal data?
 - What minimum evidence is required before an official template is marked `validated`?
 - When should official content move to a separate `gewu-algorithm-templates` repository?

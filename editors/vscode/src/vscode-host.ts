@@ -124,10 +124,9 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
 
   public setDecorations(state: DecorationState): void {
     if (this.#closed) return;
-    const accepted = this.#range(state.accepted);
     const mismatch =
       state.mismatch === undefined ? [] : [this.#range(state.mismatch)];
-    this.#editor.setDecorations(this.#decorationType, [accepted, ...mismatch]);
+    this.#editor.setDecorations(this.#decorationType, mismatch);
     const cursor = this.#range({
       start: state.accepted.end,
       end: state.accepted.end,
@@ -165,6 +164,11 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
       .edit((edit) => edit.replace(fullRange, text))
       .then(
         () => {
+          const end = this.#document.positionAt(
+            this.#document.getText().length,
+          );
+          this.#editor.selection = new vscode.Selection(end, end);
+          this.#editor.revealRange(new vscode.Range(end, end));
           if (this.#snapshot === this.#document.getText())
             this.#restoring = false;
         },
@@ -242,5 +246,8 @@ export async function openPracticeDocument(
     preserveFocus: false,
     preview: false,
   });
+  const end = document.positionAt(document.getText().length);
+  editor.selection = new vscode.Selection(end, end);
+  editor.revealRange(new vscode.Range(end, end));
   return new VsCodePracticeHost(document, editor);
 }

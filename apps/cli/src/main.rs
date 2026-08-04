@@ -8,9 +8,9 @@ use std::{
 
 use gewu_core::{CORE_VERSION, Core};
 use gewu_protocol::{
-    ApplyEventParams, CheckpointParams, DeleteHistoryResult, HandshakeParams, HandshakeResult,
-    JsonRpcRequest, JsonRpcResponse, PROTOCOL_VERSION, RecentAttemptsParams, RecentAttemptsResult,
-    RpcError, StartSessionParams, StopSessionParams,
+    ApplyEventParams, CheckpointParams, DeleteAttemptsParams, DeleteHistoryResult, HandshakeParams,
+    HandshakeResult, JsonRpcRequest, JsonRpcResponse, PROTOCOL_VERSION, RecentAttemptsParams,
+    RecentAttemptsResult, RpcError, StartSessionParams, StopSessionParams,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -120,6 +120,9 @@ fn dispatch(core: &mut Core, handshaken: &mut bool, request: JsonRpcRequest) -> 
                     .map_err(core_error)
             })
             .and_then(|session| value(json!({"session": session}))),
+        "gewu/restartSession" => decode::<CheckpointParams>(request.params)
+            .and_then(|params| core.restart_session(&params.session_id).map_err(core_error))
+            .and_then(|session| value(json!({"session": session}))),
         "gewu/recentAttempts" => decode::<RecentAttemptsParams>(request.params)
             .and_then(|params| core.recent_attempts(params.limit).map_err(core_error))
             .and_then(|attempts| value(RecentAttemptsResult { attempts })),
@@ -127,13 +130,23 @@ fn dispatch(core: &mut Core, handshaken: &mut bool, request: JsonRpcRequest) -> 
             .delete_history()
             .map_err(core_error)
             .and_then(|deleted_attempts| value(DeleteHistoryResult { deleted_attempts })),
+        "gewu/deleteAttempts" => decode::<DeleteAttemptsParams>(request.params)
+            .and_then(|params| core.delete_attempts(&params.ids).map_err(core_error))
+            .and_then(|deleted_attempts| value(DeleteHistoryResult { deleted_attempts })),
         "gewu/saveCheckpoint" => decode::<CheckpointParams>(request.params)
             .and_then(|params| core.save_checkpoint(&params.session_id).map_err(core_error))
             .and_then(|()| value(json!({}))),
         "gewu/resumeCheckpoint" => core
-            .resume_checkpoint()
+            .checkpoint_saved_at()
             .map_err(core_error)
-            .and_then(|session| value(json!({"session": session}))),
+            .and_then(|saved_at| {
+                core.resume_checkpoint()
+                    .map_err(core_error)
+                    .map(|session| (session, saved_at))
+            })
+            .and_then(|(session, saved_at)| {
+                value(json!({"session": session, "saved_at": saved_at}))
+            }),
         "gewu/discardCheckpoint" => core
             .discard_checkpoint()
             .map_err(core_error)

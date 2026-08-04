@@ -63,7 +63,9 @@ class FakeHost implements PracticeDocumentHost {
 
 class DeferredCoreClient {
   public readonly calls: Array<{ event: CoreEvent; elapsed: Elapsed }> = [];
+  public readonly restartCalls: string[] = [];
   readonly #pending: Array<(session: CoreSession) => void> = [];
+  readonly #restartPending: Array<(session: CoreSession) => void> = [];
 
   public applyEvent(
     _sessionId: string,
@@ -81,9 +83,20 @@ class DeferredCoreClient {
     return Promise.resolve(session("", "stopped"));
   }
 
+  public restartSession(sessionId: string): Promise<CoreSession> {
+    this.restartCalls.push(sessionId);
+    return new Promise((resolve) => this.#restartPending.push(resolve));
+  }
+
   public resolveNext(value: CoreSession): void {
     const resolve = this.#pending.shift();
     assert(resolve !== undefined, "pending core request");
+    resolve(value);
+  }
+
+  public resolveRestart(value: CoreSession): void {
+    const resolve = this.#restartPending.shift();
+    assert(resolve !== undefined, "pending core restart request");
     resolve(value);
   }
 }
@@ -96,12 +109,15 @@ function session(
   return {
     session_id: "session-1",
     unit_id: "graph.bfs",
+    unit_title: "Breadth-First Search",
+    problem_question: "How should the frontier be expanded?",
     revision: 1,
     mode: "shadow_typing",
     status,
     accepted_text: acceptedText,
     target_text: "ab",
     current_prompt: null,
+    completed_prompts: [],
     completed_steps: 0,
     total_steps: 0,
     accepted_input_count: acceptedText.length,
@@ -157,6 +173,16 @@ async function main(): Promise<void> {
   await nextTurn();
   assert(host.completionActions !== undefined, "queued completion is reported");
 
+  host.completionActions.restart();
+  await nextTurn();
+  assert(
+    client.restartCalls.length === 1,
+    "completion restart uses fresh session",
+  );
+  client.resolveRestart({ ...session(""), session_id: "session-2" });
+  await nextTurn();
+  assert(host.document.text === "", "restart clears the practice document");
+
   controller.dispose();
 
   const resumedHost = new FakeHost();
@@ -176,6 +202,68 @@ async function main(): Promise<void> {
   resumedClient.resolveNext(session("a", "active", 511));
   await nextTurn();
   resumed.dispose();
+
+  const indentationHost = new FakeHost();
+  const indentationClient = new DeferredCoreClient();
+  const indentationSession = {
+    ...session("a\n"),
+    target_text: "a\n        return value",
+  };
+  const indentationController = new CorePracticeDocumentController(
+    indentationHost,
+    indentationClient,
+    indentationSession,
+  );
+  indentationHost.emit(insert("a\n", "    "));
+  await nextTurn();
+  assert(
+    indentationClient.calls[0]?.event.type === "insert_text" &&
+      indentationClient.calls[0].event.text === "    ",
+    "one host Tab submits one editor indentation width",
+  );
+  indentationClient.resolveNext({
+    ...indentationSession,
+    accepted_text: "a\n    ",
+  });
+  await nextTurn();
+  indentationHost.emit(insert("a\n    ", "    "));
+  await nextTurn();
+  assert(
+    indentationClient.calls[1]?.event.type === "insert_text" &&
+      indentationClient.calls[1].event.text === "    ",
+    "a second Tab completes eight-space indentation",
+  );
+  indentationClient.resolveNext({
+    ...indentationSession,
+    accepted_text: "a\n        ",
+  });
+  await nextTurn();
+  indentationController.dispose();
+
+  const spacesHost = new FakeHost();
+  const spacesClient = new DeferredCoreClient();
+  const spacesSession = {
+    ...session("a\n"),
+    target_text: "a\n            return value",
+  };
+  const spacesController = new CorePracticeDocumentController(
+    spacesHost,
+    spacesClient,
+    spacesSession,
+  );
+  spacesHost.emit(insert("a\n", "    "));
+  await nextTurn();
+  assert(
+    spacesClient.calls[0]?.event.type === "insert_text" &&
+      spacesClient.calls[0].event.text === "    ",
+    "twelve-space indentation remains incremental",
+  );
+  spacesClient.resolveNext({
+    ...spacesSession,
+    accepted_text: "a\n    ",
+  });
+  await nextTurn();
+  spacesController.dispose();
 
   console.log("PASS queues core-backed edits and preserves resumed timing");
 }

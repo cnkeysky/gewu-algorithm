@@ -37,7 +37,7 @@
       { "command": "gewuAlgorithm.resumePractice", "title": "GEWU: Resume Interrupted Practice" },
       { "command": "gewuAlgorithm.discardCheckpoint", "title": "GEWU: Discard Interrupted Practice" },
       { "command": "gewuAlgorithm.showHistory", "title": "GEWU: Show Recent Attempts" },
-      { "command": "gewuAlgorithm.deleteHistory", "title": "GEWU: Delete Local History" },
+      { "command": "gewuAlgorithm.deleteHistory", "title": "GEWU: Delete Practice Attempts" },
       {
         "command": "gewuAlgorithm.stopShadowTyping",
         "title": "GEWU: Stop Shadow Typing"

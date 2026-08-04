@@ -2,7 +2,7 @@
 
 ## Hypothesis
 
-A dedicated, exact-match practice session with progressive visual guidance can help a learner move from recognizing an implementation to reconstructing it, while a separate Flow exercise can expose whether the learner understands the execution sequence.
+A dedicated `shadow_typing` session with progressive visual guidance can help a learner move from recognizing an implementation to reconstructing it, while a separate `flow_recall` session can expose whether the learner understands the execution sequence.
 
 The MVP validates product and interaction assumptions. It does not validate the complete long-term learning philosophy.
 
@@ -13,7 +13,7 @@ The MVP validates product and interaction assumptions. It does not validate the 
 - local built-in or fixture content;
 - one Python BFS unit and at least one additional contrasting unit;
 - exact-match `shadow_typing`;
-- a simple ordered `flow_recall` mode;
+- an ordered `flow_recall` mode with a structured panel, natural-language answers, and optional prompt reveal;
 - VS Code integration;
 - CLI or test harness for exercising the same core logic;
 - local attempt persistence;
@@ -36,11 +36,14 @@ The MVP validates product and interaction assumptions. It does not validate the 
 
 ## Technical Spikes
 
-Before committing to the final VS Code interaction design, validate:
+For Shadow Typing, validate the native editor interaction through:
 
 1. ordinary editor document plus decorations;
 2. controlled virtual/custom document;
 3. Webview-based practice editor only if native editor behavior cannot be made reliable.
+
+Flow Recall uses a structured Webview because it requires persistent problem,
+progress, and completed-step context rather than character-level editor events.
 
 The spike must cover paste, multi-cursor edits, Undo/Redo, formatting, input methods, Tab, line endings, and external document modifications.
 

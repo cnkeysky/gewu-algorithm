@@ -38,7 +38,7 @@ Exit when repeated sessions do not corrupt documents or engine state and the man
 
 ## Stage 3: Local MVP
 
-Status: in progress. The local Rust core, JSON-RPC host, deterministic `flow_recall`, local history, checkpointing, and VS Code core client are implemented. Real extension-host validation remains required before this stage can be marked complete.
+Status: in progress. The local Rust core, JSON-RPC host, deterministic `flow_recall`, local history, checkpointing, native Shadow Typing client, and structured Flow Recall panel are implemented. Real extension-host validation remains required before this stage can be marked complete.
 
 - package the core with the VS Code extension;
 - implement serialized `shadow_typing` and `flow_recall` modes;

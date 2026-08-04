@@ -23,6 +23,8 @@ VS Code closes or core process exits while session remains active
   -> core has saved a versioned-unit checkpoint after each accepted/rejected event
   -> no terminal attempt is created
   -> user chooses Resume Interrupted Practice or Discard Interrupted Practice
+  -> client shows unit, mode, revision, progress, and local saved time
+  -> user confirms the identified checkpoint
   -> core verifies the content revision before replaying typed events
 ```
 
@@ -33,10 +35,10 @@ Explicit Stop creates a stopped attempt and clears the checkpoint. Completion cr
 ```text
 Choose AlgorithmUnit
   -> select Flow Recall
-  -> view problem and optional initial context
-  -> reconstruct ordered states or steps
+  -> open a structured panel with problem context and progress
+  -> reconstruct ordered states or steps in the learner's own words
   -> reveal hints only on request
-  -> compare with the reviewed flow model
+  -> retain completed reviewed steps while later steps remain hidden
   -> save result and hint usage
 ```
 

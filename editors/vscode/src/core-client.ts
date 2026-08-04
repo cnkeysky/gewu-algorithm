@@ -7,12 +7,15 @@ export type SessionStatus = "active" | "completed" | "stopped";
 export interface CoreSession {
   readonly session_id: string;
   readonly unit_id: string;
+  readonly unit_title: string;
+  readonly problem_question: string;
   readonly revision: number;
   readonly mode: PracticeMode;
   readonly status: SessionStatus;
   readonly accepted_text: string;
   readonly target_text: string;
   readonly current_prompt: string | null;
+  readonly completed_prompts: readonly string[];
   readonly completed_steps: number;
   readonly total_steps: number;
   readonly accepted_input_count: number;
@@ -160,13 +163,19 @@ export class GewuCoreClient {
     );
   }
 
-  public async resumeCheckpoint(): Promise<CoreSession | undefined> {
+  public async restartSession(sessionId: string): Promise<CoreSession> {
+    return sessionFromResult(
+      await this.request("gewu/restartSession", { session_id: sessionId }),
+    );
+  }
+
+  public async resumeCheckpoint(): Promise<CheckpointResume | undefined> {
     const result = await this.request("gewu/resumeCheckpoint", {});
     if (!isObject(result))
       throw new Error("GEWU core returned an invalid resume result");
     if (result.session === null) return undefined;
-    return isCoreSession(result.session)
-      ? result.session
+    return isCoreSession(result.session) && typeof result.saved_at === "string"
+      ? { session: result.session, savedAt: result.saved_at }
       : (() => {
           throw new Error("GEWU core returned an invalid checkpoint session");
         })();
@@ -187,6 +196,13 @@ export class GewuCoreClient {
     const result = await this.request("gewu/deleteHistory", {});
     if (!isObject(result) || typeof result.deleted_attempts !== "number")
       throw new Error("GEWU core returned an invalid history deletion result");
+    return result.deleted_attempts;
+  }
+
+  public async deleteAttempts(ids: readonly string[]): Promise<number> {
+    const result = await this.request("gewu/deleteAttempts", { ids });
+    if (!isObject(result) || typeof result.deleted_attempts !== "number")
+      throw new Error("GEWU core returned an invalid deletion result");
     return result.deleted_attempts;
   }
 
@@ -255,6 +271,10 @@ export interface Elapsed {
   readonly active_ms: number;
   readonly wall_ms: number;
 }
+export interface CheckpointResume {
+  readonly session: CoreSession;
+  readonly savedAt: string;
+}
 export interface UnitSummary {
   readonly id: string;
   readonly revision: number;
@@ -268,6 +288,12 @@ export interface AttemptSummary {
   readonly revision: number;
   readonly mode: PracticeMode;
   readonly terminal_reason: "completed" | "stopped";
+  readonly accepted_input_count: number;
+  readonly rejected_input_count: number;
+  readonly correction_count: number;
+  readonly prompt_count: number;
+  readonly active_ms: number;
+  readonly wall_ms: number;
 }
 
 function sessionFromResult(result: unknown): CoreSession {
@@ -283,6 +309,8 @@ function isCoreSession(value: unknown): value is CoreSession {
   return (
     typeof value.session_id === "string" &&
     typeof value.unit_id === "string" &&
+    typeof value.unit_title === "string" &&
+    typeof value.problem_question === "string" &&
     typeof value.revision === "number" &&
     (value.mode === "shadow_typing" || value.mode === "flow_recall") &&
     (value.status === "active" ||
@@ -292,6 +320,8 @@ function isCoreSession(value: unknown): value is CoreSession {
     typeof value.target_text === "string" &&
     (typeof value.current_prompt === "string" ||
       value.current_prompt === null) &&
+    Array.isArray(value.completed_prompts) &&
+    value.completed_prompts.every((prompt) => typeof prompt === "string") &&
     typeof value.completed_steps === "number" &&
     typeof value.total_steps === "number" &&
     typeof value.accepted_input_count === "number" &&
@@ -326,6 +356,12 @@ function isAttemptSummary(value: unknown): value is AttemptSummary {
     typeof value.revision === "number" &&
     (value.mode === "shadow_typing" || value.mode === "flow_recall") &&
     (value.terminal_reason === "completed" ||
-      value.terminal_reason === "stopped")
+      value.terminal_reason === "stopped") &&
+    typeof value.accepted_input_count === "number" &&
+    typeof value.rejected_input_count === "number" &&
+    typeof value.correction_count === "number" &&
+    typeof value.prompt_count === "number" &&
+    typeof value.active_ms === "number" &&
+    typeof value.wall_ms === "number"
   );
 }

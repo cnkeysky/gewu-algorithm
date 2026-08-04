@@ -188,6 +188,9 @@ impl FlowRecallSession {
     pub fn completed_step_count(&self) -> usize {
         self.next_step
     }
+    pub fn completed_steps(&self) -> &[FlowStep] {
+        &self.config.steps[..self.next_step]
+    }
     pub fn total_step_count(&self) -> usize {
         self.config.steps.len()
     }
@@ -386,8 +389,8 @@ mod tests {
             "1",
             vec![FlowStep {
                 id: "expand-frontier".to_owned(),
-                prompt: "扩展下一层".to_owned(),
-                concepts: vec!["队列".to_owned(), "邻居".to_owned()],
+                prompt: "\u{6269}\u{5c55}\u{4e0b}\u{4e00}\u{5c42}".to_owned(),
+                concepts: vec!["\u{961f}\u{5217}".to_owned(), "\u{90bb}\u{5c45}".to_owned()],
                 aliases: vec![],
             }],
         );
@@ -395,12 +398,17 @@ mod tests {
             .unwrap_or_else(|error| panic!("test session: {error}"));
 
         assert_eq!(
-            session.apply(FlowRecallEvent::SubmitAnswer("随便".to_owned()), elapsed(1)),
+            session.apply(
+                FlowRecallEvent::SubmitAnswer("\u{968f}\u{4fbf}".to_owned()),
+                elapsed(1),
+            ),
             Ok(FlowRecallOutcome::RejectedAnswer)
         );
         assert_eq!(
             session.apply(
-                FlowRecallEvent::SubmitAnswer("把邻居加入队列".to_owned()),
+                FlowRecallEvent::SubmitAnswer(
+                    "\u{628a}\u{90bb}\u{5c45}\u{52a0}\u{5165}\u{961f}\u{5217}".to_owned(),
+                ),
                 elapsed(2)
             ),
             Ok(FlowRecallOutcome::Completed)

@@ -183,6 +183,17 @@ impl Core {
         self.session_view(session_id)
     }
 
+    pub fn restart_session(&mut self, session_id: &str) -> Result<SessionView, CoreError> {
+        let params = self
+            .sessions
+            .get(session_id)
+            .ok_or_else(|| CoreError::UnknownSession(session_id.to_owned()))?
+            .start_params();
+        let restarted = self.start_session(params)?;
+        self.sessions.remove(session_id);
+        Ok(restarted)
+    }
+
     /// Explicit save is useful before controlled close; ordinary events already checkpoint.
     pub fn save_checkpoint(&mut self, session_id: &str) -> Result<(), CoreError> {
         let checkpoint = self
@@ -239,6 +250,12 @@ impl Core {
     pub fn discard_checkpoint(&self) -> Result<(), CoreError> {
         Ok(self.store.clear_checkpoint()?)
     }
+    pub fn checkpoint_saved_at(&self) -> Result<Option<String>, CoreError> {
+        Ok(self
+            .store
+            .load_checkpoint()?
+            .map(|checkpoint| checkpoint.saved_at))
+    }
     pub fn recent_attempts(&self, limit: usize) -> Result<Vec<AttemptSummary>, CoreError> {
         let values = self.store.list_attempts(limit)?;
         values
@@ -248,6 +265,9 @@ impl Core {
     }
     pub fn delete_history(&self) -> Result<usize, CoreError> {
         Ok(self.store.delete_history()?)
+    }
+    pub fn delete_attempts(&self, ids: &[String]) -> Result<usize, CoreError> {
+        Ok(self.store.delete_attempts(ids)?)
     }
 
     fn start_session_with_id(
@@ -365,6 +385,25 @@ impl Core {
 }
 
 impl ActiveSession {
+    fn start_params(&self) -> StartSessionParams {
+        match self {
+            Self::Shadow {
+                unit,
+                implementation,
+                ..
+            } => StartSessionParams {
+                unit_id: unit.id.to_string(),
+                mode: PracticeModeDto::ShadowTyping,
+                implementation: Some(implementation.clone()),
+            },
+            Self::Flow { unit, .. } => StartSessionParams {
+                unit_id: unit.id.to_string(),
+                mode: PracticeModeDto::FlowRecall,
+                implementation: None,
+            },
+        }
+    }
+
     fn apply(&mut self, event: PracticeEventDto, elapsed: ElapsedDto) -> Result<(), CoreError> {
         let elapsed = elapsed_time(elapsed)?;
         let serialized = serde_json::to_value(&event).map_err(CoreError::CheckpointEvent)?;
@@ -411,12 +450,15 @@ impl ActiveSession {
             Self::Shadow { unit, session, .. } => SessionView {
                 session_id: session_id.to_owned(),
                 unit_id: unit.id.to_string(),
+                unit_title: unit.title.clone(),
+                problem_question: unit.problem.question.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ShadowTyping,
                 status: status(session.status()),
                 accepted_text: session.accepted_text().to_owned(),
                 target_text: session.target().to_owned(),
                 current_prompt: None,
+                completed_prompts: Vec::new(),
                 completed_steps: 0,
                 total_steps: 0,
                 accepted_input_count: session.accepted_input_count(),
@@ -430,12 +472,19 @@ impl ActiveSession {
             Self::Flow { unit, session, .. } => SessionView {
                 session_id: session_id.to_owned(),
                 unit_id: unit.id.to_string(),
+                unit_title: unit.title.clone(),
+                problem_question: unit.problem.question.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::FlowRecall,
                 status: status(session.status()),
                 accepted_text: String::new(),
                 target_text: String::new(),
                 current_prompt: session.current_step().map(|step| step.prompt.clone()),
+                completed_prompts: session
+                    .completed_steps()
+                    .iter()
+                    .map(|step| step.prompt.clone())
+                    .collect(),
                 completed_steps: session.completed_step_count(),
                 total_steps: session.total_step_count(),
                 accepted_input_count: session.completed_step_count() as u64,
@@ -799,7 +848,7 @@ mod tests {
                 implementation: None,
             })
             .unwrap_or_else(|error| panic!("start: {error}"));
-        let _ = core
+        let first_step = core
             .apply_event(ApplyEventParams {
                 session_id: session.session_id.clone(),
                 event: PracticeEventDto::SubmitAnswer {
@@ -808,6 +857,10 @@ mod tests {
                 elapsed: elapsed(1),
             })
             .unwrap_or_else(|error| panic!("step one: {error}"));
+        assert_eq!(
+            first_step.completed_prompts,
+            vec!["Set inclusive left and right bounds around the candidate interval.".to_owned()]
+        );
         let complete = core
             .apply_event(ApplyEventParams {
                 session_id: session.session_id,
@@ -855,11 +908,18 @@ mod tests {
             .unwrap_or_else(|error| panic!("event: {error}"));
         let mut resumed =
             Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
+        assert!(
+            resumed
+                .checkpoint_saved_at()
+                .unwrap_or_else(|error| panic!("saved at: {error}"))
+                .is_some()
+        );
         let state = resumed
             .resume_checkpoint()
             .unwrap_or_else(|error| panic!("resume: {error}"))
             .unwrap_or_else(|| panic!("checkpoint"));
         assert_eq!(state.accepted_text, "from");
+        assert_eq!(state.unit_title, "Breadth-First Search");
         fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
 
@@ -885,6 +945,48 @@ mod tests {
         assert_eq!(resumed.session_id, started.session_id);
         assert_eq!(resumed.completed_steps, 0);
         assert_eq!(resumed.status, SessionStatusDto::Active);
+
+        fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+
+    #[test]
+    fn restarting_creates_a_fresh_active_session() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let started = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::ShadowTyping,
+                implementation: None,
+            })
+            .unwrap_or_else(|error| panic!("start: {error}"));
+        let _ = core
+            .apply_event(ApplyEventParams {
+                session_id: started.session_id.clone(),
+                event: PracticeEventDto::InsertText {
+                    text: "from".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .unwrap_or_else(|error| panic!("event: {error}"));
+
+        let restarted = core
+            .restart_session(&started.session_id)
+            .unwrap_or_else(|error| panic!("restart: {error}"));
+        assert_ne!(restarted.session_id, started.session_id);
+        assert_eq!(restarted.status, SessionStatusDto::Active);
+        assert!(restarted.accepted_text.is_empty());
+        assert!(core.session_view(&started.session_id).is_err());
+
+        let mut reopened =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
+        let checkpoint = reopened
+            .resume_checkpoint()
+            .unwrap_or_else(|error| panic!("resume: {error}"))
+            .unwrap_or_else(|| panic!("restart checkpoint"));
+        assert_eq!(checkpoint.session_id, restarted.session_id);
+        assert!(checkpoint.accepted_text.is_empty());
 
         fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }

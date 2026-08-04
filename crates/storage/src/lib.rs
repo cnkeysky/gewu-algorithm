@@ -110,6 +110,15 @@ impl LocalStore {
         )?;
         Ok(count)
     }
+    pub fn delete_attempts(&self, ids: &[String]) -> Result<usize, StorageError> {
+        let mut document = self.read_history()?;
+        let before = document.attempts.len();
+        document
+            .attempts
+            .retain(|attempt| !ids.contains(&attempt.id));
+        self.write_json(HISTORY_FILE, &document)?;
+        Ok(before - document.attempts.len())
+    }
     pub fn load_checkpoint(&self) -> Result<Option<StoredCheckpoint>, StorageError> {
         Ok(self.read_checkpoint()?.checkpoint)
     }
@@ -267,6 +276,34 @@ mod tests {
                 .unwrap_or_else(|error| panic!("delete: {error}")),
             1
         );
+        fs::remove_dir_all(root).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+    #[test]
+    fn deletes_only_selected_attempts() {
+        let root = root();
+        let store = LocalStore::open(&root).unwrap_or_else(|error| panic!("open: {error}"));
+        let first = attempt();
+        let mut second = attempt();
+        second.id = "b".to_owned();
+        store
+            .append_attempt(first)
+            .unwrap_or_else(|error| panic!("first save: {error}"));
+        store
+            .append_attempt(second)
+            .unwrap_or_else(|error| panic!("second save: {error}"));
+
+        assert_eq!(
+            store
+                .delete_attempts(&["a".to_owned()])
+                .unwrap_or_else(|error| panic!("delete: {error}")),
+            1
+        );
+        let remaining = store
+            .list_attempts(10)
+            .unwrap_or_else(|error| panic!("list: {error}"));
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, "b");
+
         fs::remove_dir_all(root).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
     #[test]

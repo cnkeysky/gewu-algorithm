@@ -7,8 +7,8 @@ Every connection calls `gewu/handshake` with the client name/version and its inc
 | Method group | Purpose |
 | --- | --- |
 | `handshake`, `listUnits`, `loadUnit` | Compatibility and schema-validated local content discovery. |
-| `startSession`, `applyEvent`, `stopSession` | Rust-owned `shadow_typing` and `flow_recall` transitions. |
-| `recentAttempts`, `deleteHistory` | Local terminal-attempt inspection and deletion. |
-| `saveCheckpoint`, `resumeCheckpoint`, `discardCheckpoint` | Explicit recovery of one non-terminal versioned-unit session. |
+| `startSession`, `applyEvent`, `stopSession`, `restartSession` | Rust-owned `shadow_typing` and `flow_recall` transitions. Restart creates a fresh session rather than mutating a terminal attempt. |
+| `recentAttempts`, `deleteAttempts`, `deleteHistory` | Local terminal-attempt inspection and selective or full deletion. |
+| `saveCheckpoint`, `resumeCheckpoint`, `discardCheckpoint` | Explicit recovery of one non-terminal versioned-unit session. Resume includes its persisted save time for confirmation. |
 
 The shared [v1 handshake fixture](../../fixtures/protocol/v1-handshake.ndjson) is checked by both Rust and TypeScript tests. Changing it changes a public boundary and requires compatibility review.
