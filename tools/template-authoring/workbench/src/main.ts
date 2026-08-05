@@ -51,7 +51,7 @@ root.innerHTML = `
       <form class="panel form-panel" id="draft-form">
         <div class="panel-heading"><div><p class="eyebrow">01 / Input</p><h2>New generation draft</h2></div><span class="required">Required</span></div>
         <label class="field-label" for="problem">Algorithm problem</label>
-        <textarea id="problem" rows="6" placeholder="Describe the problem, expected behavior, constraints, and boundaries.">Implement Kahn's topological sorting algorithm for a directed graph represented as adjacency lists. Return a FIFO-deterministic ordering or an empty list when the graph contains a cycle.</textarea>
+        <textarea id="problem" rows="6" placeholder="Describe the problem, expected behavior, constraints, and boundaries."></textarea>
         <div class="field-row">
           <label class="field"><span>Provider</span><select id="provider"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="moonshotai">Moonshot</option><option value="xiaomi">Xiaomi MiMo</option></select></label>
           <label class="field"><span>Model <small class="catalog-note">From provider catalog</small></span><select id="model"><option>deepseek-v4-flash</option><option>deepseek-v4-pro</option></select></label>
@@ -62,7 +62,7 @@ root.innerHTML = `
         </div>
         <fieldset>
           <legend>Practice projections <label class="select-all"><input type="checkbox" id="select-all-modes" /><span>All modes</span></label></legend>
-          <div class="mode-list">${modes.map((mode) => `<label class="mode-option"><input type="checkbox" name="mode" value="${mode.id}" ${mode.id === "shadow_typing" || mode.id === "flow_recall" ? "checked" : ""} /><span class="checkmark"></span><span><strong>${mode.label}</strong><small>${mode.hint}</small></span></label>`).join("")}</div>
+          <div class="mode-list">${modes.map((mode) => `<label class="mode-option"><input type="checkbox" name="mode" value="${mode.id}" /><span class="checkmark"></span><span><strong>${mode.label}</strong><small>${mode.hint}</small></span></label>`).join("")}</div>
         </fieldset>
         <fieldset id="assistance-fieldset" class="assistance-fieldset">
           <legend>Code recall assistance</legend>
@@ -331,7 +331,15 @@ form.addEventListener("submit", async (event) => {
   editingDraftId = undefined;
   submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`;
 });
-document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => { editingDraftId = undefined; submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`; form.reset(); updateProfile(); message.textContent = ""; });
+document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => {
+  editingDraftId = undefined;
+  submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`;
+  form.reset();
+  document.querySelector<HTMLTextAreaElement>("#problem")!.value = "";
+  document.querySelectorAll<HTMLInputElement>("input[name=mode], input[name=assistance]").forEach((input) => { input.checked = false; });
+  updateProfile();
+  message.textContent = "";
+});
 updateProfile();
 renderDrafts();
 renderHistory();
