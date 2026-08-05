@@ -32,6 +32,7 @@ root.innerHTML = `
     <div class="connection"><span class="status-dot"></span> Local workspace</div>
   </header>
   <main class="shell">
+    <div id="new-view" class="app-view">
     <section class="intro">
       <div>
         <p class="eyebrow">Template authoring</p>
@@ -70,6 +71,17 @@ root.innerHTML = `
         <section class="panel review-panel"><div class="panel-heading"><div><p class="eyebrow">03 / Workflow</p><h2>Review gate</h2></div><span class="lock">Locked</span></div><div class="review-step"><span class="step-number">1</span><div><strong>Deterministic validation</strong><small>Schema, paths, source, and fixtures</small></div><span class="pending">Pending</span></div><div class="review-step"><span class="step-number">2</span><div><strong>Role review</strong><small>Correctness, learning design, provenance</small></div><span class="pending">Pending</span></div><div class="review-step"><span class="step-number">3</span><div><strong>Human acceptance</strong><small>Required before publication</small></div><span class="pending">Pending</span></div></section>
       </aside>
     </section>
+    </div>
+    <section id="drafts-view" class="app-view panel page-panel" hidden>
+      <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
+      <div class="draft-list"><button class="draft-row" type="button" data-go="new"><span class="draft-icon">TS</span><span><strong>topological-sort-kahn-r1</strong><small>Draft · Python · 5 practice projections</small></span><span class="draft-date">Just now</span></button><button class="draft-row" type="button" data-go="new"><span class="draft-icon">BF</span><span><strong>graph-bfs-r1</strong><small>Pending review · Python · 2 practice projections</small></span><span class="draft-date">Aug 04, 2026</span></button><button class="draft-row" type="button" data-go="new"><span class="draft-icon">BS</span><span><strong>binary-search-r1</strong><small>Accepted · Python · 3 practice projections</small></span><span class="draft-date">Aug 03, 2026</span></button></div>
+      <p class="view-note">Draft entries will become API-backed once the local authoring service is connected.</p>
+    </section>
+    <section id="history-view" class="app-view panel page-panel" hidden>
+      <div class="panel-heading"><div><p class="eyebrow">Audit trail</p><h2>Review history</h2></div><span class="lock">Immutable reports</span></div>
+      <div class="history-list"><div class="history-row"><span class="review-mark pass">&#10003;</span><span><strong>Algorithm correctness</strong><small>binary-search-r1 · artifact sha256:7a21...c91e</small></span><span class="history-status">Pass</span></div><div class="history-row"><span class="review-mark pass">&#10003;</span><span><strong>Learning design</strong><small>graph-bfs-r1 · artifact sha256:12e4...a02d</small></span><span class="history-status">Pass</span></div><div class="history-row"><span class="review-mark pending-mark">&#8226;</span><span><strong>Provenance and safety</strong><small>topological-sort-kahn-r1 · awaiting generation</small></span><span class="history-status">Pending</span></div></div>
+      <p class="view-note">Reports are tied to an artifact hash and cannot promote a draft without human acceptance.</p>
+    </section>
   </main>
   <footer><span>GEWU Template Authoring</span><span>Drafts stay local until explicitly accepted.</span></footer>
 `;
@@ -79,6 +91,14 @@ const profileSummary = document.querySelector<HTMLDivElement>("#profile-summary"
 const profileState = document.querySelector<HTMLSpanElement>("#profile-state")!;
 const assistanceFieldset = document.querySelector<HTMLFieldSetElement>("#assistance-fieldset")!;
 const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
+
+function showView(view: string): void {
+  document.querySelectorAll<HTMLElement>(".app-view").forEach((panel) => { panel.hidden = panel.id !== `${view}-view`; });
+  document.querySelectorAll<HTMLButtonElement>(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+document.querySelectorAll<HTMLButtonElement>(".nav-item, [data-go]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view ?? button.dataset.go ?? "new")));
 
 function selectedValues<T extends string>(name: string): T[] {
   return [...document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)].map((input) => input.value as T);
@@ -97,6 +117,17 @@ function updateProfile(): void {
 }
 
 document.querySelectorAll<HTMLInputElement>("input, select, textarea").forEach((input) => input.addEventListener("input", updateProfile));
+document.querySelector<HTMLSelectElement>("#provider")!.addEventListener("change", (event) => {
+  const provider = (event.target as HTMLSelectElement).value;
+  const model = document.querySelector<HTMLSelectElement>("#model")!;
+  const models: Record<string, string[]> = {
+    deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
+    openai: ["gpt-5", "gpt-5-mini"],
+    moonshot: ["kimi-k2"],
+    zhipu: ["glm-4.5"],
+  };
+  model.innerHTML = (models[provider] ?? []).map((item) => `<option>${item}</option>`).join("");
+});
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   const selectedModes = selectedValues<PracticeMode>("mode");
