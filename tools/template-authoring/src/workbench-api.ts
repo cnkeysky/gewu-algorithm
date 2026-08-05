@@ -31,6 +31,15 @@ type ReviewRecord = {
 };
 type State = { drafts: DraftRecord[]; reviews: ReviewRecord[] };
 
+function validateDraft(draft: DraftRecord): string[] {
+  const errors: string[] = [];
+  if (draft.problem.trim().length < 20) errors.push("problem must contain at least 20 characters");
+  if (draft.modes.length === 0) errors.push("at least one practice mode is required");
+  if (!draft.modes.includes("code_recall") && draft.assistance.length > 0) errors.push("code recall assistance requires code_recall");
+  if (draft.variants < 1 || draft.variants > 5) errors.push("variants must be between 1 and 5");
+  return errors;
+}
+
 async function loadState(): Promise<State> {
   try {
     const value = JSON.parse(await readFile(statePath, "utf8")) as Partial<State>;
@@ -113,6 +122,16 @@ const server = createServer(async (request, response) => {
       state.reviews = [{ id: crypto.randomUUID(), draftId: draft.id, role: "all", verdict: "pending", artifactHash: null, createdAt: draft.createdAt }, ...state.reviews];
       await saveState(state);
       return send(response, 201, { draft });
+    }
+    const validationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/validate$/);
+    if (request.method === "POST" && validationMatch) {
+      const draft = state.drafts.find((item) => item.id === validationMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      const errors = validateDraft(draft);
+      if (errors.length > 0) return send(response, 422, { status: "failed", errors });
+      draft.status = "validated";
+      await saveState(state);
+      return send(response, 200, { status: "passed", draft });
     }
     const reviewMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/reviews$/);
     if (request.method === "POST" && reviewMatch) {

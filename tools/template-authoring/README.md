@@ -95,7 +95,8 @@ npm run workbench:dev
 
 The API stores draft metadata and pending review records in the ignored
 `drafts/.workbench/state.json`. It never accepts provider credentials. The UI
-falls back to browser local storage when the API is unavailable. Generation,
-deterministic validation, and role review remain the next server operations;
-the current API deliberately exposes their persistence boundary without
-claiming that a queued draft has been generated.
+falls back to browser local storage when the API is unavailable. The
+`POST /api/drafts/:id/validate` operation performs the first deterministic
+profile check and moves a valid draft to `validated`; it does not claim that an
+LLM artifact has been generated. Generation and role review remain the next
+server operations.

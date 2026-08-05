@@ -105,7 +105,7 @@ interface DraftRecord {
   variants: number;
   modes: PracticeMode[];
   assistance: Assistance[];
-  status: "draft" | "queued";
+  status: "draft" | "queued" | "validated" | "accepted";
   createdAt: string;
 }
 
@@ -133,7 +133,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat(unde
 function renderDrafts(): void {
   const drafts = readDrafts();
   document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
-  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<button class="draft-row" type="button" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status === "queued" ? "Queued" : "Draft"} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-date">${formatDate(draft.createdAt)}</span></button>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="draft-row" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" ? "disabled" : ""}>${draft.status === "validated" ? "Validated" : "Validate"}</button></span></div>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
 }
 function renderHistory(): void {
   const drafts = readDrafts();
@@ -152,6 +152,18 @@ document.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
   const navigation = target.closest<HTMLButtonElement>(".nav-item, [data-go]");
   if (navigation) showView(navigation.dataset.view ?? navigation.dataset.go ?? "new");
+  const validateButton = target.closest<HTMLButtonElement>("[data-validate-id]");
+  if (validateButton) {
+    event.stopPropagation();
+    const id = validateButton.dataset.validateId;
+    void fetch(`/api/drafts/${id}/validate`, { method: "POST" }).then(async (response) => {
+      const payload = await response.json() as { status?: string; errors?: string[] };
+      message.textContent = response.ok ? "Deterministic validation passed." : `Validation failed: ${(payload.errors ?? ["unknown error"]).join("; ")}`;
+      message.className = response.ok ? "form-message success" : "form-message error";
+      if (response.ok) { await syncFromApi(); showView("drafts"); }
+    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+    return;
+  }
   const draftButton = target.closest<HTMLButtonElement>("[data-draft-id]");
   if (draftButton) {
     const draft = readDrafts().find((item) => item.id === draftButton.dataset.draftId);
