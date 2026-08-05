@@ -55,7 +55,7 @@ root.innerHTML = `
           <label class="field"><span>Implementation variants</span><input id="variants" type="number" min="1" max="5" value="1" /></label>
         </div>
         <fieldset>
-          <legend>Practice projections</legend>
+          <legend>Practice projections <button class="select-all" type="button" id="select-all-modes">Select all</button></legend>
           <div class="mode-list">${modes.map((mode) => `<label class="mode-option"><input type="checkbox" name="mode" value="${mode.id}" ${mode.id === "shadow_typing" || mode.id === "flow_recall" ? "checked" : ""} /><span class="checkmark"></span><span><strong>${mode.label}</strong><small>${mode.hint}</small></span></label>`).join("")}</div>
         </fieldset>
         <fieldset id="assistance-fieldset" class="assistance-fieldset" disabled>
@@ -93,6 +93,7 @@ const assistanceFieldset = document.querySelector<HTMLFieldSetElement>("#assista
 const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
 const draftList = document.querySelector<HTMLDivElement>("#draft-list")!;
 const historyList = document.querySelector<HTMLDivElement>("#history-list")!;
+const selectAllModes = document.querySelector<HTMLButtonElement>("#select-all-modes")!;
 
 interface DraftRecord {
   id: string;
@@ -183,9 +184,18 @@ function updateProfile(): void {
   profileState.textContent = selectedModes.length > 0 && language.length > 0 && variants > 0 ? "Ready" : "Needs input";
   profileState.className = `valid-badge ${profileState.textContent === "Ready" ? "" : "warning"}`;
   profileSummary.innerHTML = `<div class="summary-block"><span>Modes</span><div class="tag-list">${selectedModes.length ? selectedModes.map((mode) => `<span class="tag">${mode.replaceAll("_", " ")}</span>`).join("") : "<em>None selected</em>"}</div></div><div class="summary-block"><span>Assistance</span><div class="tag-list">${codeRecall && selectedAssistance.length ? selectedAssistance.map((item) => `<span class="tag muted">${item}</span>`).join("") : `<em>${codeRecall ? "Choose optional hints" : "Requires code recall"}</em>`}</div></div><div class="summary-meta"><span>${language.join(", ")}</span><span>${Number.isFinite(variants) ? variants : 0} variant${variants === 1 ? "" : "s"}</span></div>`;
+  const allSelected = selectedModes.length === document.querySelectorAll<HTMLInputElement>("input[name=mode]").length;
+  selectAllModes.textContent = allSelected ? "Clear all" : "Select all";
+  selectAllModes.setAttribute("aria-pressed", String(allSelected));
 }
 
 document.querySelectorAll<HTMLInputElement>("input, select, textarea").forEach((input) => input.addEventListener("input", updateProfile));
+selectAllModes.addEventListener("click", () => {
+  const inputs = [...document.querySelectorAll<HTMLInputElement>("input[name=mode]")];
+  const shouldSelect = inputs.some((input) => !input.checked);
+  inputs.forEach((input) => { input.checked = shouldSelect; });
+  updateProfile();
+});
 document.querySelector<HTMLSelectElement>("#provider")!.addEventListener("change", (event) => {
   const provider = (event.target as HTMLSelectElement).value;
   const model = document.querySelector<HTMLSelectElement>("#model")!;
