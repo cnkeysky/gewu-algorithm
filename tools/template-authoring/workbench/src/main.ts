@@ -100,6 +100,7 @@ const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
 const draftList = document.querySelector<HTMLDivElement>("#draft-list")!;
 const historyList = document.querySelector<HTMLDivElement>("#history-list")!;
 const selectAllModes = document.querySelector<HTMLInputElement>("#select-all-modes")!;
+let editingDraftId: string | undefined;
 
 interface DraftRecord {
   id: string;
@@ -242,6 +243,7 @@ document.addEventListener("click", (event) => {
       document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((input) => { input.checked = draft.modes.includes(input.value as PracticeMode); });
       document.querySelectorAll<HTMLInputElement>("input[name=assistance]").forEach((input) => { input.checked = draft.assistance.includes(input.value as Assistance); });
       updateProfile();
+      editingDraftId = draft.id;
       showView("new");
     }
   }
@@ -289,7 +291,7 @@ form.addEventListener("submit", async (event) => {
   }
   const problem = document.querySelector<HTMLTextAreaElement>("#problem")!.value.trim();
   const record: DraftRecord = {
-    id: crypto.randomUUID(),
+    id: editingDraftId ?? crypto.randomUUID(),
     title: problem.split(/\s+/).slice(0, 3).join(" ").replace(/[^a-zA-Z0-9 -]/g, "") || "Untitled algorithm",
     problem,
     provider: document.querySelector<HTMLSelectElement>("#provider")!.value,
@@ -303,7 +305,7 @@ form.addEventListener("submit", async (event) => {
   };
   let persisted = false;
   try {
-    const response = await fetch("/api/drafts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(record) });
+    const response = await fetch(editingDraftId ? `/api/drafts/${editingDraftId}` : "/api/drafts", { method: editingDraftId ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(record) });
     if (response.ok) {
       const payload = await response.json() as { draft?: DraftRecord };
       if (payload.draft) { saveDrafts([payload.draft, ...readDrafts().filter((item) => item.id !== payload.draft!.id)]); persisted = true; }
@@ -311,13 +313,14 @@ form.addEventListener("submit", async (event) => {
   } catch {
     // Local storage is the offline fallback for the authoring shell.
   }
-  if (!persisted) saveDrafts([record, ...readDrafts()]);
+  if (!persisted) saveDrafts([record, ...readDrafts().filter((item) => item.id !== record.id)]);
   renderDrafts();
   renderHistory();
-  message.textContent = persisted ? "Draft saved to the local authoring API." : "Draft queued in this browser. Start the authoring API to share it locally.";
+  message.textContent = persisted ? (editingDraftId ? "Draft revision saved to the local authoring API." : "Draft saved to the local authoring API.") : "Draft queued in this browser. Start the authoring API to share it locally.";
   message.className = "form-message success";
+  editingDraftId = undefined;
 });
-document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => { form.reset(); updateProfile(); message.textContent = ""; });
+document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => { editingDraftId = undefined; form.reset(); updateProfile(); message.textContent = ""; });
 updateProfile();
 renderDrafts();
 renderHistory();

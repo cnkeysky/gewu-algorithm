@@ -118,7 +118,7 @@ async function generateDraft(draft: DraftRecord): Promise<{ provider: string; mo
   };
   definition.validateArtifact(artifact.manifest);
   if (!isRecord(artifact.manifest.sources)) throw new Error("generator sources are invalid");
-  const artifactAbsolutePath = join(storageRoot, "artifacts", draft.id);
+  const artifactAbsolutePath = join(storageRoot, "artifacts", `${draft.id}-${Date.now()}`);
   await mkdir(artifactAbsolutePath, { recursive: true });
   await writeFile(join(artifactAbsolutePath, "unit.json"), `${JSON.stringify(artifact.manifest.manifest, null, 2)}\n`, "utf8");
   for (const [path, content] of Object.entries(artifact.manifest.sources)) {
@@ -203,6 +203,19 @@ const server = createServer(async (request, response) => {
       state.drafts = [draft, ...state.drafts];
       await saveState(state);
       return send(response, 201, { draft });
+    }
+    const updateMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)$/);
+    if (request.method === "PATCH" && updateMatch) {
+      const draft = state.drafts.find((item) => item.id === updateMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      const updated = draftFrom({ ...draft, ...(await body(request) as Record<string, unknown>) });
+      updated.id = draft.id;
+      updated.createdAt = draft.createdAt;
+      updated.status = "queued";
+      updated.artifactPath = undefined;
+      state.drafts = state.drafts.map((item) => item.id === draft.id ? updated : item);
+      await saveState(state);
+      return send(response, 200, { draft: updated });
     }
     const generationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/generate$/);
     if (request.method === "POST" && generationMatch) {

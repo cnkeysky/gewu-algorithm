@@ -110,6 +110,11 @@ schema and validator are registered. Finally,
 `POST /api/drafts/:id/accept` requires deterministic validation and a passing
 review before moving the draft to `accepted`.
 
+Existing drafts can be revised with `PATCH /api/drafts/:id`. A revision keeps
+the draft identity, clears its current artifact pointer, returns it to
+`queued`, and writes future generations into a new artifact directory; older
+review reports remain immutable history.
+
 Generation tasks are resolved through the TypeScript task registry. Use
 `GET /api/tasks` to inspect registered task ids and versions. Each task owns
 its support predicate, prompt, output schema, and artifact validator; adding a
