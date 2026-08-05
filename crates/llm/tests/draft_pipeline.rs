@@ -57,6 +57,7 @@ fn fake_provider_generates_reviews_and_loads_two_contrasting_units() {
             selected_input_hash: hash.to_owned(),
             instruction: format!("Return the reviewed {id} unit manifest as JSON."),
             output_schema: serde_json::json!({"type": "object"}),
+            profile: None,
         };
         let artifact = pipeline.generate(&task).expect("generate draft");
         assert_eq!(artifact.review, ReviewState::Pending);

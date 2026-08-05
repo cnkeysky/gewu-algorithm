@@ -134,7 +134,13 @@ Stage 7 follow-up completed on 2026-08-05: implementation variants now carry
 reviewed strategy, complexity, assumptions, and contained test references;
 DeepSeek generation uses strict whole-response JSON and staging validation; and
 role-specific model review emits immutable-hash findings without publication
-authority. These authoring capabilities remain independent of editor clients.
+authority. Generation profiles now select multiple practice projections and
+implementation variants without duplicating the canonical unit. The authoring
+workbench boundary and local TypeScript/HTML/CSS direction are recorded in
+[the workbench architecture](architecture/template-authoring-workbench.md) and
+[ADR 0016](decisions/0016-template-authoring-workbench.md); its interactive
+surface remains a follow-up slice and is not yet claimed as complete. These
+authoring capabilities remain independent of editor clients.
 
 ## Stage 8: Review, Progression, and Retention
 

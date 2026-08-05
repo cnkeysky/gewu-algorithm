@@ -3,7 +3,7 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { PiGenerator, optionsFromEnvironment, type DraftTask } from "./pi-generator.js";
+import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationProfile } from "./pi-generator.js";
 
 const FIXED_INPUT = `Create a GEWU AlgorithmUnit for Kahn's topological sorting algorithm.
 The learning target is a directed graph represented as graph: list[list[int]], where vertex IDs
@@ -152,6 +152,12 @@ ${REQUIRED_PRACTICE_SHAPE}
 
 ${REQUIRED_MANIFEST_FIELDS}`,
   outputSchema: OUTPUT_SCHEMA,
+  profile: {
+    practice_modes: ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"],
+    code_recall_assistance: ["comments", "none"],
+    implementation_languages: ["python"],
+    implementation_variants: 1,
+  } satisfies GenerationProfile,
 };
 
 export function assertGeneratedTemplate(value: unknown): asserts value is GeneratedTemplate {

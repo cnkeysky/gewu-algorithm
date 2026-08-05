@@ -56,6 +56,58 @@ pub struct GenerationRequest {
     pub max_output_tokens: Option<u32>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PracticeModeSelection {
+    ShadowTyping,
+    FlowRecall,
+    CodeRecall,
+    ReasoningRecall,
+    TransferPractice,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeRecallAssistanceSelection {
+    Skeleton,
+    Comments,
+    Keywords,
+    Cloze,
+    None,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GenerationProfile {
+    pub practice_modes: Vec<PracticeModeSelection>,
+    pub code_recall_assistance: Vec<CodeRecallAssistanceSelection>,
+    pub implementation_languages: Vec<String>,
+    pub implementation_variants: u8,
+}
+
+impl GenerationProfile {
+    pub fn validate(&self) -> Result<(), LlmError> {
+        if self.practice_modes.is_empty() {
+            return Err(LlmError::InvalidRequest(
+                "at least one practice mode is required".to_owned(),
+            ));
+        }
+        if self.implementation_languages.is_empty() || self.implementation_variants == 0 {
+            return Err(LlmError::InvalidRequest(
+                "at least one implementation language and variant are required".to_owned(),
+            ));
+        }
+        let has_code_recall = self
+            .practice_modes
+            .contains(&PracticeModeSelection::CodeRecall);
+        if !has_code_recall && !self.code_recall_assistance.is_empty() {
+            return Err(LlmError::InvalidRequest(
+                "code recall assistance requires the code_recall mode".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct GenerationResponse {
     pub provider: ProviderKind,
@@ -76,6 +128,8 @@ pub struct DraftTask {
     pub selected_input_hash: String,
     pub instruction: String,
     pub output_schema: Value,
+    #[serde(default)]
+    pub profile: Option<GenerationProfile>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -213,6 +267,9 @@ impl<P: LlmProvider> DraftPipeline<P> {
                 "task identity and selected input hash are required".to_owned(),
             ));
         }
+        if let Some(profile) = &task.profile {
+            profile.validate()?;
+        }
         let request = GenerationRequest {
             model: self.provider.profile().model.clone(),
             messages: vec![ChatMessage {
@@ -323,6 +380,7 @@ mod tests {
             selected_input_hash: "sha256:input".to_owned(),
             instruction: "Return a unit manifest".to_owned(),
             output_schema: serde_json::json!({"type":"object"}),
+            profile: None,
         };
         let artifact = pipeline.generate(&task).expect("draft");
         assert_eq!(artifact.review, ReviewState::Pending);
@@ -367,5 +425,28 @@ mod tests {
             .expect("revision requires a handoff");
         assert!(!handoff.requires_human_decision);
         assert_eq!(handoff.findings.len(), 1);
+    }
+
+    #[test]
+    fn generation_profile_selects_modes_without_creating_mode_specific_units() {
+        let profile = GenerationProfile {
+            practice_modes: vec![
+                PracticeModeSelection::ShadowTyping,
+                PracticeModeSelection::CodeRecall,
+            ],
+            code_recall_assistance: vec![
+                CodeRecallAssistanceSelection::Comments,
+                CodeRecallAssistanceSelection::Cloze,
+            ],
+            implementation_languages: vec!["python".to_owned()],
+            implementation_variants: 2,
+        };
+        assert!(profile.validate().is_ok());
+        let invalid = GenerationProfile {
+            code_recall_assistance: vec![CodeRecallAssistanceSelection::Comments],
+            practice_modes: vec![PracticeModeSelection::ShadowTyping],
+            ..profile
+        };
+        assert!(invalid.validate().is_err());
     }
 }

@@ -6,6 +6,7 @@ import {
   assertGeneratedTemplate,
   task,
 } from "./generate-template.js";
+import { validateGenerationProfile } from "./pi-generator.js";
 
 function validDraft(): Record<string, unknown> {
   return {
@@ -53,6 +54,16 @@ test("fixed task uses a stable selected-input hash and a non-fixture algorithm",
   assert.match(task.instruction, /Kahn's topological sorting/);
   assert.match(task.instruction, /list\[list\[int\]\]/);
   assert.doesNotMatch(task.instruction, /Breadth-First Search/);
+  assert.doesNotThrow(() => validateGenerationProfile(task.profile!));
+});
+
+test("generation profile rejects assistance without code recall", () => {
+  assert.throws(() => validateGenerationProfile({
+    practice_modes: ["shadow_typing"],
+    code_recall_assistance: ["comments"],
+    implementation_languages: ["python"],
+    implementation_variants: 1,
+  }), /code recall assistance/);
 });
 
 test("local validator accepts a contained pending draft", () => {

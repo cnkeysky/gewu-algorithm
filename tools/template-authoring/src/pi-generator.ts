@@ -2,12 +2,40 @@ import { Type, type Context, type Tool } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { validateToolCall } from "@earendil-works/pi-ai";
 
+export type PracticeModeSelection =
+  | "shadow_typing"
+  | "flow_recall"
+  | "code_recall"
+  | "reasoning_recall"
+  | "transfer_practice";
+
+export type CodeRecallAssistanceSelection = "skeleton" | "comments" | "keywords" | "cloze" | "none";
+
+/** Selects practice projections for one algorithm unit; it does not duplicate the unit. */
+export interface GenerationProfile {
+  readonly practice_modes: PracticeModeSelection[];
+  readonly code_recall_assistance: CodeRecallAssistanceSelection[];
+  readonly implementation_languages: string[];
+  readonly implementation_variants: number;
+}
+
+export function validateGenerationProfile(profile: GenerationProfile): void {
+  if (profile.practice_modes.length === 0) throw new Error("at least one practice mode is required");
+  if (profile.implementation_languages.length === 0 || !Number.isInteger(profile.implementation_variants) || profile.implementation_variants < 1) {
+    throw new Error("at least one implementation language and variant are required");
+  }
+  if (!profile.practice_modes.includes("code_recall") && profile.code_recall_assistance.length > 0) {
+    throw new Error("code recall assistance requires the code_recall mode");
+  }
+}
+
 export interface DraftTask {
   readonly taskId: string;
   readonly taskVersion: string;
   readonly selectedInputHash: string;
   readonly instruction: string;
   readonly outputSchema: Record<string, unknown>;
+  readonly profile?: GenerationProfile;
 }
 
 export interface DraftArtifact {
@@ -54,6 +82,7 @@ export class PiGenerator {
   async generate(task: DraftTask): Promise<DraftArtifact> {
     if (!task.taskId || !task.taskVersion || !task.selectedInputHash)
       throw new Error("task identity and selected input hash are required");
+    if (task.profile) validateGenerationProfile(task.profile);
 
     const model = this.#models.getModel(this.#options.provider, this.#options.model);
     if (!model)
@@ -69,7 +98,7 @@ export class PiGenerator {
       messages: [
         {
           role: "user",
-          content: `${task.instruction}\n\nReturn JSON matching this schema:\n${JSON.stringify(task.outputSchema)}`,
+          content: `${task.instruction}\n\nRequested generation profile:\n${JSON.stringify(task.profile ?? null)}\n\nReturn JSON matching this schema:\n${JSON.stringify(task.outputSchema)}`,
           timestamp: Date.now(),
         },
       ],

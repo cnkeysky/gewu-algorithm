@@ -50,6 +50,12 @@ arguments are validated against the task schema before GEWU sees them; plain
 text or malformed arguments are rejected, with at most one bounded repair
 attempt.
 
+Generation requests may include a `GenerationProfile` to select several
+practice projections and implementation variants for one algorithm unit. The
+profile is a request contract, not a second template format. The planned local
+authoring workbench is documented in
+[`docs/architecture/template-authoring-workbench.md`](../../docs/architecture/template-authoring-workbench.md).
+
 ## End-to-end draft generation
 
 The fixed DeepSeek integration task generates a new Kahn topological-sort unit.

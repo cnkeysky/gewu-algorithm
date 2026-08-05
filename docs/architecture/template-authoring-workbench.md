@@ -1,0 +1,74 @@
+# Template Authoring Workbench
+
+## Purpose
+
+The authoring workbench is a local, platform-independent tool for creating,
+checking, reviewing, editing, and accepting GEWU algorithm templates. It is not
+the VS Code practice surface. VS Code, Zed, and future clients consume accepted
+template contracts through the core protocol.
+
+## UI technology
+
+The first implementation should use TypeScript, semantic HTML, and plain CSS,
+served by a small local TypeScript HTTP service. This keeps the workbench easy
+to run, keeps secrets out of browser persistence, and avoids coupling the
+authoring workflow to an editor extension. The UI should be organized around
+explicit state and typed API payloads rather than DOM scraping.
+
+React/Vite is an acceptable later migration when the workbench needs reusable
+interactive components, routing, or a larger review surface. It is not a
+requirement for the first slice and should not be introduced only for visual
+decoration.
+
+## Main views
+
+1. **New draft**: problem statement, selected source material, provider/model
+   selection, implementation languages and variant count, practice modes, and
+   code-recall assistance.
+2. **Draft workspace**: manifest, implementation sources, tests, and practice
+   projections in separate tabs with schema-aware editing.
+3. **Validation**: schema, source-path, code, and fixture results with exact
+   paths and actionable messages.
+4. **Review**: role-specific LLM reports, immutable artifact hash, findings,
+   repair handoffs, and human accept/reject actions.
+5. **History**: drafts and reports indexed by task version and artifact hash.
+
+## Generation profile
+
+`GenerationProfile` selects projections of one `AlgorithmUnit`:
+
+- `practice_modes` selects shadow typing, flow recall, code recall, reasoning
+  recall, or transfer practice;
+- `code_recall_assistance` selects skeleton, comments, keywords, cloze, or no
+  hints and is valid only when code recall is selected;
+- `implementation_languages` and `implementation_variants` request source
+  implementations, not copies of the algorithm unit.
+
+The profile is part of the generation request and provenance. It must not be
+used to bypass the unit schema or to publish a mode-specific replacement unit.
+
+## Security and persistence
+
+Provider keys are read from the process environment or an OS credential
+store. The browser never receives a key, and the workbench never persists a
+key in local storage, draft files, logs, or review reports. Provider/model
+selection may be persisted without credentials.
+
+Drafts are mutable until accepted. Reviews are append-only records tied to the
+artifact hash. Acceptance is a human action after deterministic validation and
+role-specific review; a model pass cannot promote a draft.
+
+## API boundary
+
+The workbench API should expose typed operations such as:
+
+- `POST /api/drafts/generate`
+- `POST /api/drafts/:id/validate`
+- `POST /api/drafts/:id/reviews`
+- `PATCH /api/drafts/:id`
+- `POST /api/drafts/:id/accept`
+- `GET /api/drafts` and `GET /api/drafts/:id`
+
+The service calls the existing TypeScript generation/review pipeline and Rust
+validators. It does not implement practice transitions, editor state, or
+provider-specific prompt parsing.
