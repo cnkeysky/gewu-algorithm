@@ -7,13 +7,28 @@ test("registry resolves a supported task without API-specific branching", () => 
   assert.equal(definition.taskId, "algorithm-unit-topological-sort-kahn");
 });
 
+test("registry resolves the independent binary-search contract", () => {
+  const definition = builtinTaskRegistry.resolve(undefined, "Build an iterative binary search.");
+  assert.equal(definition.taskId, "algorithm-unit-binary-search");
+  const task = definition.buildTask("Build an iterative binary search.", {
+    practice_modes: ["shadow_typing"],
+    code_recall_assistance: [],
+    implementation_languages: ["python"],
+    implementation_variants: 1,
+  });
+  assert.match(task.instruction, /sorted ascending list/);
+  assert.equal(task.taskVersion, "1");
+});
+
 test("registry rejects unsupported problems explicitly", () => {
   assert.throws(() => builtinTaskRegistry.resolve(undefined, "Implement a red-black tree."), /no registered authoring task/);
   assert.throws(() => new TaskRegistry([{
     taskId: "duplicate", label: "one", taskVersion: "1", supports: () => true,
     buildTask: () => { throw new Error("unused"); },
+    validateArtifact: () => undefined,
   }, {
     taskId: "duplicate", label: "two", taskVersion: "1", supports: () => true,
     buildTask: () => { throw new Error("unused"); },
+    validateArtifact: () => undefined,
   }]), /duplicate authoring task/);
 });

@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
-import { task as kahnTask } from "./generate-template.js";
+import { assertGeneratedTemplate, task as kahnTask } from "./generate-template.js";
 import type { DraftTask, GenerationProfile } from "./pi-generator.js";
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export interface AuthoringTaskDefinition {
   readonly taskId: string;
@@ -8,6 +12,7 @@ export interface AuthoringTaskDefinition {
   readonly taskVersion: string;
   readonly supports: (problem: string) => boolean;
   readonly buildTask: (problem: string, profile: GenerationProfile) => DraftTask;
+  readonly validateArtifact: (value: unknown) => void;
 }
 
 function inputHash(problem: string): string {
@@ -25,6 +30,60 @@ const kahnDefinition: AuthoringTaskDefinition = {
     instruction: `${kahnTask.instruction}\n\nAuthor problem supplied by the workbench:\n${problem}`,
     profile,
   }),
+  validateArtifact: (value) => assertGeneratedTemplate(value),
+};
+
+const BINARY_SEARCH_SCHEMA: Record<string, unknown> = {
+  type: "object", additionalProperties: false, required: ["manifest", "sources"],
+  properties: {
+    manifest: {
+      type: "object", additionalProperties: false,
+      required: ["schema_version", "id", "revision", "status", "title", "tags", "position", "problem", "understanding", "implementations", "patterns", "relationships", "practice", "validation", "provenance", "supersedes"],
+      properties: {
+        schema_version: { const: "1" }, id: { type: "string" }, revision: { type: "integer", minimum: 1 }, status: { const: "draft" }, title: { type: "string" }, tags: { type: "array", items: { type: "string" } },
+        position: { type: "object" }, problem: { type: "object" }, understanding: { type: "object" }, implementations: { type: "array", minItems: 1 }, patterns: { type: "array" }, relationships: { type: "array" }, practice: { type: "object" }, validation: { type: "object" }, provenance: { type: "object" }, supersedes: { type: "array" },
+      },
+    },
+    sources: { type: "object", minProperties: 2, additionalProperties: { type: "string", minLength: 1 } },
+  },
+};
+
+const BINARY_SEARCH_INSTRUCTION = `Create a GEWU AlgorithmUnit for binary search over a sorted ascending list of integers.
+The implementation must expose Python function binary_search(values: list[int], target: int) -> int,
+returning the index of target or -1 when absent. State the sorted-input precondition, duplicate-value
+behavior, empty-list behavior, and the inclusive/exclusive interval invariant. Use an iterative midpoint
+calculation that cannot overflow in fixed-width integer languages. Include shadow typing, flow recall,
+code recall, reasoning recall, and transfer practice. Return only one JSON object with manifest and sources:
+{"manifest": <complete AlgorithmUnit manifest>, "sources": {"code/python.py": <Python source>, "tests/python_test.py": <pytest source>}}
+Use schema_version "1", status "draft", lowercase ids/tags, pending validation fields, and provenance.generated_by.
+The implementation key must be "python-teaching", source "code/python.py", and test_references must include
+"tests/python_test.py". Do not include markdown or unknown fields.`;
+
+function assertBinaryArtifact(value: unknown): asserts value is { manifest: Record<string, unknown>; sources: Record<string, unknown> } {
+  if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("binary-search artifact must contain manifest and sources");
+  const manifest = value.manifest;
+  if (manifest.schema_version !== "1" || manifest.status !== "draft" || typeof manifest.id !== "string") throw new Error("binary-search manifest lifecycle or id is invalid");
+  if (!Array.isArray(manifest.implementations) || manifest.implementations.length < 1) throw new Error("binary-search implementation is missing");
+  const implementation = manifest.implementations[0];
+  if (!isRecord(implementation) || implementation.key !== "python-teaching" || implementation.source !== "code/python.py" || !Array.isArray(implementation.test_references) || !implementation.test_references.includes("tests/python_test.py")) throw new Error("binary-search implementation contract is invalid");
+  for (const path of ["code/python.py", "tests/python_test.py"]) if (typeof value.sources[path] !== "string" || (value.sources[path] as string).trim() === "") throw new Error(`binary-search source is missing: ${path}`);
+  if (!isRecord(manifest.validation) || manifest.validation.schema !== "pending" || manifest.validation.code !== "pending") throw new Error("binary-search validation must remain pending");
+}
+
+const binarySearchDefinition: AuthoringTaskDefinition = {
+  taskId: "algorithm-unit-binary-search",
+  label: "AlgorithmUnit · Binary search",
+  taskVersion: "1",
+  supports: (problem) => /binary\s+search/i.test(problem),
+  buildTask: (problem, profile) => ({
+    taskId: "algorithm-unit-binary-search",
+    taskVersion: "1",
+    selectedInputHash: inputHash(problem),
+    instruction: `${BINARY_SEARCH_INSTRUCTION}\n\nAuthor problem supplied by the workbench:\n${problem}`,
+    outputSchema: BINARY_SEARCH_SCHEMA,
+    profile,
+  }),
+  validateArtifact: assertBinaryArtifact,
 };
 
 export class TaskRegistry {
@@ -53,4 +112,4 @@ export class TaskRegistry {
   }
 }
 
-export const builtinTaskRegistry = new TaskRegistry([kahnDefinition]);
+export const builtinTaskRegistry = new TaskRegistry([kahnDefinition, binarySearchDefinition]);

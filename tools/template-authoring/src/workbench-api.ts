@@ -2,7 +2,6 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertGeneratedTemplate } from "./generate-template.js";
 import { PiGenerator, optionsFromEnvironment, type CodeRecallAssistanceSelection, type PracticeModeSelection } from "./pi-generator.js";
 import { reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
@@ -72,7 +71,17 @@ async function generateDraft(draft: DraftRecord): Promise<{ provider: string; mo
       implementation_variants: draft.variants,
     }));
   if (!isRecord(artifact.manifest)) throw new Error("generator returned an invalid artifact");
-  assertGeneratedTemplate(artifact.manifest);
+  if (!isRecord(artifact.manifest.manifest)) throw new Error("generator manifest is invalid");
+  artifact.manifest.manifest.status = "draft";
+  artifact.manifest.manifest.validation = {
+    schema: "pending", code: "pending", content_review: "pending", transfer_review: "pending", last_validated_at: null,
+  };
+  artifact.manifest.manifest.provenance = {
+    ...(isRecord(artifact.manifest.manifest.provenance) ? artifact.manifest.manifest.provenance : {}),
+    generated_by: { provider: artifact.provider, model: artifact.model, task_version: artifact.taskVersion, generated_at: new Date().toISOString() },
+  };
+  definition.validateArtifact(artifact.manifest);
+  if (!isRecord(artifact.manifest.sources)) throw new Error("generator sources are invalid");
   const artifactAbsolutePath = join(dirname(statePath), "artifacts", draft.id);
   await mkdir(artifactAbsolutePath, { recursive: true });
   await writeFile(join(artifactAbsolutePath, "unit.json"), `${JSON.stringify(artifact.manifest.manifest, null, 2)}\n`, "utf8");

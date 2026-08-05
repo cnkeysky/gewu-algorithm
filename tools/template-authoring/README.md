@@ -111,5 +111,8 @@ review before moving the draft to `accepted`.
 
 Generation tasks are resolved through the TypeScript task registry. Use
 `GET /api/tasks` to inspect registered task ids and versions. Each task owns
-its support predicate and output contract; adding a new algorithm task does not
-require another API generation branch.
+its support predicate, prompt, output schema, and artifact validator; adding a
+new algorithm task does not require another API generation branch. The registry
+now includes the Kahn topological-sort and Binary Search tasks, both verified
+through real DeepSeek generation, deterministic validation, and a correctness
+review.
