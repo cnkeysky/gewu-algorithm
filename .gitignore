@@ -4,6 +4,7 @@
 # Node.js and extension build output
 node_modules/
 dist/
+*.tsbuildinfo
 out/
 coverage/
 .nyc_output/

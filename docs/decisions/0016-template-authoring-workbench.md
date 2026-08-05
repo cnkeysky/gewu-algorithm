@@ -13,10 +13,10 @@ interactive practice workflow embedded in an editor.
 
 ## Decision
 
-Build a local TypeScript/HTML/CSS authoring workbench around the existing
+Build a local Vite + TypeScript/HTML/CSS authoring workbench around the existing
 provider-neutral generation pipeline. Keep it independent of VS Code and make
 accepted `AlgorithmUnit` artifacts the only integration contract for editor
-adapters. Add React/Vite only when component complexity justifies it.
+adapters. Add React only when component complexity justifies it.
 
 Represent coding modes with a `GenerationProfile` attached to one generation
 task. Generate one algorithm unit with mode-specific practice projections;

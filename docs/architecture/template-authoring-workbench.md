@@ -9,16 +9,13 @@ template contracts through the core protocol.
 
 ## UI technology
 
-The first implementation should use TypeScript, semantic HTML, and plain CSS,
-served by a small local TypeScript HTTP service. This keeps the workbench easy
-to run, keeps secrets out of browser persistence, and avoids coupling the
-authoring workflow to an editor extension. The UI should be organized around
-explicit state and typed API payloads rather than DOM scraping.
-
-React/Vite is an acceptable later migration when the workbench needs reusable
-interactive components, routing, or a larger review surface. It is not a
-requirement for the first slice and should not be introduced only for visual
-decoration.
+The first implementation uses Vite, TypeScript, semantic HTML, and plain CSS,
+served by a small local TypeScript HTTP service. Vite provides the development
+server and production bundle without coupling the workbench to an editor
+extension. The UI should be organized around explicit state and typed API
+payloads rather than DOM scraping. React remains an optional later addition if
+the review surface requires a component framework; it is not required by the
+authoring contract.
 
 ## Main views
 
