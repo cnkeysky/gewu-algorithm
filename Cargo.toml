@@ -20,4 +20,5 @@ repository = "https://github.com/cnkeysky/gewu-algorithm"
 [workspace.dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
+sha2 = "0.10.9"
 thiserror = "2.0.12"

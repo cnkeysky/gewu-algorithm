@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 //! JSON loading, semantic validation, and source resolution for `AlgorithmUnit` files.
 
+pub mod lifecycle;
+pub mod pack;
+
 use std::{
     collections::HashSet,
     fs, io,

@@ -167,11 +167,21 @@ set in core tests, and the CLI can project recommendations without an editor.
 
 ## Stage 9: Content Lifecycle and Distribution
 
+Status: complete as of 2026-08-05.
+
 - define checksummed content-pack manifests and compatibility checks;
 - harden draft, review, validation, revision, and deprecation workflows;
 - evaluate extracting `gewu-algorithm-templates` only after the schema and
   contribution cadence satisfy the documented split criteria;
 - add knowledge relationships only after they improve real recommendations.
+
+Stage 9 now has a versioned SHA-256 content-pack manifest and verification
+command (`gewu-template pack build|verify`), explicit lifecycle transition
+rules, and documented split criteria. The current repository remains the
+content owner: it has not reached the unit count, independent contribution
+cadence, or release ownership needed for a separate templates repository.
+Knowledge relationships remain part of the AlgorithmUnit contract and are not
+expanded without evidence that they improve Stage 8 recommendations.
 
 ## Stage 10: Client and Editor Expansion
 

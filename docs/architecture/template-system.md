@@ -79,4 +79,10 @@ Until then, a monorepo avoids synchronized changes across unstable contracts.
 
 ## Distribution
 
-Git is the authoring and review mechanism. Runtime clients should consume a tagged, checksummed content-pack artifact or an explicitly selected local directory. Git submodules are not the default distribution mechanism because they make installation and version resolution harder for ordinary users.
+Git is the authoring and review mechanism. `gewu-template pack build` emits a
+versioned JSON manifest with SHA-256 hashes for every unit directory and the
+pack inventory; `gewu-template pack verify` validates those hashes before a
+runtime consumes the pack. Runtime clients should consume a tagged,
+checksummed content-pack artifact or an explicitly selected local directory.
+Git submodules are not the default distribution mechanism because they make
+installation and version resolution harder for ordinary users.
