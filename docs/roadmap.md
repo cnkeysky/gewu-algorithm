@@ -56,7 +56,7 @@ Exit according to [MVP criteria](product/mvp.md).
 
 ## Stage 4: Core Learning Contracts and Template Schema
 
-Status: in progress as of 2026-08-05.
+Status: complete as of 2026-08-05.
 
 - specify platform-independent content, assistance, event, and scoring contracts
   for all reserved practice modes;
@@ -73,7 +73,7 @@ five practice modes without an editor, network connection, or LLM provider.
 
 ## Stage 5: Core Progressive Code Practice
 
-Status: in progress as of 2026-08-05. The deterministic session, host-free core
+Status: complete as of 2026-08-05. The deterministic session, host-free core
 service, protocol DTOs, practice-definition selection, checkpoint replay, and
 local attempt facts are implemented. Editor integration and broader progression
 behavior remain deferred.
@@ -91,6 +91,10 @@ Exit when progressive code practice can be replayed and scored deterministically
 through core tests and the CLI.
 
 ## Stage 6: Core Reasoning and Transfer Practice
+
+Status: in progress as of 2026-08-05. The next slice starts with an offline,
+deterministic session contract and explicit attempt facts for reasoning and
+transfer answers.
 
 - implement `reasoning_recall` against reviewed concepts, invariants,
   trade-offs, boundaries, and failure conditions;
