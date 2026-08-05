@@ -104,9 +104,9 @@ falls back to browser local storage when the API is unavailable. The
 moves a valid draft to `validated`. For the currently supported Kahn
 topological-sort example, `POST /api/drafts/:id/generate` calls the configured
 Pi-ai provider and stores a contained artifact; `POST
-/api/drafts/:id/reviews` runs a role-specific review against that artifact. A
-different algorithm task is rejected until its output schema and validator are
-declared rather than being silently treated as Kahn. Finally,
+/api/drafts/:id/reviews` runs a role-specific review against that artifact. New
+algorithm categories use the general AlgorithmUnit contract until a specialized
+schema and validator are registered. Finally,
 `POST /api/drafts/:id/accept` requires deterministic validation and a passing
 review before moving the draft to `accepted`.
 
@@ -117,3 +117,12 @@ new algorithm task does not require another API generation branch. The registry
 now includes the Kahn topological-sort and Binary Search tasks, both verified
 through real DeepSeek generation, deterministic validation, and a correctness
 review.
+
+Rule proposals can be checked locally before involving a model:
+
+```sh
+npm run rule-dedup -- NEW-RULE "The implementation and assumptions match declared space and time bounds."
+```
+
+Exact and high-similarity rewrites are automatically marked `duplicate`; only
+independent or ambiguous proposals become `needs_review`.
