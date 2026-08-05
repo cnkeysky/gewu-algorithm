@@ -58,10 +58,10 @@ root.innerHTML = `
           <legend>Practice projections <button class="select-all" type="button" id="select-all-modes">Select all</button></legend>
           <div class="mode-list">${modes.map((mode) => `<label class="mode-option"><input type="checkbox" name="mode" value="${mode.id}" ${mode.id === "shadow_typing" || mode.id === "flow_recall" ? "checked" : ""} /><span class="checkmark"></span><span><strong>${mode.label}</strong><small>${mode.hint}</small></span></label>`).join("")}</div>
         </fieldset>
-        <fieldset id="assistance-fieldset" class="assistance-fieldset" disabled>
+        <fieldset id="assistance-fieldset" class="assistance-fieldset">
           <legend>Code recall assistance</legend>
           <div class="assistance-list">${assistance.map((item) => `<label><input type="checkbox" name="assistance" value="${item.id}" /><span>${item.label}</span></label>`).join("")}</div>
-          <p class="field-note">Select code recall to configure its hint progression.</p>
+          <p class="field-note">These hints are included only when code recall is selected.</p>
         </fieldset>
         <div class="form-actions"><button class="button secondary" type="button" id="reset">Reset</button><button class="button primary" type="submit">Create draft <span aria-hidden="true">&#8594;</span></button></div>
         <p class="form-message" id="form-message" role="status"></p>
@@ -105,11 +105,13 @@ interface DraftRecord {
   variants: number;
   modes: PracticeMode[];
   assistance: Assistance[];
-  status: "draft" | "queued" | "validated" | "accepted";
+  status: "draft" | "queued" | "generated" | "validated" | "accepted";
   createdAt: string;
 }
+interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; createdAt: string; }
 
 const DRAFTS_KEY = "gewu.authoring.drafts.v1";
+const REVIEWS_KEY = "gewu.authoring.reviews.v1";
 function readDrafts(): DraftRecord[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? "[]");
@@ -117,12 +119,18 @@ function readDrafts(): DraftRecord[] {
   } catch { return []; }
 }
 function saveDrafts(drafts: DraftRecord[]): void { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); }
+function readReviews(): ReviewRecord[] { try { const value: unknown = JSON.parse(localStorage.getItem(REVIEWS_KEY) ?? "[]"); return Array.isArray(value) ? value as ReviewRecord[] : []; } catch { return []; } }
 async function syncFromApi(): Promise<void> {
   try {
     const response = await fetch("/api/drafts");
     if (!response.ok) return;
     const payload = await response.json() as { drafts?: DraftRecord[] };
     if (Array.isArray(payload.drafts)) saveDrafts(payload.drafts);
+    const reviewsResponse = await fetch("/api/reviews");
+    if (reviewsResponse.ok) {
+      const reviewsPayload = await reviewsResponse.json() as { reviews?: ReviewRecord[] };
+      if (Array.isArray(reviewsPayload.reviews)) localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviewsPayload.reviews));
+    }
     renderDrafts();
     renderHistory();
   } catch {
@@ -133,11 +141,12 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat(unde
 function renderDrafts(): void {
   const drafts = readDrafts();
   document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
-  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="draft-row" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" ? "disabled" : ""}>${draft.status === "validated" ? "Validated" : "Validate"}</button></span></div>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="draft-row" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><button class="inline-action" type="button" data-generate-id="${draft.id}" ${draft.status === "generated" || draft.status === "validated" ? "disabled" : ""}>${draft.status === "generated" || draft.status === "validated" ? "Generated" : "Generate"}</button><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" ? "disabled" : ""}>${draft.status === "validated" ? "Validated" : "Validate"}</button><button class="inline-action" type="button" data-review-id="${draft.id}" ${draft.status === "queued" ? "disabled" : ""}>Review</button></span></div>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
 }
 function renderHistory(): void {
   const drafts = readDrafts();
-  historyList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="history-row"><span class="review-mark pending-mark">&#8226;</span><span><strong>Awaiting review</strong><small>${draft.title} · ${draft.provider}/${draft.model}</small></span><span class="history-status">Pending</span></div>`).join("") : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
+  const reviews = readReviews();
+  historyList.innerHTML = reviews.length ? reviews.map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small></span><span class="history-status">${review.verdict}</span></div>`; }).join("") : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
 }
 
 function showView(view: string): void {
@@ -152,6 +161,18 @@ document.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
   const navigation = target.closest<HTMLButtonElement>(".nav-item, [data-go]");
   if (navigation) showView(navigation.dataset.view ?? navigation.dataset.go ?? "new");
+  const generateButton = target.closest<HTMLButtonElement>("[data-generate-id]");
+  if (generateButton) {
+    event.stopPropagation();
+    const id = generateButton.dataset.generateId;
+    void fetch(`/api/drafts/${id}/generate`, { method: "POST" }).then(async (response) => {
+      const payload = await response.json() as { error?: string; status?: string };
+      message.textContent = response.ok ? "Draft generated and stored as a local artifact." : `Generation failed: ${payload.error ?? "unknown error"}`;
+      message.className = response.ok ? "form-message success" : "form-message error";
+      if (response.ok) { await syncFromApi(); showView("drafts"); }
+    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+    return;
+  }
   const validateButton = target.closest<HTMLButtonElement>("[data-validate-id]");
   if (validateButton) {
     event.stopPropagation();
@@ -161,6 +182,18 @@ document.addEventListener("click", (event) => {
       message.textContent = response.ok ? "Deterministic validation passed." : `Validation failed: ${(payload.errors ?? ["unknown error"]).join("; ")}`;
       message.className = response.ok ? "form-message success" : "form-message error";
       if (response.ok) { await syncFromApi(); showView("drafts"); }
+    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+    return;
+  }
+  const reviewButton = target.closest<HTMLButtonElement>("[data-review-id]");
+  if (reviewButton) {
+    event.stopPropagation();
+    const id = reviewButton.dataset.reviewId;
+    void fetch(`/api/drafts/${id}/reviews`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "algorithm_correctness" }) }).then(async (response) => {
+      const payload = await response.json() as { error?: string };
+      message.textContent = response.ok ? "Algorithm correctness review completed." : `Review failed: ${payload.error ?? "unknown error"}`;
+      message.className = response.ok ? "form-message success" : "form-message error";
+      if (response.ok) { await syncFromApi(); showView("history"); }
     }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
     return;
   }
@@ -190,12 +223,12 @@ function updateProfile(): void {
   const selectedModes = selectedValues<PracticeMode>("mode");
   const selectedAssistance = selectedValues<Assistance>("assistance");
   const codeRecall = selectedModes.includes("code_recall");
-  assistanceFieldset.disabled = !codeRecall;
+  assistanceFieldset.disabled = false;
   const language = (document.querySelector<HTMLInputElement>("#languages")!.value || "python").split(",").map((value) => value.trim()).filter(Boolean);
   const variants = Number(document.querySelector<HTMLInputElement>("#variants")!.value);
   profileState.textContent = selectedModes.length > 0 && language.length > 0 && variants > 0 ? "Ready" : "Needs input";
   profileState.className = `valid-badge ${profileState.textContent === "Ready" ? "" : "warning"}`;
-  profileSummary.innerHTML = `<div class="summary-block"><span>Modes</span><div class="tag-list">${selectedModes.length ? selectedModes.map((mode) => `<span class="tag">${mode.replaceAll("_", " ")}</span>`).join("") : "<em>None selected</em>"}</div></div><div class="summary-block"><span>Assistance</span><div class="tag-list">${codeRecall && selectedAssistance.length ? selectedAssistance.map((item) => `<span class="tag muted">${item}</span>`).join("") : `<em>${codeRecall ? "Choose optional hints" : "Requires code recall"}</em>`}</div></div><div class="summary-meta"><span>${language.join(", ")}</span><span>${Number.isFinite(variants) ? variants : 0} variant${variants === 1 ? "" : "s"}</span></div>`;
+  profileSummary.innerHTML = `<div class="summary-block"><span>Modes</span><div class="tag-list">${selectedModes.length ? selectedModes.map((mode) => `<span class="tag">${mode.replaceAll("_", " ")}</span>`).join("") : "<em>None selected</em>"}</div></div><div class="summary-block"><span>Assistance</span><div class="tag-list">${selectedAssistance.length ? selectedAssistance.map((item) => `<span class="tag muted">${item}</span>`).join("") : "<em>No hints selected</em>"}</div><small class="profile-note">${codeRecall ? "Applied to code recall." : "Configured, but inactive until code recall is selected."}</small></div><div class="summary-meta"><span>${language.join(", ")}</span><span>${Number.isFinite(variants) ? variants : 0} variant${variants === 1 ? "" : "s"}</span></div>`;
   const allSelected = selectedModes.length === document.querySelectorAll<HTMLInputElement>("input[name=mode]").length;
   selectAllModes.textContent = allSelected ? "Clear all" : "Select all";
   selectAllModes.setAttribute("aria-pressed", String(allSelected));

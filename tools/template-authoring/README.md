@@ -93,10 +93,16 @@ npm run workbench:api
 npm run workbench:dev
 ```
 
+Use `npm run workbench:api:local` when the API should load the ignored
+`.env.local` DeepSeek configuration for live generation.
+
 The API stores draft metadata and pending review records in the ignored
 `drafts/.workbench/state.json`. It never accepts provider credentials. The UI
 falls back to browser local storage when the API is unavailable. The
-`POST /api/drafts/:id/validate` operation performs the first deterministic
-profile check and moves a valid draft to `validated`; it does not claim that an
-LLM artifact has been generated. Generation and role review remain the next
-server operations.
+`POST /api/drafts/:id/validate` performs the deterministic profile check and
+moves a valid draft to `validated`. For the currently supported Kahn
+topological-sort example, `POST /api/drafts/:id/generate` calls the configured
+Pi-ai provider and stores a contained artifact; `POST
+/api/drafts/:id/reviews` runs a role-specific review against that artifact. A
+different algorithm task is rejected until its output schema and validator are
+declared rather than being silently treated as Kahn.

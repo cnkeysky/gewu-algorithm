@@ -1,13 +1,16 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertGeneratedTemplate, task } from "./generate-template.js";
+import { PiGenerator, optionsFromEnvironment, type CodeRecallAssistanceSelection, type PracticeModeSelection } from "./pi-generator.js";
+import { reviewTemplateDraft } from "./review-template.js";
 
 const PORT = Number(process.env.GEWU_WORKBENCH_PORT ?? 4174);
 const here = dirname(fileURLToPath(import.meta.url));
 const statePath = resolve(here, "../drafts/.workbench/state.json");
 
-type DraftStatus = "draft" | "queued" | "validated" | "accepted";
+type DraftStatus = "draft" | "queued" | "generated" | "validated" | "accepted";
 type DraftRecord = {
   id: string;
   title: string;
@@ -20,6 +23,7 @@ type DraftRecord = {
   assistance: string[];
   status: DraftStatus;
   createdAt: string;
+  artifactPath?: string;
 };
 type ReviewRecord = {
   id: string;
@@ -55,6 +59,36 @@ async function saveState(state: State): Promise<void> {
   const temporary = `${statePath}.tmp`;
   await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
   await rename(temporary, statePath);
+}
+
+async function generateDraft(draft: DraftRecord): Promise<{ provider: string; model: string; artifactPath: string }> {
+  const normalized = draft.problem.toLowerCase();
+  if (!normalized.includes("kahn") || !normalized.includes("topological")) {
+    throw new Error("the live generator currently supports the Kahn topological-sort authoring task only");
+  }
+  const artifact = await new PiGenerator(optionsFromEnvironment()).generate({
+    ...task,
+    instruction: `${task.instruction}\n\nAuthor problem supplied by the workbench:\n${draft.problem}`,
+    profile: {
+      practice_modes: draft.modes as PracticeModeSelection[],
+      code_recall_assistance: draft.assistance as CodeRecallAssistanceSelection[],
+      implementation_languages: [draft.language],
+      implementation_variants: draft.variants,
+    },
+  });
+  if (!isRecord(artifact.manifest)) throw new Error("generator returned an invalid artifact");
+  assertGeneratedTemplate(artifact.manifest);
+  const artifactAbsolutePath = join(dirname(statePath), "artifacts", draft.id);
+  await mkdir(artifactAbsolutePath, { recursive: true });
+  await writeFile(join(artifactAbsolutePath, "unit.json"), `${JSON.stringify(artifact.manifest.manifest, null, 2)}\n`, "utf8");
+  for (const [path, content] of Object.entries(artifact.manifest.sources)) {
+    if (typeof content !== "string" || path.includes("..") || path.startsWith("/")) throw new Error(`invalid generated source path: ${path}`);
+    const destination = join(artifactAbsolutePath, path);
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, content, "utf8");
+  }
+  await writeFile(join(artifactAbsolutePath, "generation.json"), `${JSON.stringify({ provider: artifact.provider, model: artifact.model, task_id: artifact.taskId, task_version: artifact.taskVersion, review: artifact.review }, null, 2)}\n`, "utf8");
+  return { provider: artifact.provider, model: artifact.model, artifactPath: relative(resolve(here, "../..", ".."), artifactAbsolutePath) };
 }
 
 function send(response: ServerResponse, status: number, body: unknown): void {
@@ -123,6 +157,16 @@ const server = createServer(async (request, response) => {
       await saveState(state);
       return send(response, 201, { draft });
     }
+    const generationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/generate$/);
+    if (request.method === "POST" && generationMatch) {
+      const draft = state.drafts.find((item) => item.id === generationMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      const generated = await generateDraft(draft);
+      draft.status = "generated";
+      draft.artifactPath = generated.artifactPath;
+      await saveState(state);
+      return send(response, 200, { status: "generated", provider: generated.provider, model: generated.model, artifactPath: generated.artifactPath });
+    }
     const validationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/validate$/);
     if (request.method === "POST" && validationMatch) {
       const draft = state.drafts.find((item) => item.id === validationMatch[1]);
@@ -137,8 +181,15 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && reviewMatch) {
       const payload = await body(request);
       if (!isRecord(payload) || typeof payload.role !== "string") throw new Error("review role is required");
-      if (!state.drafts.some((draft) => draft.id === reviewMatch[1])) return send(response, 404, { error: "draft not found" });
-      const review: ReviewRecord = { id: crypto.randomUUID(), draftId: reviewMatch[1], role: payload.role, verdict: "pending", artifactHash: null, createdAt: new Date().toISOString() };
+      const draft = state.drafts.find((item) => item.id === reviewMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      if (!draft.artifactPath) return send(response, 409, { error: "generate the draft before requesting review" });
+      const repoRoot = resolve(here, "../..", "..");
+      const artifactAbsolutePath = resolve(repoRoot, draft.artifactPath);
+      await reviewTemplateDraft(relative(repoRoot, artifactAbsolutePath), payload.role);
+      const reportPath = join(artifactAbsolutePath, "reviews", `${payload.role}.json`);
+      const report = JSON.parse(await readFile(reportPath, "utf8")) as { verdict?: ReviewRecord["verdict"]; artifact_hash?: string };
+      const review: ReviewRecord = { id: crypto.randomUUID(), draftId: draft.id, role: payload.role, verdict: report.verdict ?? "pending", artifactHash: report.artifact_hash ?? null, createdAt: new Date().toISOString() };
       state.reviews = [review, ...state.reviews];
       await saveState(state);
       return send(response, 201, { review });
