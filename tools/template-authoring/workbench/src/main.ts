@@ -29,9 +29,10 @@ if (!root) throw new Error("workbench root is missing");
 
 root.innerHTML = `
   <header class="topbar">
-    <a class="brand" href="#">GEWU <span>AUTHORING</span></a>
+    <a class="brand" href="#home" data-go="home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>GEWU <span>HOME</span></a>
     <nav aria-label="Primary navigation">
-      <button class="nav-item active" data-view="new">New draft</button>
+      <button class="nav-item active" data-view="home">Home</button>
+      <button class="nav-item" data-view="new">Authoring</button>
       <button class="nav-item" data-view="practice">Practice</button>
       <button class="nav-item" data-view="drafts">Drafts <span class="nav-count">3</span></button>
       <button class="nav-item" data-view="history">Review history</button>
@@ -39,7 +40,22 @@ root.innerHTML = `
     <div class="connection"><span class="status-dot"></span> Local workspace</div>
   </header>
   <main class="shell">
-    <div id="new-view" class="app-view">
+    <section id="home-view" class="app-view home-view">
+      <div class="home-hero">
+        <div class="hero-copy">
+          <p class="eyebrow">GEWU / Algorithm practice system</p>
+          <h1>Make the invisible structure of an algorithm visible.</h1>
+          <p class="hero-lede">GEWU turns reviewed algorithms into deliberate practice. Reconstruct code, recover reasoning, and transfer patterns while one deterministic core keeps every transition and attempt trustworthy.</p>
+          <div class="hero-actions"><button class="button primary" type="button" data-go="practice">Start practicing <span aria-hidden="true">&#8594;</span></button><button class="button secondary" type="button" data-go="new">Author a unit</button></div>
+          <div class="hero-meta"><span><b>01</b> canonical AlgorithmUnit</span><span><b>05</b> practice projections</span><span><b>00</b> hidden scoring shortcuts</span></div>
+        </div>
+        <div class="terminal-visual" aria-label="GEWU core status visualization"><div class="terminal-bar"><span></span><span></span><span></span><b>gewu-core</b></div><div class="terminal-body"><p><em>core</em>.start(<strong>graph.bfs</strong>, <strong>code_recall</strong>)</p><p class="dim">&gt; loading reviewed revision <strong>r1</strong></p><p class="green">&gt; state machine ready</p><p class="amber">&gt; next move: reconstruct frontier</p><div class="terminal-grid"><span>accepted</span><strong>000</strong><span>stability</span><strong>0.00</strong><span>mode</span><strong>RECALL</strong></div></div></div>
+      </div>
+      <section class="vision-strip"><div><p class="eyebrow">The GEWU model</p><h2>One canonical unit. Many ways to remember it.</h2></div><p>Content, practice, review, and persistence share a typed boundary. The interface can change; the learning facts do not.</p></section>
+      <section class="home-cards"><article><span class="card-index">01</span><h3>Reconstruct</h3><p>Shadow typing and code recall make the implementation a sequence of decisions, not a snippet to copy.</p><button class="text-link" type="button" data-go="practice">Open Practice <span aria-hidden="true">&#8594;</span></button></article><article><span class="card-index">02</span><h3>Understand</h3><p>Flow, reasoning, and transfer recall keep state, invariants, trade-offs, and boundaries in view.</p><button class="text-link" type="button" data-go="practice">Explore modes <span aria-hidden="true">&#8594;</span></button></article><article><span class="card-index">03</span><h3>Author</h3><p>Describe an algorithm once. GEWU generates one reviewed learning unit with explicit practice projections.</p><button class="text-link" type="button" data-go="new">Build a unit <span aria-hidden="true">&#8594;</span></button></article></section>
+      <section class="core-principles"><div><p class="eyebrow">Under the surface</p><h2>Trust lives in the core.</h2></div><div class="principle-list"><p><b>Rust Core</b><span>Owns scoring, transitions, checkpoints, and attempt facts.</span></p><p><b>Local first</b><span>Your content and practice history stay on the machine.</span></p><p><b>Provider neutral</b><span>LLM generation is optional and never owns completion state.</span></p></div></section>
+    </section>
+    <div id="new-view" class="app-view" hidden>
     <section class="intro">
       <div>
         <p class="eyebrow">Template authoring</p>
@@ -114,7 +130,7 @@ root.innerHTML = `
       <p class="view-note">Reports are tied to an artifact hash and cannot promote a draft without human acceptance.</p>
     </section>
   </main>
-  <footer><span>GEWU Template Authoring</span><span>Drafts stay local until explicitly accepted.</span></footer>
+  <footer><span>GEWU / deliberate algorithm practice</span><span>Local by design.</span></footer>
 `;
 
 const form = document.querySelector<HTMLFormElement>("#draft-form")!;
