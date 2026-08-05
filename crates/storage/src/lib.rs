@@ -12,8 +12,10 @@ use thiserror::Error;
 
 const HISTORY_FILE: &str = "attempts-v1.json";
 const CHECKPOINTS_FILE: &str = "checkpoints-v2.json";
+const REVIEW_STATE_FILE: &str = "review-state-v1.json";
 const HISTORY_FORMAT_VERSION: u32 = 1;
 const CHECKPOINT_FORMAT_VERSION: u32 = 2;
+const REVIEW_STATE_FORMAT_VERSION: u32 = 1;
 
 /// A terminal attempt persisted without user source or answer contents.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -55,6 +57,23 @@ pub struct StoredCheckpoint {
     pub saved_at: String,
 }
 
+/// Persisted scheduler state; it contains no source or answer content.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct StoredReviewState {
+    pub unit_id: String,
+    pub revision: u64,
+    pub mode: String,
+    pub last_reviewed_at_ms: u64,
+    pub next_due_at_ms: u64,
+    pub stability_days: f64,
+    pub difficulty: f64,
+    pub scheduler_version: String,
+    #[serde(default)]
+    pub model_version: Option<String>,
+    pub success_count: u64,
+    pub failure_count: u64,
+}
+
 /// Replayed event log used only to resume a live session.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StoredEvent {
@@ -72,6 +91,11 @@ struct HistoryDocument {
 struct CheckpointDocument {
     format_version: u32,
     checkpoints: Vec<StoredCheckpoint>,
+}
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+struct ReviewStateDocument {
+    format_version: u32,
+    states: Vec<StoredReviewState>,
 }
 
 /// Local data store rooted at a caller-selected portable directory.
@@ -160,6 +184,44 @@ impl LocalStore {
         self.write_json(CHECKPOINTS_FILE, &document)?;
         Ok(before != document.checkpoints.len())
     }
+    pub fn list_review_states(&self) -> Result<Vec<StoredReviewState>, StorageError> {
+        Ok(self.read_review_states()?.states)
+    }
+    pub fn upsert_review_state(&self, state: StoredReviewState) -> Result<(), StorageError> {
+        let mut document = self.read_review_states()?;
+        document.states.retain(|existing| {
+            !(existing.unit_id == state.unit_id
+                && existing.revision == state.revision
+                && existing.mode == state.mode)
+        });
+        document.states.push(state);
+        self.write_json(REVIEW_STATE_FILE, &document)
+    }
+    pub fn delete_review_states(
+        &self,
+        keys: &[(String, u64, String)],
+    ) -> Result<usize, StorageError> {
+        let mut document = self.read_review_states()?;
+        let before = document.states.len();
+        document.states.retain(|state| {
+            !keys.iter().any(|(unit_id, revision, mode)| {
+                state.unit_id == *unit_id && state.revision == *revision && state.mode == *mode
+            })
+        });
+        self.write_json(REVIEW_STATE_FILE, &document)?;
+        Ok(before - document.states.len())
+    }
+    pub fn delete_all_review_states(&self) -> Result<usize, StorageError> {
+        let count = self.read_review_states()?.states.len();
+        self.write_json(
+            REVIEW_STATE_FILE,
+            &ReviewStateDocument {
+                format_version: REVIEW_STATE_FORMAT_VERSION,
+                states: Vec::new(),
+            },
+        )?;
+        Ok(count)
+    }
     fn read_history(&self) -> Result<HistoryDocument, StorageError> {
         let document = self.read_json(
             HISTORY_FILE,
@@ -187,6 +249,21 @@ impl LocalStore {
             CHECKPOINTS_FILE,
             document.format_version,
             CHECKPOINT_FORMAT_VERSION,
+        )?;
+        Ok(document)
+    }
+    fn read_review_states(&self) -> Result<ReviewStateDocument, StorageError> {
+        let document = self.read_json(
+            REVIEW_STATE_FILE,
+            ReviewStateDocument {
+                format_version: REVIEW_STATE_FORMAT_VERSION,
+                states: Vec::new(),
+            },
+        )?;
+        self.ensure_version(
+            REVIEW_STATE_FILE,
+            document.format_version,
+            REVIEW_STATE_FORMAT_VERSION,
         )?;
         Ok(document)
     }
@@ -323,6 +400,27 @@ mod tests {
                 .unwrap_or_else(|error| panic!("delete: {error}")),
             1
         );
+        fs::remove_dir_all(root).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+    #[test]
+    fn round_trips_review_scheduler_state() {
+        let root = root();
+        let store = LocalStore::open(&root).unwrap_or_else(|error| panic!("open: {error}"));
+        let state = StoredReviewState {
+            unit_id: "graph.bfs".to_owned(),
+            revision: 1,
+            mode: "shadow_typing".to_owned(),
+            last_reviewed_at_ms: 100,
+            next_due_at_ms: 200,
+            stability_days: 2.5,
+            difficulty: 0.4,
+            scheduler_version: "review-v1".to_owned(),
+            model_version: None,
+            success_count: 2,
+            failure_count: 0,
+        };
+        store.upsert_review_state(state.clone()).unwrap();
+        assert_eq!(store.list_review_states().unwrap(), vec![state]);
         fs::remove_dir_all(root).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
     #[test]

@@ -21,9 +21,14 @@ answers, editor metadata, and presentation details.
   days.
 - Two or more clean completions allow progression after seven days.
 
-The schedule is expressed as `due_after_days` so clients can apply their own
-clock and locale. Recommendations include the policy version and source
-attempt IDs for auditability.
+The schedule is expressed as `due_after_days` for a fresh projection and as
+`due_at_ms` when persisted scheduler state exists. Recommendations include the
+policy version and source attempt IDs for auditability.
+
+The persisted state uses an Ebbinghaus-inspired bounded stability estimate:
+successful independent reconstruction increases stability, while rejection or
+assistance dependence reduces it. This is a transparent prior, not a claim
+that every learner follows one universal forgetting curve.
 
 ## User Overrides
 

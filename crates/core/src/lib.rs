@@ -23,9 +23,10 @@ use gewu_protocol::{
     UnitSummary,
 };
 use gewu_review::{
-    AttemptFact, ReviewRecommendation, TerminalReason as ReviewTerminalReason, recommend,
+    AttemptFact, ReviewRecommendation, ReviewState, TerminalReason as ReviewTerminalReason,
+    recommend, update_state,
 };
-use gewu_storage::{LocalStore, StoredAttempt, StoredCheckpoint, StoredEvent};
+use gewu_storage::{LocalStore, StoredAttempt, StoredCheckpoint, StoredEvent, StoredReviewState};
 use gewu_template::{LoadError, load_algorithm_unit};
 use thiserror::Error;
 
@@ -403,39 +404,52 @@ impl Core {
         let attempts = self.store.list_attempts(limit)?;
         let facts = attempts
             .into_iter()
-            .map(|value| {
-                let mode = parse_stored_mode_for_review(&value.mode)?;
-                let terminal_reason = match value.terminal_reason.as_str() {
-                    "completed" => ReviewTerminalReason::Completed,
-                    "stopped" => ReviewTerminalReason::Stopped,
-                    other => {
-                        return Err(CoreError::UnsupportedStoredTerminalReason(other.to_owned()));
-                    }
-                };
-                Ok(AttemptFact {
-                    id: value.id,
-                    unit_id: gewu_domain::UnitId::parse(value.unit_id)
-                        .map_err(|error| CoreError::InvalidReviewUnit(error.to_string()))?,
-                    revision: gewu_domain::Revision::new(value.revision)
-                        .map_err(|error| CoreError::InvalidReviewRevision(error.to_string()))?,
-                    mode,
-                    terminal_reason,
-                    accepted: value.accepted_input_count,
-                    rejected: value.rejected_input_count,
-                    prompts: value.prompt_count,
-                    scaffold_reveals: value.scaffold_reveal_count,
-                    active_ms: value.active_ms,
-                    wall_ms: value.wall_ms,
-                })
-            })
+            .map(review_fact_from_stored)
             .collect::<Result<Vec<_>, CoreError>>()?;
-        Ok(recommend(&facts))
+        let states = self
+            .store
+            .list_review_states()?
+            .into_iter()
+            .map(review_state_from_stored)
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(recommend(&facts)
+            .into_iter()
+            .map(|mut recommendation| {
+                recommendation.due_at_ms = states
+                    .iter()
+                    .find(|state| {
+                        state.unit_id == recommendation.unit_id
+                            && state.revision == recommendation.revision
+                            && state.mode == recommendation.mode
+                    })
+                    .map(|state| state.next_due_at_ms);
+                recommendation
+            })
+            .collect())
     }
     pub fn delete_history(&self) -> Result<usize, CoreError> {
-        Ok(self.store.delete_history()?)
+        let deleted = self.store.delete_history()?;
+        self.store.delete_all_review_states()?;
+        Ok(deleted)
     }
     pub fn delete_attempts(&self, ids: &[String]) -> Result<usize, CoreError> {
-        Ok(self.store.delete_attempts(ids)?)
+        let before = self.store.list_attempts(usize::MAX)?;
+        let deleted = self.store.delete_attempts(ids)?;
+        let remaining = self.store.list_attempts(usize::MAX)?;
+        let keys = before
+            .into_iter()
+            .filter(|attempt| ids.contains(&attempt.id))
+            .filter(|attempt| {
+                !remaining.iter().any(|other| {
+                    other.unit_id == attempt.unit_id
+                        && other.revision == attempt.revision
+                        && other.mode == attempt.mode
+                })
+            })
+            .map(|attempt| (attempt.unit_id, attempt.revision, attempt.mode))
+            .collect::<Vec<_>>();
+        self.store.delete_review_states(&keys)?;
+        Ok(deleted)
     }
 
     fn start_session_with_id(
@@ -585,7 +599,8 @@ impl Core {
             .get(session_id)
             .ok_or_else(|| CoreError::UnknownSession(session_id.to_owned()))?;
         if let Some(attempt) = session.terminal_attempt(session_id) {
-            self.store.append_attempt(attempt)?;
+            self.store.append_attempt(attempt.clone())?;
+            self.update_review_state(&attempt)?;
             self.store.clear_checkpoint(&checkpoint_id(session_id))?;
         } else {
             self.store
@@ -598,6 +613,24 @@ impl Core {
             .get(session_id)
             .map(|session| session.view(session_id))
             .ok_or_else(|| CoreError::UnknownSession(session_id.to_owned()))
+    }
+    fn update_review_state(&self, attempt: &StoredAttempt) -> Result<(), CoreError> {
+        let fact = review_fact_from_stored(attempt.clone())?;
+        let previous = self
+            .store
+            .list_review_states()?
+            .into_iter()
+            .find(|state| {
+                state.unit_id == attempt.unit_id
+                    && state.revision == attempt.revision
+                    && state.mode == attempt.mode
+            })
+            .map(review_state_from_stored)
+            .transpose()?;
+        let state = update_state(previous.as_ref(), &fact, unix_millis());
+        self.store
+            .upsert_review_state(stored_state_from_review(&state))?;
+        Ok(())
     }
     fn allocate_session_id(&mut self) -> String {
         let id = format!("session-{}-{}", unix_nanos(), self.next_session);
@@ -1439,6 +1472,64 @@ fn parse_stored_mode_for_review(value: &str) -> Result<gewu_domain::PracticeMode
         _ => Err(CoreError::UnsupportedStoredMode(value.to_owned())),
     }
 }
+fn review_fact_from_stored(value: StoredAttempt) -> Result<AttemptFact, CoreError> {
+    let terminal_reason = match value.terminal_reason.as_str() {
+        "completed" => ReviewTerminalReason::Completed,
+        "stopped" => ReviewTerminalReason::Stopped,
+        other => return Err(CoreError::UnsupportedStoredTerminalReason(other.to_owned())),
+    };
+    Ok(AttemptFact {
+        id: value.id,
+        unit_id: gewu_domain::UnitId::parse(value.unit_id)
+            .map_err(|error| CoreError::InvalidReviewUnit(error.to_string()))?,
+        revision: gewu_domain::Revision::new(value.revision)
+            .map_err(|error| CoreError::InvalidReviewRevision(error.to_string()))?,
+        mode: parse_stored_mode_for_review(&value.mode)?,
+        terminal_reason,
+        accepted: value.accepted_input_count,
+        rejected: value.rejected_input_count,
+        prompts: value.prompt_count,
+        scaffold_reveals: value.scaffold_reveal_count,
+        active_ms: value.active_ms,
+        wall_ms: value.wall_ms,
+    })
+}
+fn review_state_from_stored(value: StoredReviewState) -> Result<ReviewState, CoreError> {
+    Ok(ReviewState {
+        unit_id: gewu_domain::UnitId::parse(value.unit_id)
+            .map_err(|error| CoreError::InvalidReviewUnit(error.to_string()))?,
+        revision: gewu_domain::Revision::new(value.revision)
+            .map_err(|error| CoreError::InvalidReviewRevision(error.to_string()))?,
+        mode: parse_stored_mode_for_review(&value.mode)?,
+        last_reviewed_at_ms: value.last_reviewed_at_ms,
+        next_due_at_ms: value.next_due_at_ms,
+        stability_days: value.stability_days,
+        difficulty: value.difficulty,
+        scheduler_version: value.scheduler_version,
+        model_version: value.model_version,
+        success_count: value.success_count,
+        failure_count: value.failure_count,
+    })
+}
+fn stored_state_from_review(value: &ReviewState) -> StoredReviewState {
+    StoredReviewState {
+        unit_id: value.unit_id.to_string(),
+        revision: value.revision.get(),
+        mode: serde_json::to_value(value.mode)
+            .expect("practice mode serialization is infallible")
+            .as_str()
+            .expect("practice mode serializes to a string")
+            .to_owned(),
+        last_reviewed_at_ms: value.last_reviewed_at_ms,
+        next_due_at_ms: value.next_due_at_ms,
+        stability_days: value.stability_days,
+        difficulty: value.difficulty,
+        scheduler_version: value.scheduler_version.clone(),
+        model_version: value.model_version.clone(),
+        success_count: value.success_count,
+        failure_count: value.failure_count,
+    }
+}
 fn parse_stored_terminal_reason(value: &str) -> Result<TerminalReasonDto, CoreError> {
     match value {
         "completed" => Ok(TerminalReasonDto::Completed),
@@ -1450,6 +1541,11 @@ fn unix_nanos() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |value| value.as_nanos())
+}
+fn unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |value| value.as_millis().try_into().unwrap_or(u64::MAX))
 }
 fn utc_now() -> String {
     let seconds = SystemTime::now()
@@ -1637,6 +1733,18 @@ mod tests {
         assert_eq!(
             core.recent_attempts(10)
                 .unwrap_or_else(|error| panic!("attempts: {error}"))
+                .len(),
+            1
+        );
+        let recommendations = core
+            .review_recommendations(10)
+            .unwrap_or_else(|error| panic!("recommendations: {error}"));
+        assert_eq!(recommendations.len(), 1);
+        assert!(recommendations[0].due_at_ms.is_some());
+        assert_eq!(
+            core.store
+                .list_review_states()
+                .unwrap_or_else(|error| panic!("review state: {error}"))
                 .len(),
             1
         );
