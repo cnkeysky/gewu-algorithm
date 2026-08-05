@@ -1,6 +1,9 @@
 # Keep canonical template text and protocol fixtures stable across platforms.
 * text=auto eol=lf
 
+# Real-host boundary fixture: keep this source physically CRLF on checkout.
+fixtures/algorithm-units/valid/validation/crlf/code/python.py text eol=crlf
+
 # Binary assets must never be line-ending normalized.
 *.gif binary
 *.ico binary

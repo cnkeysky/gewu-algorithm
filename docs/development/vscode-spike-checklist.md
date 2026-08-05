@@ -70,6 +70,9 @@ operating system, keyboard layout, and result in the issue or release notes.
   and verify the panel restores completed steps and current progress.
 - Start another practice while a Flow checkpoint exists. Confirm the extension
   requires Resume, Discard, or Cancel and never silently overwrites it.
+- Choose Stop in the Flow panel. It must stop immediately without opening a
+  redundant confirmation dialog. The command-palette `GEWU: Stop Practice`
+  remains the guarded path and must still ask for confirmation.
 - Complete once and stop once so both terminal reasons can be inspected in
   history.
 
@@ -97,11 +100,20 @@ active checkpoint can be resumed.
 - Verify final-newline completion with editor auto-indentation enabled. Generated
   indentation after the final newline must be removed before completion.
 
-Automated tests cover LF/CRLF normalization, UTF-16-to-Unicode-scalar offset
-translation, non-ASCII scalar deletion, emoji boundaries, and combining
-sequences. These are implementation evidence, but they do not count as real
-host verification. A versioned manual fixture with pinned line endings and
-reviewed Unicode target text is required before the corresponding host items can
-be marked passed.
+For real-host boundary verification, select `CRLF Boundary Fixture` in Shadow
+Typing and complete it without an extra carriage-return mismatch or duplicate
+newline. Its source is pinned to physical CRLF by `.gitattributes`, while the
+practice target is canonical LF.
+
+Then select `Unicode Boundary Fixture`. Type or paste the exact CJK and emoji
+string, verify deletion around the emoji does not jump offsets, and verify the
+decomposed `Cafe` plus combining acute sequence is not silently normalized.
+Interrupt after accepting Unicode text, Resume, and confirm the cursor and
+remaining guidance restore at the same scalar boundary.
+
+Automated tests independently cover CRLF normalization, UTF-16-to-Unicode-scalar
+translation, non-ASCII scalar deletion, emoji boundaries, and decomposed
+combining sequences. Both automated and real-host evidence are required before
+these boundary items are marked passed.
 
 A failed real-host item blocks the relevant stage exit decision.

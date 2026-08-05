@@ -1,0 +1,41 @@
+{
+  "schema_version": "1",
+  "id": "validation.unicode",
+  "revision": 1,
+  "status": "draft",
+  "title": "Unicode Boundary Fixture",
+  "tags": ["validation", "unicode"],
+  "position": {"domain": "validation", "category": "editor-boundary", "prerequisites": []},
+  "problem": {
+    "question": "Do Unicode scalar offsets remain stable during typing, deletion, and resume?",
+    "scope": ["CJK text", "Emoji", "Decomposed combining sequences"],
+    "out_of_scope": ["Unicode normalization equivalence"]
+  },
+  "understanding": {
+    "summary": "The strict target preserves reviewed Unicode scalars without NFC or NFD conversion.",
+    "confidence": "high",
+    "alternatives": [],
+    "failure_conditions": ["UTF-16 offsets split a scalar or normalization silently changes the target."]
+  },
+  "implementations": [{
+    "key": "python-unicode",
+    "language": "python",
+    "source": "code/python.py",
+    "purpose": "teaching",
+    "normalization": {"line_endings": "lf", "trailing_newline": true, "whitespace": "strict"}
+  }],
+  "patterns": [],
+  "relationships": [],
+  "practice": {
+    "shadow_typing": [{"implementation": "python-unicode", "strict": true}],
+    "flow_recall": {"steps": [{
+      "id": "preserve-scalars",
+      "prompt": "Preserve every reviewed Unicode scalar exactly during editor interaction.",
+      "concepts": ["unicode", "scalar"],
+      "aliases": ["preserve Unicode scalars"]
+    }]}
+  },
+  "validation": {"schema": "passed", "code": "pending", "content_review": "pending", "transfer_review": "pending", "last_validated_at": null},
+  "provenance": {"authors": ["gewu-algorithm maintainers"], "generated_by": null, "reviewed_by": [], "sources": [], "license": "MIT"},
+  "supersedes": []
+}

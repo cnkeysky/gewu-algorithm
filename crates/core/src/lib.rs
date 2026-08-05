@@ -950,6 +950,38 @@ mod tests {
     }
 
     #[test]
+    fn loads_real_host_boundary_fixtures_canonically() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let crlf = core
+            .start_session(StartSessionParams {
+                unit_id: "validation.crlf".to_owned(),
+                mode: PracticeModeDto::ShadowTyping,
+                implementation: None,
+            })
+            .unwrap_or_else(|error| panic!("CRLF start: {error}"));
+        assert!(!crlf.target_text.contains('\r'));
+        assert!(crlf.target_text.ends_with('\n'));
+
+        let unicode = core
+            .start_session(StartSessionParams {
+                unit_id: "validation.unicode".to_owned(),
+                mode: PracticeModeDto::ShadowTyping,
+                implementation: None,
+            })
+            .unwrap_or_else(|error| panic!("Unicode start: {error}"));
+        assert!(
+            unicode
+                .target_text
+                .contains("\u{5df2}\u{8bbf}\u{95ee}\u{1f642}")
+        );
+        assert!(unicode.target_text.contains("Cafe\u{301}"));
+
+        fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+
+    #[test]
     fn restarting_creates_a_fresh_active_session() {
         let data = data_root();
         let mut core =

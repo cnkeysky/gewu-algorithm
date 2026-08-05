@@ -65,7 +65,7 @@ export function deactivate(): void {
 
 async function startPractice(mode: PracticeMode): Promise<void> {
   const core = await ensureClient();
-  const checkpointAction = await resolveCheckpointBeforeStart(core);
+  const checkpointAction = await resolveCheckpointBeforeStart(core, mode);
   if (checkpointAction === "resume" || checkpointAction === "cancel") return;
   closeActivePracticeUi();
   const units = await core.listUnits();
@@ -141,6 +141,11 @@ async function stopPractice(): Promise<void> {
     CONFIRM_ACTION,
   );
   if (answer !== CONFIRM_ACTION) return;
+  await stopFlowPractice();
+}
+
+async function stopFlowPractice(): Promise<void> {
+  if (activeFlow === undefined) return;
   const core = await ensureClient();
   await core.stopSession(activeFlow.session_id, elapsed());
   activeFlowPanel?.dispose();
@@ -269,27 +274,28 @@ async function confirmCheckpoint(
 
 async function resolveCheckpointBeforeStart(
   core: GewuCoreClient,
+  requestedMode: PracticeMode,
 ): Promise<"resume" | "discard" | "cancel"> {
   const checkpoint = await core.resumeCheckpoint();
   if (checkpoint === undefined) return "discard";
   const choice = await vscode.window.showQuickPick(
     [
       {
-        label: "$(debug-continue) Resume interrupted practice",
+        label: `$(play) Resume ${displayMode(checkpoint.session.mode)}`,
         description: checkpointDescription(checkpoint),
         detail: checkpointDetail(checkpoint),
         action: "resume" as const,
       },
       {
-        label: "$(trash) Discard checkpoint",
+        label: `$(trash) Discard and start ${displayMode(requestedMode)}`,
         description: checkpointDescription(checkpoint),
         detail: checkpointDetail(checkpoint),
         action: "discard" as const,
       },
     ],
     {
-      title: "Interrupted Practice",
-      placeHolder: "Resolve the checkpoint before starting another practice",
+      title: `Start ${displayMode(requestedMode)}`,
+      placeHolder: `An interrupted ${displayMode(checkpoint.session.mode)} exists; choose how to continue`,
     },
   );
   if (choice?.action === "resume") {
@@ -355,7 +361,7 @@ function openFlowPanel(session: CoreSession): void {
     submit: submitFlowAnswer,
     reveal: revealFlowPrompt,
     restart: restartPractice,
-    stop: stopPractice,
+    stop: stopFlowPractice,
     close: () => {
       activeFlowPanel?.dispose();
       activeFlowPanel = undefined;

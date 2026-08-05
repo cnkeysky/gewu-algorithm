@@ -1,0 +1,41 @@
+{
+  "schema_version": "1",
+  "id": "validation.crlf",
+  "revision": 1,
+  "status": "draft",
+  "title": "CRLF Boundary Fixture",
+  "tags": ["validation", "line-endings"],
+  "position": {"domain": "validation", "category": "editor-boundary", "prerequisites": []},
+  "problem": {
+    "question": "Does a physical CRLF source produce the same canonical practice text as LF?",
+    "scope": ["VS Code host line-ending normalization"],
+    "out_of_scope": ["Algorithm instruction"]
+  },
+  "understanding": {
+    "summary": "The source is stored with CRLF while the practice target is normalized to LF.",
+    "confidence": "high",
+    "alternatives": [],
+    "failure_conditions": ["An extra carriage return creates a mismatch or duplicate newline."]
+  },
+  "implementations": [{
+    "key": "python-crlf",
+    "language": "python",
+    "source": "code/python.py",
+    "purpose": "teaching",
+    "normalization": {"line_endings": "lf", "trailing_newline": true, "whitespace": "strict"}
+  }],
+  "patterns": [],
+  "relationships": [],
+  "practice": {
+    "shadow_typing": [{"implementation": "python-crlf", "strict": true}],
+    "flow_recall": {"steps": [{
+      "id": "normalize-lines",
+      "prompt": "Normalize physical CRLF line endings to the canonical LF practice target.",
+      "concepts": ["crlf", "lf"],
+      "aliases": ["normalize CRLF to LF"]
+    }]}
+  },
+  "validation": {"schema": "passed", "code": "pending", "content_review": "pending", "transfer_review": "pending", "last_validated_at": null},
+  "provenance": {"authors": ["gewu-algorithm maintainers"], "generated_by": null, "reviewed_by": [], "sources": [], "license": "MIT"},
+  "supersedes": []
+}

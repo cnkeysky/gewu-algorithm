@@ -44,6 +44,8 @@ Status: in progress. The local Rust core, JSON-RPC host, deterministic `flow_rec
 - implement serialized `shadow_typing` and `flow_recall` modes;
 - persist local attempts;
 - add onboarding, accessible feedback, and deletion controls;
+- replace the singleton interrupted checkpoint with a selectable collection,
+  while allowing only one active editor interaction at a time;
 - validate several real units through repeated use.
 
 Exit according to [MVP criteria](product/mvp.md).
