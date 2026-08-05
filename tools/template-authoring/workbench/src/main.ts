@@ -128,7 +128,7 @@ const selectAllModes = document.querySelector<HTMLInputElement>("#select-all-mod
 const assistanceNote = document.querySelector<HTMLParagraphElement>("#assistance-note")!;
 const submitDraft = document.querySelector<HTMLButtonElement>("#submit-draft")!;
 let editingDraftId: string | undefined;
-const practiceApi = "http://127.0.0.1:4175/rpc";
+const practiceApi = "/core/rpc";
 let practiceRequestId = 1;
 let practiceHandshaken = false;
 let activePracticeSession: { session_id: string; mode: PracticeMode } | undefined;
@@ -172,7 +172,7 @@ async function refreshPracticeData(): Promise<void> {
     document.querySelector<HTMLElement>("#practice-checkpoints")!.innerHTML = checkpoints.checkpoints.length ? checkpoints.checkpoints.map((checkpoint) => `<div class="compact-row"><span><strong>${checkpoint.unit_title}</strong>${checkpoint.mode.replaceAll("_", " ")} · ${checkpoint.accepted_characters}/${checkpoint.target_characters}</span><span><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div>`).join("") : `<div class="compact-empty">No interrupted practice.</div>`;
     document.querySelector<HTMLElement>("#practice-recommendations")!.innerHTML = recommendations.length ? recommendations.map((item) => `<div class="compact-row"><span><strong>${item.unit_id} · ${item.mode.replaceAll("_", " ")}</strong>${item.reason}</span><span>${item.due_at_ms ? formatDate(new Date(item.due_at_ms).toISOString()) : `${item.due_after_days}d`}</span></div>`).join("") : `<div class="compact-empty">No recommendations yet.</div>`;
     document.querySelector<HTMLElement>("#practice-attempts")!.innerHTML = attempts.attempts.length ? attempts.attempts.map((item) => `<div class="compact-row"><span><strong>${item.unit_id}</strong>${item.mode.replaceAll("_", " ")}</span><span>${item.terminal_reason}</span></div>`).join("") : `<div class="compact-empty">No attempts yet.</div>`;
-  } catch (error) { document.querySelector<HTMLElement>("#practice-connection")!.textContent = "Core offline"; practiceMessage(error instanceof Error ? error.message : "Core unavailable", true); }
+  } catch (error) { document.querySelector<HTMLElement>("#practice-connection")!.textContent = "Core offline"; practiceMessage("Rust Core 未启动。请先运行 `cargo run -p gewu-cli -- serve`。", true); }
 }
 
 interface DraftRecord {
@@ -249,6 +249,7 @@ function showView(view: string): void {
   renderHistory();
   document.querySelectorAll<HTMLElement>(".app-view").forEach((panel) => { panel.hidden = panel.id !== `${view}-view`; });
   document.querySelectorAll<HTMLButtonElement>(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+  document.querySelector<HTMLSpanElement>(".brand span")!.textContent = view === "practice" ? "PRACTICE" : "AUTHORING";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 

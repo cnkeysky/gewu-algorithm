@@ -127,9 +127,8 @@ npm run workbench:dev
 ```
 
 Open `http://127.0.0.1:5173/`, select `Practice`, and use the unit/mode
-picker. The client uses the existing JSON-RPC contract through
-`http://127.0.0.1:4175/rpc`; scoring, checkpoint recovery, attempts, and review
-recommendations remain Rust-owned.
+picker. Vite proxies `/core/rpc` to the Rust adapter; scoring, checkpoint
+recovery, attempts, and review recommendations remain Rust-owned.
 
 Generation tasks are resolved through the TypeScript task registry. Use
 `GET /api/tasks` to inspect registered task ids and versions. Each task owns
