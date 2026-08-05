@@ -67,9 +67,9 @@ root.innerHTML = `
         <fieldset id="assistance-fieldset" class="assistance-fieldset">
           <legend>Code recall assistance</legend>
           <div class="assistance-list">${assistance.map((item) => `<label><input type="checkbox" name="assistance" value="${item.id}" disabled /><span>${item.label}</span></label>`).join("")}</div>
-          <p class="field-note">These hints are included only when code recall is selected.</p>
+          <p class="field-note" id="assistance-note">Select Code recall above to enable these hints.</p>
         </fieldset>
-        <div class="form-actions"><button class="button secondary" type="button" id="reset">Reset</button><button class="button primary" type="submit">Create draft <span aria-hidden="true">&#8594;</span></button></div>
+        <div class="form-actions"><button class="button secondary" type="button" id="reset">Reset</button><button class="button primary" type="submit" id="submit-draft">Create draft <span aria-hidden="true">&#8594;</span></button></div>
         <p class="form-message" id="form-message" role="status"></p>
       </form>
       <aside class="right-column">
@@ -100,6 +100,8 @@ const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
 const draftList = document.querySelector<HTMLDivElement>("#draft-list")!;
 const historyList = document.querySelector<HTMLDivElement>("#history-list")!;
 const selectAllModes = document.querySelector<HTMLInputElement>("#select-all-modes")!;
+const assistanceNote = document.querySelector<HTMLParagraphElement>("#assistance-note")!;
+const submitDraft = document.querySelector<HTMLButtonElement>("#submit-draft")!;
 let editingDraftId: string | undefined;
 
 interface DraftRecord {
@@ -163,7 +165,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat(unde
 function renderDrafts(): void {
   const drafts = readDrafts();
   document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
-  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="draft-row" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><button class="inline-action" type="button" data-generate-id="${draft.id}" ${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "Generated" : "Generate"}</button><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "validated" || draft.status === "accepted" ? "Validated" : "Validate"}</button><button class="inline-action" type="button" data-review-id="${draft.id}" ${draft.status === "queued" || draft.status === "accepted" ? "disabled" : ""}>Review</button><button class="inline-action" type="button" data-accept-id="${draft.id}" ${draft.status !== "validated" ? "disabled" : ""}>${draft.status === "accepted" ? "Accepted" : "Accept"}</button></span></div>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="draft-row" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><button class="inline-action" type="button" data-edit-id="${draft.id}">Edit</button><button class="inline-action" type="button" data-generate-id="${draft.id}" ${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "Generated" : "Generate"}</button><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "validated" || draft.status === "accepted" ? "Validated" : "Validate"}</button><button class="inline-action" type="button" data-review-id="${draft.id}" ${draft.status === "queued" || draft.status === "accepted" ? "disabled" : ""}>Review</button><button class="inline-action" type="button" data-accept-id="${draft.id}" ${draft.status !== "validated" ? "disabled" : ""}>${draft.status === "accepted" ? "Accepted" : "Accept"}</button></span></div>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
 }
 function renderHistory(): void {
   const drafts = readDrafts();
@@ -231,9 +233,9 @@ document.addEventListener("click", (event) => {
     }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
     return;
   }
-  const draftButton = target.closest<HTMLButtonElement>("[data-draft-id]");
+  const draftButton = target.closest<HTMLButtonElement>("[data-edit-id]") ?? target.closest<HTMLButtonElement>("[data-draft-id]");
   if (draftButton) {
-    const draft = readDrafts().find((item) => item.id === draftButton.dataset.draftId);
+    const draft = readDrafts().find((item) => item.id === (draftButton.dataset.editId ?? draftButton.dataset.draftId));
     if (draft) {
       (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
       (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
@@ -244,6 +246,7 @@ document.addEventListener("click", (event) => {
       document.querySelectorAll<HTMLInputElement>("input[name=assistance]").forEach((input) => { input.checked = draft.assistance.includes(input.value as Assistance); });
       updateProfile();
       editingDraftId = draft.id;
+      submitDraft.innerHTML = `Update draft <span aria-hidden="true">&#8594;</span>`;
       showView("new");
     }
   }
@@ -258,6 +261,7 @@ function updateProfile(): void {
   const selectedAssistance = selectedValues<Assistance>("assistance");
   const codeRecall = selectedModes.includes("code_recall");
   assistanceFieldset.disabled = !codeRecall;
+  assistanceNote.textContent = codeRecall ? "These hints will be included in the code recall projection." : "Select Code recall above to enable these hints.";
   const language = (document.querySelector<HTMLInputElement>("#languages")!.value || "python").split(",").map((value) => value.trim()).filter(Boolean);
   const variants = 1;
   profileState.textContent = selectedModes.length > 0 && language.length > 0 && variants > 0 ? "Ready" : "Needs input";
@@ -270,7 +274,10 @@ function updateProfile(): void {
 }
 
 document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:not(#select-all-modes), select, textarea").forEach((input) => input.addEventListener("input", updateProfile));
-document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((input) => input.addEventListener("change", updateProfile));
+document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((input) => {
+  input.addEventListener("change", updateProfile);
+  input.addEventListener("click", () => setTimeout(updateProfile, 0));
+});
 selectAllModes.addEventListener("change", () => {
   const inputs = [...document.querySelectorAll<HTMLInputElement>("input[name=mode]")];
   inputs.forEach((input) => { input.checked = selectAllModes.checked; });
@@ -319,8 +326,9 @@ form.addEventListener("submit", async (event) => {
   message.textContent = persisted ? (editingDraftId ? "Draft revision saved to the local authoring API." : "Draft saved to the local authoring API.") : "Draft queued in this browser. Start the authoring API to share it locally.";
   message.className = "form-message success";
   editingDraftId = undefined;
+  submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`;
 });
-document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => { editingDraftId = undefined; form.reset(); updateProfile(); message.textContent = ""; });
+document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => { editingDraftId = undefined; submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`; form.reset(); updateProfile(); message.textContent = ""; });
 updateProfile();
 renderDrafts();
 renderHistory();
