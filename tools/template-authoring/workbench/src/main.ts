@@ -29,7 +29,7 @@ if (!root) throw new Error("workbench root is missing");
 
 root.innerHTML = `
   <header class="topbar">
-    <a class="brand" href="#home" data-go="home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>GEWU <span>HOME</span></a>
+    <a class="brand" href="#home" data-go="home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>GEWU</a>
     <nav aria-label="Primary navigation">
       <button class="nav-item active" data-view="home">Home</button>
       <button class="nav-item" data-view="new">Authoring</button>
@@ -265,7 +265,6 @@ function showView(view: string): void {
   renderHistory();
   document.querySelectorAll<HTMLElement>(".app-view").forEach((panel) => { panel.hidden = panel.id !== `${view}-view`; });
   document.querySelectorAll<HTMLButtonElement>(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
-  document.querySelector<HTMLSpanElement>(".brand span")!.textContent = view === "practice" ? "PRACTICE" : "AUTHORING";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
