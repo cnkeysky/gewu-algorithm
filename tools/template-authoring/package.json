@@ -5,7 +5,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "smoke": "npm run build && node dist/smoke.js"
+    "test": "npm run build && node --test dist/*.test.js",
+    "smoke": "npm run build && node dist/smoke.js",
+    "smoke:local": "npm run build && node --env-file=.env.local dist/smoke.js",
+    "generate-template": "npm run build && node dist/generate-template.js",
+    "generate-template:local": "npm run build && node --env-file=.env.local dist/generate-template.js",
+    "review-template": "npm run build && node dist/review-template.js",
+    "review-template:local": "npm run build && node --env-file=.env.local dist/review-template.js"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.83.0"

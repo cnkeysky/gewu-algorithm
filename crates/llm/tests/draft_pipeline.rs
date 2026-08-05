@@ -31,7 +31,7 @@ fn fake_provider_generates_reviews_and_loads_two_contrasting_units() {
     let binary =
         fs::read_to_string(root.join("search/binary-search/unit.json")).expect("binary manifest");
     let bfs = fs::read_to_string(root.join("graph/bfs/unit.json")).expect("bfs manifest");
-    let profile = ProviderProfile::recommended(ProviderKind::DeepSeek, "deepseek-chat");
+    let profile = ProviderProfile::recommended(ProviderKind::DeepSeek, "deepseek-v4-flash");
     let mut pipeline = DraftPipeline::new(FakeProvider::new(profile, vec![binary, bfs]));
     let scratch = std::env::temp_dir().join(format!(
         "gewu-draft-pipeline-{}",

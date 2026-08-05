@@ -39,6 +39,10 @@
       "language": "python",
       "source": "code/python.py",
       "purpose": "teaching",
+      "strategy": "fifo-frontier",
+      "complexity": {"time": "O(V + E)", "space": "O(V)"},
+      "assumptions": ["the graph is represented by adjacency lists"],
+      "test_references": ["tests/python_test.py"],
       "normalization": {
         "line_endings": "lf",
         "trailing_newline": true,

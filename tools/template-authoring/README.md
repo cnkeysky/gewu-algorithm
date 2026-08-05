@@ -9,6 +9,10 @@ validator and explicit human review accept them.
 The package intentionally imports Pi-ai only here. Rust Core and VS Code do not
 depend on npm provider packages.
 
+The current real integration test target is DeepSeek only. Other provider
+profiles remain provider-neutral compatibility paths until their credentials
+are available for dedicated integration runs.
+
 ## Provider selection and secrets
 
 Provider/model selection is configured with `GEWU_LLM_PROVIDER` and
@@ -22,12 +26,54 @@ To run a real DeepSeek connectivity smoke test from this directory:
 
 ```sh
 read -s "DEEPSEEK_API_KEY?DeepSeek API key: "; export DEEPSEEK_API_KEY; echo
-GEWU_LLM_PROVIDER=deepseek GEWU_LLM_MODEL=deepseek-chat npm run smoke
+GEWU_LLM_PROVIDER=deepseek GEWU_LLM_MODEL=deepseek-v4-flash npm run smoke
 unset DEEPSEEK_API_KEY
 ```
+
+For local repeatable testing, fill in the ignored `.env.local` file and run:
+
+```sh
+npm run smoke:local
+```
+
+`.env.local` is a convenience file, not a secure vault. Do not copy it into
+issues, logs, screenshots, or commits.
 
 The command prints only a success record containing provider, model, and task
 identity. It does not persist prompts, responses, or credentials. Other
 providers use the same two selection variables and the credential names
 defined by Pi-ai; inspect its model catalog rather than copying provider URLs
 or secrets into this repository.
+
+Structured generation and review use a required Pi-ai tool call. Tool
+arguments are validated against the task schema before GEWU sees them; plain
+text or malformed arguments are rejected, with at most one bounded repair
+attempt.
+
+## End-to-end draft generation
+
+The fixed DeepSeek integration task generates a new Kahn topological-sort unit.
+It is deliberately different from the checked-in BFS and binary-search fixtures.
+It writes only to a timestamped ignored `drafts/topological-sort-kahn-r1-*/`
+directory and always remains `pending` for human review.
+
+```sh
+npm run generate-template:local
+```
+
+The command requires the ignored `.env.local` file to contain `DEEPSEEK_API_KEY`.
+It writes `unit.json`, `code/python.py`, and non-secret `generation.json`, then
+performs response-shape and source-containment checks, Python syntax, fixed
+Kahn semantic examples, and the real Rust `gewu-template` manifest loader. It first writes to an
+ignored staging directory and exposes the final draft only after those checks
+pass. The adapter overwrites `provenance.generated_by` with its own trusted
+provider, model, task version, and timestamp, and resets all lifecycle and
+validation claims to `draft` and `pending`. A success record with
+`contractValidation: "passed"` only means the draft can be reviewed; it does
+not mean that its content is accepted or publishable.
+
+To run local non-network checks for the authoring adapter:
+
+```sh
+npm test
+```

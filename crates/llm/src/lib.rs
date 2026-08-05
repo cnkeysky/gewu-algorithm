@@ -86,6 +86,79 @@ pub enum ReviewState {
     Rejected,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewRole {
+    AlgorithmCorrectness,
+    LearningDesign,
+    ProvenanceSafety,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewVerdict {
+    Pass,
+    NeedsRevision,
+    Reject,
+    HumanReviewRequired,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FindingSeverity {
+    Info,
+    Minor,
+    Major,
+    Critical,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ReviewFinding {
+    pub rule_id: String,
+    pub severity: FindingSeverity,
+    pub path: String,
+    pub problem: String,
+    pub evidence: String,
+    pub suggested_change: String,
+}
+
+/// Read-only model review. A passing report never promotes the reviewed draft.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LlmReviewReport {
+    pub artifact_hash: String,
+    pub rubric_version: String,
+    pub role: ReviewRole,
+    pub provider: ProviderKind,
+    pub model: String,
+    pub verdict: ReviewVerdict,
+    pub findings: Vec<ReviewFinding>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RepairHandoff {
+    pub artifact_hash: String,
+    pub rubric_version: String,
+    pub findings: Vec<ReviewFinding>,
+    pub requires_human_decision: bool,
+}
+
+impl LlmReviewReport {
+    pub fn repair_handoff(&self) -> Option<RepairHandoff> {
+        if self.verdict == ReviewVerdict::Pass {
+            return None;
+        }
+        Some(RepairHandoff {
+            artifact_hash: self.artifact_hash.clone(),
+            rubric_version: self.rubric_version.clone(),
+            findings: self.findings.clone(),
+            requires_human_decision: matches!(
+                self.verdict,
+                ReviewVerdict::Reject | ReviewVerdict::HumanReviewRequired
+            ),
+        })
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct DraftArtifact {
     pub task_id: String,
@@ -211,7 +284,7 @@ mod tests {
 
     #[test]
     fn profiles_capture_vendor_specific_defaults_without_sdk_types() {
-        let deepseek = ProviderProfile::recommended(ProviderKind::DeepSeek, "deepseek-chat");
+        let deepseek = ProviderProfile::recommended(ProviderKind::DeepSeek, "deepseek-v4-flash");
         assert_eq!(deepseek.api, "openai-completions");
         let openai = ProviderProfile::recommended(ProviderKind::OpenAi, "gpt-5.6-terra");
         assert_eq!(openai.api, "openai-responses");
@@ -239,7 +312,7 @@ mod tests {
 
     #[test]
     fn draft_pipeline_requires_review_before_publication() {
-        let profile = ProviderProfile::recommended(ProviderKind::DeepSeek, "deepseek-chat");
+        let profile = ProviderProfile::recommended(ProviderKind::DeepSeek, "deepseek-v4-flash");
         let mut pipeline = DraftPipeline::new(FakeProvider::new(
             profile,
             vec!["{\"schema_version\":\"1\"}".to_owned()],
@@ -269,5 +342,30 @@ mod tests {
         .expect("json");
         assert_eq!(written["schema_version"], "1");
         let _ = std::fs::remove_file("/tmp/gewu-stage7-accepted.json");
+    }
+
+    #[test]
+    fn model_review_creates_a_repair_handoff_without_promoting_a_draft() {
+        let report = LlmReviewReport {
+            artifact_hash: "sha256:draft".to_owned(),
+            rubric_version: "algorithm-template-review.v1".to_owned(),
+            role: ReviewRole::AlgorithmCorrectness,
+            provider: ProviderKind::DeepSeek,
+            model: "deepseek-v4-flash".to_owned(),
+            verdict: ReviewVerdict::NeedsRevision,
+            findings: vec![ReviewFinding {
+                rule_id: "ALG-BOUNDARY-001".to_owned(),
+                severity: FindingSeverity::Major,
+                path: "patterns[0].boundaries[0]".to_owned(),
+                problem: "cycle detection is described as a crash".to_owned(),
+                evidence: "the implementation returns an empty list".to_owned(),
+                suggested_change: "describe the actual empty-result behavior".to_owned(),
+            }],
+        };
+        let handoff = report
+            .repair_handoff()
+            .expect("revision requires a handoff");
+        assert!(!handoff.requires_human_decision);
+        assert_eq!(handoff.findings.len(), 1);
     }
 }

@@ -20,3 +20,4 @@ Statuses are `proposed`, `accepted`, `deprecated`, and `superseded`.
 | [0012](0012-code-recall-core-protocol-boundary.md) | Expose Code Recall through the core boundary | Accepted |
 | [0013](0013-reasoning-transfer-core-boundary.md) | Keep reasoning and transfer completion deterministic and reviewable | Accepted |
 | [0014](0014-provider-neutral-llm-boundary.md) | Keep provider protocols and GEWU generation tasks independent | Accepted |
+| [0015](0015-llm-generation-and-review-boundary.md) | Keep LLM generation and review behind deterministic gates | Accepted |

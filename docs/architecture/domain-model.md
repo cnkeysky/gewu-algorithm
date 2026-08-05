@@ -58,10 +58,20 @@ An algorithm may have multiple valid implementations. Each variant has a stable 
 - source file;
 - formatting and line-ending policy;
 - intended purpose, such as `teaching`, `concise`, or `iterative`;
+- reviewed strategy and asymptotic complexity when available;
 - runtime assumptions;
-- validation commands or test references.
+- contained test references. Templates never carry executable validation commands.
+
+Variants belong to one unit only while they share the same problem contract,
+core mechanism, reasoning target, and execution flow. A materially different
+algorithmic approach, such as Kahn versus DFS topological sorting, is a separate
+related `AlgorithmUnit`; duplicating every practice mode for each approach would
+hide that conceptual difference and create maintenance drift.
 
 Shadow Typing compares against one selected variant. It makes no claim about other correct solutions.
+Code Recall also selects a variant by key. Flow Recall, Reasoning Recall, and
+Transfer Practice remain unit-level learning content rather than being copied
+into separate mode-specific templates.
 
 Practice mode names and their stable serialized values are defined in [domain terminology](terminology.md). Bare values such as `code`, `flow`, `thinking`, and `transfer` are not valid internal mode identifiers.
 

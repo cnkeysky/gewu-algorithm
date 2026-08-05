@@ -28,6 +28,21 @@ fn loads_bfs_with_a_contained_source_file() -> Result<(), Box<dyn Error>> {
     assert_eq!(unit.implementations.len(), 1);
     assert_eq!(unit.implementations[0].source, "code/python.py");
     assert_eq!(unit.implementations[0].purpose, "teaching");
+    assert_eq!(
+        unit.implementations[0].strategy.as_deref(),
+        Some("fifo-frontier")
+    );
+    assert_eq!(
+        unit.implementations[0]
+            .complexity
+            .as_ref()
+            .map(|value| value.time.as_str()),
+        Some("O(V + E)")
+    );
+    assert_eq!(
+        unit.implementations[0].test_references,
+        ["tests/python_test.py"]
+    );
     assert!(unit.implementations[0].normalization.trailing_newline);
     assert!(
         unit.implementations[0]

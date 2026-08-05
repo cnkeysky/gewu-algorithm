@@ -10,10 +10,10 @@ use std::{
 pub use gewu_domain::AlgorithmUnit;
 use gewu_domain::{
     CheckStatus, CodeRecallAssistance, CodeRecallDefinition, Confidence, ContentStatus, FlowStep,
-    Generator, Implementation, Normalization, Pattern, Position, PracticeDefinition, Problem,
-    Provenance, ReasoningAspect, ReasoningRecallDefinition, Relationship, RelationshipType,
-    Revision, ShadowTypingDefinition, Source, SupersededRevision, TransferPracticeDefinition,
-    Understanding, UnitId, ValidationState,
+    Generator, Implementation, ImplementationComplexity, Normalization, Pattern, Position,
+    PracticeDefinition, Problem, Provenance, ReasoningAspect, ReasoningRecallDefinition,
+    Relationship, RelationshipType, Revision, ShadowTypingDefinition, Source, SupersededRevision,
+    TransferPracticeDefinition, Understanding, UnitId, ValidationState,
 };
 use serde::Deserialize;
 use thiserror::Error;
@@ -274,6 +274,28 @@ fn validate_implementations(
         }
         validate_slug(&implementation.language, &format!("{base}.language"))?;
         validate_implementation_purpose(&implementation.purpose, &format!("{base}.purpose"))?;
+        if let Some(strategy) = &implementation.strategy {
+            validate_text(strategy, &format!("{base}.strategy"))?;
+        }
+        let complexity = implementation
+            .complexity
+            .map(|complexity| {
+                validate_text(&complexity.time, &format!("{base}.complexity.time"))?;
+                validate_text(&complexity.space, &format!("{base}.complexity.space"))?;
+                Ok::<_, LoadError>(ImplementationComplexity {
+                    time: complexity.time,
+                    space: complexity.space,
+                })
+            })
+            .transpose()?;
+        validate_optional_texts(&implementation.assumptions, &format!("{base}.assumptions"))?;
+        for (test_index, reference) in implementation.test_references.iter().enumerate() {
+            resolve_source(
+                root,
+                reference,
+                &format!("{base}.test_references[{test_index}]"),
+            )?;
+        }
         let normalization = validate_normalization(
             implementation.normalization,
             &format!("{base}.normalization"),
@@ -285,6 +307,10 @@ fn validate_implementations(
             source: implementation.source,
             source_path,
             purpose: implementation.purpose,
+            strategy: implementation.strategy,
+            complexity,
+            assumptions: implementation.assumptions,
+            test_references: implementation.test_references,
             normalization,
         });
     }
@@ -794,7 +820,22 @@ struct RawImplementation {
     language: String,
     source: String,
     purpose: String,
+    #[serde(default)]
+    strategy: Option<String>,
+    #[serde(default)]
+    complexity: Option<RawImplementationComplexity>,
+    #[serde(default)]
+    assumptions: Vec<String>,
+    #[serde(default)]
+    test_references: Vec<String>,
     normalization: RawNormalization,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawImplementationComplexity {
+    time: String,
+    space: String,
 }
 
 #[derive(Deserialize)]

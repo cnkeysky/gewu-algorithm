@@ -35,6 +35,7 @@ credentials.json
 # Personal practice data and unreviewed generated content
 /practice/
 /drafts/
+**/drafts/
 /.local/
 /data/local/
 

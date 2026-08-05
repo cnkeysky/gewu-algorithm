@@ -256,7 +256,18 @@ pub struct Implementation {
     pub source: String,
     pub source_path: PathBuf,
     pub purpose: String,
+    pub strategy: Option<String>,
+    pub complexity: Option<ImplementationComplexity>,
+    pub assumptions: Vec<String>,
+    pub test_references: Vec<String>,
     pub normalization: Normalization,
+}
+
+/// Reviewed asymptotic bounds for one implementation variant.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ImplementationComplexity {
+    pub time: String,
+    pub space: String,
 }
 
 /// Text-normalization contract for exact reconstruction.

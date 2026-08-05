@@ -130,6 +130,12 @@ Exit when a fake provider can exercise the full deterministic pipeline and at
 least two contrasting local draft units can be generated, validated, reviewed,
 and loaded without any editor dependency.
 
+Stage 7 follow-up completed on 2026-08-05: implementation variants now carry
+reviewed strategy, complexity, assumptions, and contained test references;
+DeepSeek generation uses strict whole-response JSON and staging validation; and
+role-specific model review emits immutable-hash findings without publication
+authority. These authoring capabilities remain independent of editor clients.
+
 ## Stage 8: Review, Progression, and Retention
 
 Status: in progress as of 2026-08-05.

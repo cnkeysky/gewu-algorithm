@@ -317,6 +317,27 @@
         "purpose": {
           "enum": ["teaching", "concise", "iterative", "recursive", "optimized"]
         },
+        "strategy": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "complexity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["time", "space"],
+          "properties": {
+            "time": { "$ref": "#/$defs/nonEmptyString" },
+            "space": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "test_references": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/relativePath" },
+          "uniqueItems": true
+        },
         "normalization": {
           "type": "object",
           "additionalProperties": false,

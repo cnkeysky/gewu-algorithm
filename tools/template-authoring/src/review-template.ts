@@ -1,0 +1,164 @@
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { PiGenerator, optionsFromEnvironment, type DraftTask } from "./pi-generator.js";
+
+const RUBRIC_VERSION = "algorithm-template-review.v1";
+const ROLES = ["algorithm_correctness", "learning_design", "provenance_safety"] as const;
+type ReviewRole = (typeof ROLES)[number];
+
+const OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["verdict", "findings"],
+  properties: {
+    verdict: { enum: ["pass", "needs_revision", "reject", "human_review_required"] },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["rule_id", "severity", "path", "problem", "evidence", "suggested_change"],
+        properties: {
+          rule_id: { type: "string" },
+          severity: { enum: ["info", "minor", "major", "critical"] },
+          path: { type: "string" },
+          problem: { type: "string" },
+          evidence: { type: "string" },
+          suggested_change: { type: "string" },
+        },
+      },
+    },
+  },
+};
+
+type ModelReport = {
+  verdict: "pass" | "needs_revision" | "reject" | "human_review_required";
+  findings: Array<{
+    rule_id: string;
+    severity: "info" | "minor" | "major" | "critical";
+    path: string;
+    problem: string;
+    evidence: string;
+    suggested_change: string;
+  }>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseRole(value: string | undefined): ReviewRole {
+  if (value && (ROLES as readonly string[]).includes(value)) return value as ReviewRole;
+  throw new Error(`review role must be one of: ${ROLES.join(", ")}`);
+}
+
+function assertReport(value: unknown, allowedRules: ReadonlySet<string>): asserts value is ModelReport {
+  if (!isRecord(value) || typeof value.verdict !== "string" || !Array.isArray(value.findings)) {
+    throw new Error("reviewer returned an invalid report shape");
+  }
+  if (!["pass", "needs_revision", "reject", "human_review_required"].includes(value.verdict))
+    throw new Error("reviewer returned an invalid verdict");
+  for (const finding of value.findings) {
+    if (!isRecord(finding)) throw new Error("review finding must be an object");
+    for (const key of ["rule_id", "severity", "path", "problem", "evidence", "suggested_change"]) {
+      if (typeof finding[key] !== "string" || finding[key] === "") throw new Error(`review finding field is invalid: ${key}`);
+    }
+    if (!allowedRules.has(finding.rule_id as string))
+      throw new Error(`reviewer used a rule outside its assigned role: ${String(finding.rule_id)}`);
+  }
+}
+
+function collectReviewedPaths(manifest: Record<string, unknown>): string[] {
+  if (!Array.isArray(manifest.implementations)) throw new Error("draft implementations must be an array");
+  const paths = new Set<string>();
+  for (const implementation of manifest.implementations) {
+    if (!isRecord(implementation) || typeof implementation.source !== "string")
+      throw new Error("draft implementation source is invalid");
+    paths.add(implementation.source);
+    if (Array.isArray(implementation.test_references)) {
+      for (const reference of implementation.test_references) {
+        if (typeof reference !== "string") throw new Error("draft test reference is invalid");
+        paths.add(reference);
+      }
+    }
+  }
+  return [...paths].sort();
+}
+
+async function hashDraft(draftRoot: string, files: Array<{ path: string; content: string }>): Promise<string> {
+  const unit = await readFile(join(draftRoot, "unit.json"));
+  const hash = createHash("sha256").update(unit);
+  for (const file of files) hash.update(file.path).update(file.content);
+  return `sha256:${hash.digest("hex")}`;
+}
+
+export async function reviewTemplateDraft(draftArgument: string, roleArgument: string | undefined): Promise<void> {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = resolve(here, "../..", "..");
+  const draftsRoot = resolve(here, "../drafts");
+  const draftRoot = resolve(repoRoot, draftArgument);
+  if (!draftRoot.startsWith(`${draftsRoot}/`)) throw new Error("review target must be inside ignored drafts/");
+  const role = parseRole(roleArgument ?? process.env.GEWU_REVIEW_ROLE);
+  const unit = await readFile(join(draftRoot, "unit.json"), "utf8");
+  const manifest = JSON.parse(unit) as unknown;
+  if (!isRecord(manifest)) throw new Error("draft manifest must be an object");
+  const reviewedFiles = await Promise.all(collectReviewedPaths(manifest).map(async (path) => {
+    const absolute = resolve(draftRoot, path);
+    if (!absolute.startsWith(`${draftRoot}/`)) throw new Error(`reviewed file escapes draft root: ${path}`);
+    return { path, content: await readFile(absolute, "utf8") };
+  }));
+  const rubricDocument = JSON.parse(
+    await readFile(join(here, "../rules/algorithm-template-review.v1.json"), "utf8"),
+  ) as { id: string; roles: Record<string, string[]>; rules: Array<{ id: string; description: string }> };
+  const assignedRuleIds = rubricDocument.roles[role];
+  if (!assignedRuleIds) throw new Error(`rubric does not define role: ${role}`);
+  const allowedRules = new Set(assignedRuleIds);
+  const rubric = JSON.stringify({
+    id: rubricDocument.id,
+    role,
+    rules: rubricDocument.rules.filter((rule) => allowedRules.has(rule.id)),
+  });
+  const artifactHash = await hashDraft(draftRoot, reviewedFiles);
+  const task: DraftTask = {
+    taskId: `review-${basename(draftRoot)}-${role}`,
+    taskVersion: RUBRIC_VERSION,
+    selectedInputHash: artifactHash,
+    instruction: `Review this GEWU draft as the ${role} reviewer. This is a read-only review.
+Never change files, approve publication, or trust lifecycle claims from the draft.
+Use only rules in the supplied rubric. Return only the JSON report shape requested.
+Rubric:\n${rubric}\nDraft manifest:\n${unit}\nReviewed source and test files:\n${JSON.stringify(reviewedFiles)}`,
+    outputSchema: OUTPUT_SCHEMA,
+  };
+  const artifact = await new PiGenerator(optionsFromEnvironment()).generate(task);
+  if (!isRecord(artifact.manifest)) throw new Error("review response must be an object");
+  assertReport(artifact.manifest, allowedRules);
+  const report = {
+    artifact_hash: artifactHash,
+    rubric_version: RUBRIC_VERSION,
+    role,
+    provider: artifact.provider,
+    model: artifact.model,
+    verdict: artifact.manifest.verdict,
+    findings: artifact.manifest.findings,
+    action: artifact.manifest.verdict === "pass" ? "human_confirmation_required" : "repair_or_user_review",
+  };
+  const outputRoot = join(draftRoot, "reviews");
+  await mkdir(outputRoot, { recursive: true });
+  await writeFile(join(outputRoot, `${role}.json`), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  console.log(JSON.stringify({ status: "reviewed", ...report, output: relative(repoRoot, join(outputRoot, `${role}.json`)) }));
+}
+
+const [draftArgument, roleArgument] = process.argv.slice(2);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (!draftArgument) {
+    console.error("usage: review-template <draft-path> <algorithm_correctness|learning_design|provenance_safety>");
+    process.exitCode = 2;
+  } else {
+    reviewTemplateDraft(draftArgument, roleArgument).catch((error: unknown) => {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 1;
+    });
+  }
+}

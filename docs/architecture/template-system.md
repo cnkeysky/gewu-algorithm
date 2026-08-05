@@ -48,6 +48,12 @@ persisted practice modes.
 - Generated content remains under local draft storage until reviewed.
 - Generation tasks may emit only fields defined by an implemented schema
   contract; a provider response cannot extend practice semantics implicitly.
+- One generation task emits one `AlgorithmUnit` aggregate with every applicable
+  practice definition. It does not emit separate templates per practice mode.
+- Generated implementation variants declare strategy, complexity, assumptions,
+  and contained test references. Content cannot provide shell commands.
+- Model reviewers are read-only. They emit versioned findings and repair
+  handoffs; they cannot promote or publish a draft.
 
 ## Schema Evolution
 

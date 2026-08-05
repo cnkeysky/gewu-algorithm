@@ -57,6 +57,27 @@ explicitly selected input
   -> optional publication
 ```
 
+Structured tasks use one required Pi-ai tool call whose parameters are the
+versioned TypeBox/JSON Schema contract. The adapter validates tool arguments
+before exposing them to GEWU. Ordinary text, markdown fences, partial tool
+arguments, and ambiguous wrappers are protocol failures; GEWU does not search
+for the first brace or recover content with regular expressions. Provider
+errors and schema failures use bounded retries; no request loop may retry
+indefinitely.
+
+## Model Review
+
+Review is role-specific and read-only. The initial roles are algorithm
+correctness, learning design, and provenance/safety. Each reviewer receives the
+same immutable artifact hash and a versioned subset of the universal algorithm
+rubric, then returns a structured verdict and findings. A model `pass` still
+requires human confirmation and never mutates lifecycle state.
+
+`needs_revision` produces a repair handoff that another generation call may
+consume. `reject`, reviewer disagreement, source/licensing decisions, and
+changes to the algorithm contract require a human decision. Every repaired
+artifact gets a new hash and repeats deterministic validation and review.
+
 Remote source text is untrusted data. Prompts must delimit it as content and must not allow embedded instructions to select files, reveal secrets, or execute commands.
 
 ## Reproducibility and Provenance
