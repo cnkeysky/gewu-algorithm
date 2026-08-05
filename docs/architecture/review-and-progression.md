@@ -1,0 +1,38 @@
+# Review and Progression
+
+`gewu-review` is the platform-independent policy boundary for Stage 8. It is a
+pure projection over terminal attempt facts and never owns editor state,
+content source, or LLM calls.
+
+## Decision Inputs
+
+The policy keeps only facts that can change a recommendation: unit ID and
+revision, practice mode, terminal reason, accepted and rejected work, prompt
+use, scaffold reveals, and elapsed time. It deliberately ignores source text,
+answers, editor metadata, and presentation details.
+
+## Policy
+
+- Interrupted-only history is `inconclusive`; it cannot advance or schedule a
+  completed review.
+- Any rejected answer or assistance use schedules a high-priority review after
+  one day.
+- One clean completion schedules an independent delayed review after three
+  days.
+- Two or more clean completions allow progression after seven days.
+
+The schedule is expressed as `due_after_days` so clients can apply their own
+clock and locale. Recommendations include the policy version and source
+attempt IDs for auditability.
+
+## User Overrides
+
+`UserChoice::OverrideMode` and `UserChoice::Dismiss` create a separate
+`ReviewDecision`. They do not rewrite, delete, or reinterpret historical
+attempts, so later policy versions can reproduce the original recommendation.
+
+## Verification
+
+The policy has host-free Rust tests for assistance dependence, interrupted
+histories, repeated independent completion, override isolation, and stable
+unordered input. The CLI projection is available with `gewu review`.

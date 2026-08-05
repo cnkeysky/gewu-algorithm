@@ -5,6 +5,7 @@ members = [
     "crates/domain",
     "crates/llm",
     "crates/practice",
+    "crates/review",
     "crates/protocol",
     "crates/storage",
     "crates/template",

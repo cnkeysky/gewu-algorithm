@@ -19,6 +19,7 @@ dependencies = [
  "gewu-domain",
  "gewu-practice",
  "gewu-protocol",
+ "gewu-review",
  "gewu-storage",
  "gewu-template",
  "serde_json",
@@ -59,6 +60,15 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "gewu-review"
+version = "0.1.0"
+dependencies = [
+ "gewu-domain",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

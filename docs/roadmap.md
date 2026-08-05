@@ -144,7 +144,7 @@ authoring capabilities remain independent of editor clients.
 
 ## Stage 8: Review, Progression, and Retention
 
-Status: in progress as of 2026-08-05.
+Status: complete as of 2026-08-05.
 
 - derive progression recommendations from attempts and assistance dependence;
 - add minimal delayed-review scheduling through a platform-independent policy;
@@ -153,8 +153,17 @@ Status: in progress as of 2026-08-05.
 - remove attempt and content fields that do not change decisions;
 - document inconclusive and negative findings.
 
-Exit when the same attempt history produces the same review recommendations in
-core tests and at least one host-free client.
+The platform-independent `gewu-review` policy now groups terminal attempt facts
+by unit, revision, and mode. Assistance dependence and rejected answers produce
+high-priority one-day reviews; a clean repeated history produces a seven-day
+progression recommendation; a single clean completion produces a three-day
+delayed review. Interrupted-only histories are explicitly inconclusive. The
+policy consumes only decision-relevant facts, returns stable recommendations,
+and exposes user overrides as separate decisions without mutating attempt
+history. `gewu review` is the host-free CLI surface for the policy.
+
+Exit evidence: the same unordered attempt facts produce the same recommendation
+set in core tests, and the CLI can project recommendations without an editor.
 
 ## Stage 9: Content Lifecycle and Distribution
 

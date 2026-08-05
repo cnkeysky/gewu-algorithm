@@ -44,6 +44,15 @@ fn main() {
                 Err(error) => fail(&error.to_string()),
             }
         }
+        // Projects deterministic review recommendations without starting an editor.
+        "review" => {
+            match Core::open(content_root, data_root)
+                .and_then(|core| core.review_recommendations(100))
+            {
+                Ok(recommendations) => print_json(&recommendations),
+                Err(error) => fail(&error.to_string()),
+            }
+        }
         "delete-history" => {
             match Core::open(content_root, data_root).and_then(|core| core.delete_history()) {
                 Ok(deleted_attempts) => print_json(&DeleteHistoryResult { deleted_attempts }),
@@ -213,6 +222,6 @@ fn fail(message: &str) {
 }
 fn print_help() {
     println!(
-        "gewu <stdio|list-units|recent-attempts|delete-history> [--content-root PATH] [--data-root PATH]"
+        "gewu <stdio|list-units|recent-attempts|review|delete-history> [--content-root PATH] [--data-root PATH]"
     );
 }

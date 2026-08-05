@@ -22,6 +22,9 @@ use gewu_protocol::{
     PracticeModeDto, SessionStatusDto, SessionView, StartSessionParams, TerminalReasonDto,
     UnitSummary,
 };
+use gewu_review::{
+    AttemptFact, ReviewRecommendation, TerminalReason as ReviewTerminalReason, recommend,
+};
 use gewu_storage::{LocalStore, StoredAttempt, StoredCheckpoint, StoredEvent};
 use gewu_template::{LoadError, load_algorithm_unit};
 use thiserror::Error;
@@ -389,6 +392,44 @@ impl Core {
             .into_iter()
             .map(stored_attempt_view)
             .collect::<Result<Vec<_>, _>>()
+    }
+
+    /// Derives deterministic delayed-review and progression recommendations.
+    /// Recommendations are projections; this method never mutates attempt history.
+    pub fn review_recommendations(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<ReviewRecommendation>, CoreError> {
+        let attempts = self.store.list_attempts(limit)?;
+        let facts = attempts
+            .into_iter()
+            .map(|value| {
+                let mode = parse_stored_mode_for_review(&value.mode)?;
+                let terminal_reason = match value.terminal_reason.as_str() {
+                    "completed" => ReviewTerminalReason::Completed,
+                    "stopped" => ReviewTerminalReason::Stopped,
+                    other => {
+                        return Err(CoreError::UnsupportedStoredTerminalReason(other.to_owned()));
+                    }
+                };
+                Ok(AttemptFact {
+                    id: value.id,
+                    unit_id: gewu_domain::UnitId::parse(value.unit_id)
+                        .map_err(|error| CoreError::InvalidReviewUnit(error.to_string()))?,
+                    revision: gewu_domain::Revision::new(value.revision)
+                        .map_err(|error| CoreError::InvalidReviewRevision(error.to_string()))?,
+                    mode,
+                    terminal_reason,
+                    accepted: value.accepted_input_count,
+                    rejected: value.rejected_input_count,
+                    prompts: value.prompt_count,
+                    scaffold_reveals: value.scaffold_reveal_count,
+                    active_ms: value.active_ms,
+                    wall_ms: value.wall_ms,
+                })
+            })
+            .collect::<Result<Vec<_>, CoreError>>()?;
+        Ok(recommend(&facts))
     }
     pub fn delete_history(&self) -> Result<usize, CoreError> {
         Ok(self.store.delete_history()?)
@@ -1388,6 +1429,16 @@ fn parse_stored_mode(value: &str) -> Result<PracticeModeDto, CoreError> {
         _ => Err(CoreError::UnsupportedStoredMode(value.to_owned())),
     }
 }
+fn parse_stored_mode_for_review(value: &str) -> Result<gewu_domain::PracticeMode, CoreError> {
+    match value {
+        "shadow_typing" => Ok(gewu_domain::PracticeMode::ShadowTyping),
+        "flow_recall" => Ok(gewu_domain::PracticeMode::FlowRecall),
+        "code_recall" => Ok(gewu_domain::PracticeMode::CodeRecall),
+        "reasoning_recall" => Ok(gewu_domain::PracticeMode::ReasoningRecall),
+        "transfer_practice" => Ok(gewu_domain::PracticeMode::TransferPractice),
+        _ => Err(CoreError::UnsupportedStoredMode(value.to_owned())),
+    }
+}
 fn parse_stored_terminal_reason(value: &str) -> Result<TerminalReasonDto, CoreError> {
     match value {
         "completed" => Ok(TerminalReasonDto::Completed),
@@ -1515,6 +1566,10 @@ pub enum CoreError {
     UnsupportedStoredMode(String),
     #[error("stored attempt uses unsupported terminal reason `{0}`")]
     UnsupportedStoredTerminalReason(String),
+    #[error("stored attempt has invalid review unit ID: {0}")]
+    InvalidReviewUnit(String),
+    #[error("stored attempt has invalid review revision: {0}")]
+    InvalidReviewRevision(String),
 }
 
 #[cfg(test)]

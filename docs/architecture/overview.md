@@ -76,7 +76,7 @@ Repository directories use short responsibility names because the repository roo
 | `crates/domain` | `gewu-domain` | Domain IDs and value objects, content lifecycle, relationships, attempts, and typed domain errors |
 | `crates/template` | `gewu-template` | `AlgorithmUnit` parsing, structural and semantic validation, source-file resolution, and schema migration |
 | `crates/practice` | `gewu-practice` | Deterministic practice-mode state machines, event transitions, progress facts, hints, and completion rules |
-| `crates/review` | `gewu-review` | User review state, scheduling policies, and retention-oriented recommendations; planned for Stage 8 |
+| `crates/review` | `gewu-review` | Platform-independent scheduling policies, progression recommendations, and retention decisions |
 | `crates/llm` | `gewu-llm` | Typed generation tasks, task versions, structured-output parsing, fake-provider pipeline, and optional provider adapters; Stage 7 |
 | `crates/protocol` | `gewu-protocol` | Versioned transport DTOs, handshake contracts, JSON-RPC methods, and domain-boundary conversions |
 | `crates/storage` | `gewu-storage` | MVP local attempt and content persistence, atomic writes, migrations, and deletion |

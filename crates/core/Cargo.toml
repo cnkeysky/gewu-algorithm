@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 gewu-domain = { path = "../domain" }
 gewu-practice = { path = "../practice" }
+gewu-review = { path = "../review" }
 gewu-protocol = { path = "../protocol" }
 gewu-storage = { path = "../storage" }
 gewu-template = { path = "../template" }
