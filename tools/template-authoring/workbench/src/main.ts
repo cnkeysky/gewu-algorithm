@@ -258,9 +258,12 @@ function selectedValues<T extends string>(name: string): T[] {
 
 function updateProfile(): void {
   const selectedModes = selectedValues<PracticeMode>("mode");
-  const selectedAssistance = selectedValues<Assistance>("assistance");
   const codeRecall = selectedModes.includes("code_recall");
   assistanceFieldset.disabled = !codeRecall;
+  if (!codeRecall) {
+    document.querySelectorAll<HTMLInputElement>("input[name=assistance]").forEach((input) => { input.checked = false; });
+  }
+  const selectedAssistance = codeRecall ? selectedValues<Assistance>("assistance") : [];
   assistanceNote.textContent = codeRecall ? "These hints will be included in the code recall projection." : "Select Code recall above to enable these hints.";
   const language = (document.querySelector<HTMLInputElement>("#languages")!.value || "python").split(",").map((value) => value.trim()).filter(Boolean);
   const variants = 1;
@@ -306,7 +309,7 @@ form.addEventListener("submit", async (event) => {
     language: document.querySelector<HTMLInputElement>("#languages")!.value || "python",
     variants: 1,
     modes: selectedModes,
-    assistance: selectedValues<Assistance>("assistance"),
+    assistance: selectedModes.includes("code_recall") ? selectedValues<Assistance>("assistance") : [],
     status: "queued",
     createdAt: new Date().toISOString(),
   };
