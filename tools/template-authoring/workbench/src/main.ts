@@ -52,7 +52,7 @@ root.innerHTML = `
         </div>
         <div class="field-row">
           <label class="field"><span>Languages</span><input id="languages" value="python" /></label>
-          <label class="field"><span>Implementation variants</span><input id="variants" type="number" min="1" max="5" value="1" /></label>
+          <div class="field"><span>Implementation plan</span><div class="readonly-value"><strong>Automatic</strong><small>One teaching implementation by default</small></div></div>
         </div>
         <fieldset>
           <legend>Practice projections <label class="select-all"><input type="checkbox" id="select-all-modes" /><span>All modes</span></label></legend>
@@ -215,7 +215,6 @@ document.addEventListener("click", (event) => {
     if (draft) {
       (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
       (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
-      (document.querySelector<HTMLInputElement>("#variants")!).value = String(draft.variants);
       (document.querySelector<HTMLSelectElement>("#provider")!).value = draft.provider;
       document.querySelector<HTMLSelectElement>("#provider")!.dispatchEvent(new Event("change"));
       (document.querySelector<HTMLSelectElement>("#model")!).value = draft.model;
@@ -237,10 +236,10 @@ function updateProfile(): void {
   const codeRecall = selectedModes.includes("code_recall");
   assistanceFieldset.disabled = false;
   const language = (document.querySelector<HTMLInputElement>("#languages")!.value || "python").split(",").map((value) => value.trim()).filter(Boolean);
-  const variants = Number(document.querySelector<HTMLInputElement>("#variants")!.value);
+  const variants = 1;
   profileState.textContent = selectedModes.length > 0 && language.length > 0 && variants > 0 ? "Ready" : "Needs input";
   profileState.className = `valid-badge ${profileState.textContent === "Ready" ? "" : "warning"}`;
-  profileSummary.innerHTML = `<div class="summary-block"><span>Modes</span><div class="tag-list">${selectedModes.length ? selectedModes.map((mode) => `<span class="tag">${mode.replaceAll("_", " ")}</span>`).join("") : "<em>None selected</em>"}</div></div><div class="summary-block"><span>Assistance</span><div class="tag-list">${selectedAssistance.length ? selectedAssistance.map((item) => `<span class="tag muted">${item}</span>`).join("") : "<em>No hints selected</em>"}</div><small class="profile-note">${codeRecall ? "Applied to code recall." : "Configured, but inactive until code recall is selected."}</small></div><div class="summary-meta"><span>${language.join(", ")}</span><span>${Number.isFinite(variants) ? variants : 0} variant${variants === 1 ? "" : "s"}</span></div>`;
+  profileSummary.innerHTML = `<div class="summary-block"><span>Modes</span><div class="tag-list">${selectedModes.length ? selectedModes.map((mode) => `<span class="tag">${mode.replaceAll("_", " ")}</span>`).join("") : "<em>None selected</em>"}</div></div><div class="summary-block"><span>Assistance</span><div class="tag-list">${selectedAssistance.length ? selectedAssistance.map((item) => `<span class="tag muted">${item}</span>`).join("") : "<em>No hints selected</em>"}</div><small class="profile-note">${codeRecall ? "Applied to code recall." : "Configured, but inactive until code recall is selected."}</small></div><div class="summary-meta"><span>${language.join(", ")}</span><span>Automatic implementation</span></div>`;
   const totalModes = document.querySelectorAll<HTMLInputElement>("input[name=mode]").length;
   const allSelected = totalModes > 0 && selectedModes.length === totalModes;
   selectAllModes.checked = allSelected;
@@ -280,7 +279,7 @@ form.addEventListener("submit", async (event) => {
     provider: document.querySelector<HTMLSelectElement>("#provider")!.value,
     model: document.querySelector<HTMLSelectElement>("#model")!.value,
     language: document.querySelector<HTMLInputElement>("#languages")!.value || "python",
-    variants: Number(document.querySelector<HTMLInputElement>("#variants")!.value),
+    variants: 1,
     modes: selectedModes,
     assistance: selectedValues<Assistance>("assistance"),
     status: "queued",
