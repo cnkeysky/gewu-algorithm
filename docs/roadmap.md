@@ -183,10 +183,21 @@ cadence, or release ownership needed for a separate templates repository.
 Knowledge relationships remain part of the AlgorithmUnit contract and are not
 expanded without evidence that they improve Stage 8 recommendations.
 
-## Stage 10: Client and Editor Expansion
+## Stage 10: Core Web Client
 
-- adapt the completed core modes to VS Code without redefining their scoring or
-  persistence behavior;
-- revisit Zed, web, and synchronization using current platform capabilities;
+Status: complete for the first-party Web slice as of 2026-08-05. Third-party
+editor expansion remains a later stage.
+
+- provide a Vite Web Practice Client at `localhost:5173`;
+- expose the existing Rust Core through a localhost HTTP adapter carrying the
+  existing JSON-RPC contract;
+- support unit, mode, and `practice_id` selection plus all core practice event
+  paths;
+- show review recommendations, interrupted checkpoints, and recent attempts;
+- keep scoring, state transitions, checkpoint recovery, attempts, and review
+  persistence in Rust Core.
+
+VS Code, Zed, and synchronization are intentionally deferred until the
+first-party client has validated the shared protocol and interaction model.
 - treat client-specific interaction polish as adapter work rather than a blocker
   for platform-independent core development.

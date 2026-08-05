@@ -115,6 +115,22 @@ the draft identity, clears its current artifact pointer, returns it to
 `queued`, and writes future generations into a new artifact directory; older
 review reports remain immutable history.
 
+## First-party Web Practice
+
+The Practice workspace is backed by Rust Core rather than the authoring API.
+Start the loopback Core HTTP adapter from the repository root, then run the
+Vite client:
+
+```sh
+cargo run -p gewu-cli -- serve --content-root fixtures/algorithm-units/valid --data-root .gewu-data
+npm run workbench:dev
+```
+
+Open `http://127.0.0.1:5173/`, select `Practice`, and use the unit/mode
+picker. The client uses the existing JSON-RPC contract through
+`http://127.0.0.1:4175/rpc`; scoring, checkpoint recovery, attempts, and review
+recommendations remain Rust-owned.
+
 Generation tasks are resolved through the TypeScript task registry. Use
 `GET /api/tasks` to inspect registered task ids and versions. Each task owns
 its support predicate, prompt, output schema, and artifact validator; adding a

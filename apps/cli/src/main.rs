@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+mod http;
+
 use std::{
     env,
     io::{self, BufRead, Write},
@@ -29,6 +31,12 @@ fn main() {
         "stdio" => {
             if let Err(error) = run_stdio(content_root, data_root) {
                 eprintln!("GEWU core host failed: {error}");
+                std::process::exit(1);
+            }
+        }
+        "serve" => {
+            if let Err(error) = http::run(content_root, data_root) {
+                eprintln!("GEWU HTTP core host failed: {error}");
                 std::process::exit(1);
             }
         }
@@ -85,7 +93,11 @@ fn run_stdio(content_root: PathBuf, data_root: PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-fn dispatch(core: &mut Core, handshaken: &mut bool, request: JsonRpcRequest) -> JsonRpcResponse {
+pub(crate) fn dispatch(
+    core: &mut Core,
+    handshaken: &mut bool,
+    request: JsonRpcRequest,
+) -> JsonRpcResponse {
     if request.jsonrpc != "2.0" {
         return JsonRpcResponse::failure(
             request.id,
@@ -136,6 +148,10 @@ fn dispatch(core: &mut Core, handshaken: &mut bool, request: JsonRpcRequest) -> 
         "gewu/recentAttempts" => decode::<RecentAttemptsParams>(request.params)
             .and_then(|params| core.recent_attempts(params.limit).map_err(core_error))
             .and_then(|attempts| value(RecentAttemptsResult { attempts })),
+        "gewu/reviewRecommendations" => core
+            .review_recommendations(100)
+            .map_err(core_error)
+            .and_then(value),
         "gewu/deleteHistory" => core
             .delete_history()
             .map_err(core_error)
@@ -222,6 +238,6 @@ fn fail(message: &str) {
 }
 fn print_help() {
     println!(
-        "gewu <stdio|list-units|recent-attempts|review|delete-history> [--content-root PATH] [--data-root PATH]"
+        "gewu <stdio|serve|list-units|recent-attempts|review|delete-history> [--content-root PATH] [--data-root PATH]"
     );
 }

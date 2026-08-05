@@ -32,6 +32,7 @@ root.innerHTML = `
     <a class="brand" href="#">GEWU <span>AUTHORING</span></a>
     <nav aria-label="Primary navigation">
       <button class="nav-item active" data-view="new">New draft</button>
+      <button class="nav-item" data-view="practice">Practice</button>
       <button class="nav-item" data-view="drafts">Drafts <span class="nav-count">3</span></button>
       <button class="nav-item" data-view="history">Review history</button>
     </nav>
@@ -78,6 +79,30 @@ root.innerHTML = `
       </aside>
     </section>
     </div>
+    <section id="practice-view" class="app-view panel page-panel" hidden>
+      <div class="panel-heading"><div><p class="eyebrow">Core practice</p><h2>Practice workspace</h2></div><span class="lock" id="practice-connection">Core offline</span></div>
+      <div class="practice-layout">
+        <form id="practice-start" class="practice-controls">
+          <label class="field"><span>Algorithm unit</span><select id="practice-unit"><option>Loading units...</option></select></label>
+          <label class="field"><span>Practice mode</span><select id="practice-mode">${modes.map((mode) => `<option value="${mode.id}">${mode.label}</option>`).join("")}</select></label>
+          <label class="field"><span>Practice ID <small class="catalog-note">Optional for multi-variant units</small></span><input id="practice-id" placeholder="automatic" /></label>
+          <button class="button primary" type="submit">Start practice <span aria-hidden="true">&#8594;</span></button>
+          <p class="form-message" id="practice-message" role="status"></p>
+        </form>
+        <section class="practice-session" id="practice-session" hidden>
+          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3></div><span class="valid-badge" id="session-status">Active</span></div>
+          <p id="session-prompt" class="session-prompt"></p><pre id="session-target" class="session-target"></pre>
+          <textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
+          <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit event</button><button class="button secondary" type="button" id="session-stop">Stop practice</button></div>
+          <div class="session-meta" id="session-meta"></div>
+        </section>
+        <aside class="practice-side">
+          <section><div class="panel-heading"><h3>Interrupted</h3><button class="inline-action" type="button" id="refresh-checkpoints">Refresh</button></div><div id="practice-checkpoints" class="compact-list"></div></section>
+          <section><div class="panel-heading"><h3>Review queue</h3></div><div id="practice-recommendations" class="compact-list"></div></section>
+          <section><div class="panel-heading"><h3>Recent attempts</h3></div><div id="practice-attempts" class="compact-list"></div></section>
+        </aside>
+      </div>
+    </section>
     <section id="drafts-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
       <div class="draft-list" id="draft-list"></div>
@@ -103,6 +128,52 @@ const selectAllModes = document.querySelector<HTMLInputElement>("#select-all-mod
 const assistanceNote = document.querySelector<HTMLParagraphElement>("#assistance-note")!;
 const submitDraft = document.querySelector<HTMLButtonElement>("#submit-draft")!;
 let editingDraftId: string | undefined;
+const practiceApi = "http://127.0.0.1:4175/rpc";
+let practiceRequestId = 1;
+let practiceHandshaken = false;
+let activePracticeSession: { session_id: string; mode: PracticeMode } | undefined;
+type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[] };
+type PracticeSession = { session_id: string; unit_title: string; mode: PracticeMode; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number };
+type Checkpoint = { id: string; unit_title: string; unit_id: string; mode: PracticeMode; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
+type Recommendation = { unit_id: string; revision: number; mode: PracticeMode; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
+type Attempt = { id: string; unit_id: string; mode: PracticeMode; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
+async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> {
+  if (!practiceHandshaken && method !== "gewu/handshake") {
+    await practiceRpc("gewu/handshake", { protocol_min: 1, protocol_max: 1, client_name: "gewu-web", client_version: "0.1.0" });
+    practiceHandshaken = true;
+  }
+  const response = await fetch(practiceApi, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: practiceRequestId++, method, params }) });
+  if (!response.ok) throw new Error(`Core HTTP ${response.status}`);
+  const payload = await response.json() as { result?: T; error?: { message?: string } };
+  if (payload.error) throw new Error(payload.error.message ?? "Core request failed");
+  return payload.result as T;
+}
+function practiceMessage(text: string, error = false): void { const target = document.querySelector<HTMLParagraphElement>("#practice-message")!; target.textContent = text; target.className = `form-message ${error ? "error" : "success"}`; }
+function renderPracticeSession(session: PracticeSession): void {
+  document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
+  document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
+  document.querySelector<HTMLElement>("#session-status")!.textContent = session.status;
+  document.querySelector<HTMLElement>("#session-prompt")!.textContent = session.current_prompt ?? "";
+  document.querySelector<HTMLElement>("#session-target")!.textContent = session.target_text || session.accepted_text || "Awaiting the next response.";
+  document.querySelector<HTMLElement>("#session-meta")!.textContent = `${session.mode.replaceAll("_", " ")} · ${session.accepted_input_count} accepted · ${session.rejected_input_count} rejected · ${session.prompt_count} prompts`;
+  if (session.status !== "active") document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = true;
+}
+async function refreshPracticeData(): Promise<void> {
+  try {
+    const [units, checkpoints, recommendations, attempts] = await Promise.all([
+      practiceRpc<PracticeUnit[]>("gewu/listUnits"),
+      practiceRpc<{ checkpoints: Checkpoint[] }>("gewu/listCheckpoints"),
+      practiceRpc<Recommendation[]>("gewu/reviewRecommendations"),
+      practiceRpc<{ attempts: Attempt[] }>("gewu/recentAttempts", { limit: 10 }),
+    ]);
+    const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit")!;
+    unitSelect.innerHTML = units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("");
+    document.querySelector<HTMLElement>("#practice-connection")!.textContent = "Core connected";
+    document.querySelector<HTMLElement>("#practice-checkpoints")!.innerHTML = checkpoints.checkpoints.length ? checkpoints.checkpoints.map((checkpoint) => `<div class="compact-row"><span><strong>${checkpoint.unit_title}</strong>${checkpoint.mode.replaceAll("_", " ")} · ${checkpoint.accepted_characters}/${checkpoint.target_characters}</span><span><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div>`).join("") : `<div class="compact-empty">No interrupted practice.</div>`;
+    document.querySelector<HTMLElement>("#practice-recommendations")!.innerHTML = recommendations.length ? recommendations.map((item) => `<div class="compact-row"><span><strong>${item.unit_id} · ${item.mode.replaceAll("_", " ")}</strong>${item.reason}</span><span>${item.due_at_ms ? formatDate(new Date(item.due_at_ms).toISOString()) : `${item.due_after_days}d`}</span></div>`).join("") : `<div class="compact-empty">No recommendations yet.</div>`;
+    document.querySelector<HTMLElement>("#practice-attempts")!.innerHTML = attempts.attempts.length ? attempts.attempts.map((item) => `<div class="compact-row"><span><strong>${item.unit_id}</strong>${item.mode.replaceAll("_", " ")}</span><span>${item.terminal_reason}</span></div>`).join("") : `<div class="compact-empty">No attempts yet.</div>`;
+  } catch (error) { document.querySelector<HTMLElement>("#practice-connection")!.textContent = "Core offline"; practiceMessage(error instanceof Error ? error.message : "Core unavailable", true); }
+}
 
 interface DraftRecord {
   id: string;
@@ -184,7 +255,11 @@ function showView(view: string): void {
 document.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
   const navigation = target.closest<HTMLButtonElement>(".nav-item, [data-go]");
-  if (navigation) showView(navigation.dataset.view ?? navigation.dataset.go ?? "new");
+  if (navigation) {
+    const view = navigation.dataset.view ?? navigation.dataset.go ?? "new";
+    showView(view);
+    if (view === "practice") void refreshPracticeData();
+  }
   const generateButton = target.closest<HTMLButtonElement>("[data-generate-id]");
   if (generateButton) {
     event.stopPropagation();
@@ -339,6 +414,56 @@ document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", (
   document.querySelectorAll<HTMLInputElement>("input[name=mode], input[name=assistance]").forEach((input) => { input.checked = false; });
   updateProfile();
   message.textContent = "";
+});
+document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const session = await practiceRpc<{ session: PracticeSession }>("gewu/startSession", {
+      unit_id: document.querySelector<HTMLSelectElement>("#practice-unit")!.value,
+      mode: document.querySelector<HTMLSelectElement>("#practice-mode")!.value,
+      practice_id: document.querySelector<HTMLInputElement>("#practice-id")!.value.trim() || undefined,
+    });
+    activePracticeSession = { session_id: session.session.session_id, mode: session.session.mode };
+    document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = false;
+    renderPracticeSession(session.session);
+    practiceMessage("Practice started.");
+    await refreshPracticeData();
+  } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to start practice", true); }
+});
+document.querySelector<HTMLButtonElement>("#session-submit")!.addEventListener("click", async () => {
+  if (!activePracticeSession) return;
+  const answer = document.querySelector<HTMLTextAreaElement>("#session-answer")!;
+  const answerModes: PracticeMode[] = ["flow_recall", "reasoning_recall", "transfer_practice"];
+  const event = answerModes.includes(activePracticeSession.mode) ? { type: "submit_answer", answer: answer.value } : { type: "insert_text", text: answer.value };
+  try {
+    const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: activePracticeSession.session_id, event, elapsed: { active_ms: 1000, wall_ms: 1000 } });
+    renderPracticeSession(result.session);
+    answer.value = "";
+    await refreshPracticeData();
+  } catch (error) { practiceMessage(error instanceof Error ? error.message : "Event rejected", true); }
+});
+document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("click", async () => {
+  if (!activePracticeSession) return;
+  try {
+    const result = await practiceRpc<{ session: PracticeSession }>("gewu/stopSession", { session_id: activePracticeSession.session_id, elapsed: { active_ms: 1000, wall_ms: 1000 } });
+    renderPracticeSession(result.session);
+    activePracticeSession = undefined;
+    await refreshPracticeData();
+  } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to stop practice", true); }
+});
+document.querySelector<HTMLButtonElement>("#refresh-checkpoints")!.addEventListener("click", () => { void refreshPracticeData(); });
+document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click", async (event) => {
+  const target = event.target as HTMLElement;
+  const resume = target.closest<HTMLButtonElement>("[data-resume-checkpoint]");
+  const discard = target.closest<HTMLButtonElement>("[data-discard-checkpoint]");
+  try {
+    if (resume) {
+      const result = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: resume.dataset.resumeCheckpoint });
+      if (result.session) { activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
+    }
+    if (discard) await practiceRpc("gewu/discardCheckpoint", { checkpoint_id: discard.dataset.discardCheckpoint });
+    await refreshPracticeData();
+  } catch (error) { practiceMessage(error instanceof Error ? error.message : "Checkpoint action failed", true); }
 });
 updateProfile();
 renderDrafts();
