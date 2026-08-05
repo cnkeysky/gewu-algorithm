@@ -59,8 +59,8 @@ root.innerHTML = `
       <form class="panel form-panel" id="draft-form">
         <div class="panel-heading"><div><p class="eyebrow">01 / Input</p><h2>New generation draft</h2></div><span class="required">Required</span></div>
         <label class="field-label" for="task-id">Authoring task</label>
-        <select id="task-id" class="task-select">${fallbackTasks.map((task) => `<option value="${task.taskId}">${task.label} · v${task.taskVersion}</option>`).join("")}</select>
-        <p class="field-note task-note">The task owns its output schema and deterministic artifact validator.</p>
+        <select id="task-id" class="task-select"><option value="">Auto detect from problem</option>${fallbackTasks.map((task) => `<option value="${task.taskId}">${task.label} · v${task.taskVersion}</option>`).join("")}</select>
+        <p class="field-note task-note">The problem is free-form. Live generation requires an auto-detected or explicitly selected registered contract.</p>
         <label class="field-label" for="problem">Algorithm problem</label>
         <textarea id="problem" rows="6" placeholder="Describe the problem, expected behavior, constraints, and boundaries.">Implement Kahn's topological sorting algorithm for a directed graph represented as adjacency lists. Return a FIFO-deterministic ordering or an empty list when the graph contains a cycle.</textarea>
         <div class="field-row">
@@ -77,7 +77,7 @@ root.innerHTML = `
         </fieldset>
         <fieldset id="assistance-fieldset" class="assistance-fieldset">
           <legend>Code recall assistance</legend>
-          <div class="assistance-list">${assistance.map((item) => `<label><input type="checkbox" name="assistance" value="${item.id}" /><span>${item.label}</span></label>`).join("")}</div>
+          <div class="assistance-list">${assistance.map((item) => `<label><input type="checkbox" name="assistance" value="${item.id}" disabled /><span>${item.label}</span></label>`).join("")}</div>
           <p class="field-note">These hints are included only when code recall is selected.</p>
         </fieldset>
         <div class="form-actions"><button class="button secondary" type="button" id="reset">Reset</button><button class="button primary" type="submit">Create draft <span aria-hidden="true">&#8594;</span></button></div>
@@ -161,7 +161,11 @@ async function syncTasks(): Promise<void> {
     const response = await fetch("/api/tasks");
     if (!response.ok) return;
     const payload = await response.json() as { tasks?: typeof fallbackTasks };
-    if (Array.isArray(payload.tasks) && payload.tasks.length) taskSelect.innerHTML = payload.tasks.map((task) => `<option value="${task.taskId}">${task.label} · v${task.taskVersion}</option>`).join("");
+    if (Array.isArray(payload.tasks) && payload.tasks.length) {
+      const selected = taskSelect.value;
+      taskSelect.innerHTML = `<option value="">Auto detect from problem</option>${payload.tasks.map((task) => `<option value="${task.taskId}">${task.label} · v${task.taskVersion}</option>`).join("")}`;
+      taskSelect.value = selected;
+    }
   } catch {
     // Built-in task options keep the form usable when the API is stopped.
   }
@@ -257,7 +261,7 @@ document.addEventListener("click", (event) => {
     const draft = readDrafts().find((item) => item.id === draftButton.dataset.draftId);
     if (draft) {
       (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
-      if (draft.taskId) taskSelect.value = draft.taskId;
+      taskSelect.value = draft.taskId ?? "";
       (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
       (document.querySelector<HTMLSelectElement>("#provider")!).value = draft.provider;
       document.querySelector<HTMLSelectElement>("#provider")!.dispatchEvent(new Event("change"));
@@ -278,7 +282,7 @@ function updateProfile(): void {
   const selectedModes = selectedValues<PracticeMode>("mode");
   const selectedAssistance = selectedValues<Assistance>("assistance");
   const codeRecall = selectedModes.includes("code_recall");
-  assistanceFieldset.disabled = false;
+  assistanceFieldset.disabled = !codeRecall;
   const language = (document.querySelector<HTMLInputElement>("#languages")!.value || "python").split(",").map((value) => value.trim()).filter(Boolean);
   const variants = 1;
   profileState.textContent = selectedModes.length > 0 && language.length > 0 && variants > 0 ? "Ready" : "Needs input";
@@ -290,7 +294,8 @@ function updateProfile(): void {
   selectAllModes.indeterminate = selectedModes.length > 0 && !allSelected;
 }
 
-document.querySelectorAll<HTMLInputElement>("input, select, textarea").forEach((input) => input.addEventListener("input", updateProfile));
+document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:not(#select-all-modes), select, textarea").forEach((input) => input.addEventListener("input", updateProfile));
+document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((input) => input.addEventListener("change", updateProfile));
 selectAllModes.addEventListener("change", () => {
   const inputs = [...document.querySelectorAll<HTMLInputElement>("input[name=mode]")];
   inputs.forEach((input) => { input.checked = selectAllModes.checked; });
@@ -316,7 +321,7 @@ form.addEventListener("submit", async (event) => {
   const problem = document.querySelector<HTMLTextAreaElement>("#problem")!.value.trim();
   const record: DraftRecord = {
     id: crypto.randomUUID(),
-    taskId: taskSelect.value,
+    taskId: taskSelect.value || undefined,
     title: problem.split(/\s+/).slice(0, 3).join(" ").replace(/[^a-zA-Z0-9 -]/g, "") || "Untitled algorithm",
     problem,
     provider: document.querySelector<HTMLSelectElement>("#provider")!.value,
