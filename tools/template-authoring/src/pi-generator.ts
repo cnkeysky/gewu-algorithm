@@ -24,6 +24,16 @@ export interface PiGeneratorOptions {
   readonly model: string;
 }
 
+/** Reads non-secret selection settings. Provider credentials stay in Pi-ai's env/auth layer. */
+export function optionsFromEnvironment(
+  environment: Record<string, string | undefined> = process.env,
+): PiGeneratorOptions {
+  return {
+    provider: environment.GEWU_LLM_PROVIDER ?? "deepseek",
+    model: environment.GEWU_LLM_MODEL ?? "deepseek-chat",
+  };
+}
+
 export class PiGenerator {
   readonly #models = builtinModels();
   readonly #options: PiGeneratorOptions;
