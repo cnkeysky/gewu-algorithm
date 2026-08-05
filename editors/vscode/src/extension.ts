@@ -1,12 +1,18 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 
-import { GewuCoreClient, PracticeMode, CoreSession } from "./core-client.js";
+import {
+  CheckpointSummary,
+  checkpointProgressPercentage,
+  checkpointStartActions,
+  CoreSession,
+  GewuCoreClient,
+  PracticeMode,
+} from "./core-client.js";
 import { CorePracticeDocumentController } from "./core-session.js";
 import { FlowRecallPanel } from "./flow-panel.js";
 import { openPracticeDocument, VsCodePracticeHost } from "./vscode-host.js";
 
-const STOP_CONFIRMATION = "Stop practice?";
 const CONFIRM_ACTION = "Confirm";
 
 let activeHost: VsCodePracticeHost | undefined;
@@ -55,23 +61,38 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("gewuAlgorithm.deleteHistory", () =>
       deleteHistory(),
     ),
-    { dispose: () => disposeWithoutTerminalAttempt() },
+    { dispose: () => void disposeWithoutTerminalAttempt() },
   );
 }
 
-export function deactivate(): void {
-  disposeWithoutTerminalAttempt();
+export async function deactivate(): Promise<void> {
+  await disposeWithoutTerminalAttempt();
 }
 
 async function startPractice(mode: PracticeMode): Promise<void> {
   const core = await ensureClient();
   const checkpointAction = await resolveCheckpointBeforeStart(core, mode);
   if (checkpointAction === "resume" || checkpointAction === "cancel") return;
-  closeActivePracticeUi();
   const units = await core.listUnits();
+  const checkpoints = await core.listCheckpoints();
   const choices = units
-    .filter((unit) => unit.modes.includes(mode))
+    .filter(
+      (unit) =>
+        unit.modes.includes(mode) &&
+        !checkpoints.some(
+          (checkpoint) =>
+            checkpoint.unit_id === unit.id &&
+            checkpoint.revision === unit.revision &&
+            checkpoint.mode === mode,
+        ),
+    )
     .map((unit) => ({ label: unit.title, description: unit.id, unit }));
+  if (choices.length === 0) {
+    vscode.window.showInformationMessage(
+      `GEWU: Every available ${displayMode(mode)} task already has an interrupted checkpoint.`,
+    );
+    return;
+  }
   const selected = await vscode.window.showQuickPick(choices, {
     placeHolder:
       mode === "shadow_typing"
@@ -79,6 +100,7 @@ async function startPractice(mode: PracticeMode): Promise<void> {
         : "Choose a local unit for Flow Recall",
   });
   if (selected === undefined) return;
+  await closeActivePracticeUi();
   const session = await core.startSession(selected.unit.id, mode);
   if (mode === "shadow_typing") {
     activeHost = await openPracticeDocument(
@@ -113,7 +135,7 @@ async function submitFlowRecallFromCommand(): Promise<void> {
 async function stopShadowTyping(): Promise<void> {
   if (activeController === undefined) return;
   const answer = await vscode.window.showWarningMessage(
-    STOP_CONFIRMATION,
+    `Stop Shadow Typing for ${activeController.unitTitle}?`,
     { modal: true },
     CONFIRM_ACTION,
   );
@@ -136,7 +158,7 @@ async function stopPractice(): Promise<void> {
   }
   if (activeFlow === undefined) return;
   const answer = await vscode.window.showWarningMessage(
-    STOP_CONFIRMATION,
+    `Stop Flow Recall for ${activeFlow.unit_title}?`,
     { modal: true },
     CONFIRM_ACTION,
   );
@@ -214,139 +236,179 @@ async function submitFlowAnswer(answer: string): Promise<void> {
 
 async function resumePractice(): Promise<void> {
   const core = await ensureClient();
-  const session = await confirmCheckpoint(core, "resume");
-  if (session === undefined) return;
-  closeActivePracticeUi();
-  if (session.session.mode === "flow_recall") {
-    activeFlow = session.session;
-    setFlowClock(session.session);
-    openFlowPanel(session.session);
+  const checkpoint = await confirmCheckpoint(core);
+  if (checkpoint === undefined) return;
+  const resumed = await core.resumeCheckpoint(checkpoint.id);
+  if (resumed === undefined) {
+    vscode.window.showInformationMessage(
+      "GEWU: That interrupted practice is no longer available.",
+    );
     return;
   }
-  activeHost = await openPracticeDocument(
-    session.session.session_id,
-    vscode.ViewColumn.Active,
-    session.session.accepted_text,
-  );
-  activeController = new CorePracticeDocumentController(
-    activeHost,
-    core,
-    session.session,
-  );
-  vscode.window.showInformationMessage(
-    `GEWU: Resumed Shadow Typing for ${session.session.unit_id}.`,
-  );
+  await activateResumedSession(core, resumed.session);
 }
 
 async function discardCheckpoint(): Promise<void> {
   const core = await ensureClient();
-  const session = await confirmCheckpoint(core, "discard");
-  if (session === undefined) return;
-  await core.discardCheckpoint();
-  vscode.window.showInformationMessage("GEWU: Interrupted practice discarded.");
+  const checkpoints = await core.listCheckpoints();
+  if (checkpoints.length === 0) {
+    vscode.window.showInformationMessage(
+      "GEWU: No interrupted practice session to discard.",
+    );
+    return;
+  }
+  const selected = await vscode.window.showQuickPick(
+    checkpoints.map(checkpointItem),
+    {
+      canPickMany: true,
+      title: "Discard Interrupted Practice",
+      placeHolder: "Select interrupted practices to discard",
+    },
+  );
+  if (selected === undefined || selected.length === 0) return;
+  for (const checkpoint of selected) {
+    await discardSelectedCheckpoint(core, checkpoint.id);
+  }
+  vscode.window.showInformationMessage(
+    `GEWU: Discarded ${selected.length} interrupted ${selected.length === 1 ? "practice" : "practices"}.`,
+  );
 }
 
 async function confirmCheckpoint(
   core: GewuCoreClient,
-  action: "resume" | "discard",
-): Promise<import("./core-client.js").CheckpointResume | undefined> {
-  const checkpoint = await core.resumeCheckpoint();
-  if (checkpoint === undefined) {
+): Promise<CheckpointSummary | undefined> {
+  const checkpoints = await core.listCheckpoints();
+  if (checkpoints.length === 0) {
     vscode.window.showInformationMessage(
-      action === "resume"
-        ? "GEWU: No interrupted practice session to resume."
-        : "GEWU: No interrupted practice session to discard.",
+      "GEWU: No interrupted practice session to resume.",
     );
     return undefined;
   }
-  const session = checkpoint.session;
-  const verb = action === "resume" ? "Resume" : "Discard";
-  const selected = await vscode.window.showQuickPick(
-    [checkpointItem(checkpoint)],
-    {
-      title: `${verb} Interrupted Practice`,
-      placeHolder: `${verb} the selected checkpoint`,
-    },
-  );
-  if (selected === undefined) return undefined;
-  return checkpoint;
+  return vscode.window.showQuickPick(checkpoints.map(checkpointItem), {
+    title: "Resume Interrupted Practice",
+    placeHolder: "Resume the selected checkpoint",
+  });
 }
 
 async function resolveCheckpointBeforeStart(
   core: GewuCoreClient,
   requestedMode: PracticeMode,
 ): Promise<"resume" | "discard" | "cancel"> {
-  const checkpoint = await core.resumeCheckpoint();
-  if (checkpoint === undefined) return "discard";
+  const checkpoints = (await core.listCheckpoints()).filter(
+    (checkpoint) => checkpoint.mode === requestedMode,
+  );
+  if (checkpoints.length === 0) return "discard";
+  const checkpointChoices = checkpointStartActions(checkpoints, requestedMode)
+    .filter((choice) => choice.action !== "start")
+    .map((choice) => {
+      const checkpoint = checkpoints.find(
+        (value) => value.id === choice.checkpoint_id,
+      );
+      if (checkpoint === undefined) throw new Error("checkpoint disappeared");
+      return {
+        label:
+          choice.action === "resume"
+            ? `$(play) Resume ${displayMode(checkpoint.mode)}`
+            : `$(trash) Discard and start new ${displayMode(requestedMode)}`,
+        description: checkpointDescription(checkpoint),
+        detail: checkpointDetail(checkpoint),
+        action: choice.action,
+        checkpoint,
+      };
+    });
   const choice = await vscode.window.showQuickPick(
     [
       {
-        label: `$(play) Resume ${displayMode(checkpoint.session.mode)}`,
-        description: checkpointDescription(checkpoint),
-        detail: checkpointDetail(checkpoint),
-        action: "resume" as const,
+        label: `$(add) Start new ${displayMode(requestedMode)}`,
+        description: `Keep ${checkpoints.length} interrupted practice ${checkpoints.length === 1 ? "checkpoint" : "checkpoints"}`,
+        action: "start" as const,
       },
-      {
-        label: `$(trash) Discard and start ${displayMode(requestedMode)}`,
-        description: checkpointDescription(checkpoint),
-        detail: checkpointDetail(checkpoint),
-        action: "discard" as const,
-      },
+      ...checkpointChoices,
     ],
     {
       title: `Start ${displayMode(requestedMode)}`,
-      placeHolder: `An interrupted ${displayMode(checkpoint.session.mode)} exists; choose how to continue`,
+      placeHolder: `Choose a checkpoint or start a new ${displayMode(requestedMode)} session`,
     },
   );
   if (choice?.action === "resume") {
-    const session = checkpoint.session;
-    closeActivePracticeUi();
-    if (session.mode === "flow_recall") {
-      activeFlow = session;
-      setFlowClock(session);
-      openFlowPanel(session);
-    } else {
-      activeHost = await openPracticeDocument(
-        session.session_id,
-        vscode.ViewColumn.Active,
-        session.accepted_text,
+    const resumed = await core.resumeCheckpoint(choice.checkpoint.id);
+    if (resumed === undefined) {
+      vscode.window.showInformationMessage(
+        "GEWU: That interrupted practice is no longer available.",
       );
-      activeController = new CorePracticeDocumentController(
-        activeHost,
-        core,
-        session,
-      );
+      return "cancel";
     }
+    await activateResumedSession(core, resumed.session);
     return "resume";
   }
   if (choice?.action === "discard") {
-    await core.discardCheckpoint();
+    await discardSelectedCheckpoint(core, choice.checkpoint.id);
     return "discard";
   }
+  if (choice?.action === "start") return "discard";
   return "cancel";
 }
 
 function checkpointItem(
-  checkpoint: import("./core-client.js").CheckpointResume,
-): vscode.QuickPickItem {
+  checkpoint: CheckpointSummary,
+): CheckpointSummary & vscode.QuickPickItem {
   return {
-    label: checkpoint.session.unit_title,
+    ...checkpoint,
+    label: checkpoint.unit_title,
     description: checkpointDescription(checkpoint),
     detail: checkpointDetail(checkpoint),
   };
 }
 
-function checkpointDescription(
-  checkpoint: import("./core-client.js").CheckpointResume,
-): string {
-  const session = checkpoint.session;
-  return `${displayMode(session.mode)} | ${session.unit_id} r${session.revision}`;
+function checkpointDescription(checkpoint: CheckpointSummary): string {
+  return `${displayMode(checkpoint.mode)} | ${checkpoint.unit_id} r${checkpoint.revision}`;
 }
 
-function checkpointDetail(
-  checkpoint: import("./core-client.js").CheckpointResume,
-): string {
-  return `${progress(checkpoint.session)} | saved ${formatLocalDate(checkpoint.savedAt)}`;
+function checkpointDetail(checkpoint: CheckpointSummary): string {
+  return `${checkpointProgress(checkpoint)} | saved ${formatLocalDate(checkpoint.saved_at)}`;
+}
+
+function checkpointProgress(checkpoint: CheckpointSummary): string {
+  return `${checkpointProgressPercentage(checkpoint)}% complete`;
+}
+
+async function activateResumedSession(
+  core: GewuCoreClient,
+  session: CoreSession,
+): Promise<void> {
+  await closeActivePracticeUi();
+  if (session.mode === "flow_recall") {
+    activeFlow = session;
+    setFlowClock(session);
+    openFlowPanel(session);
+    return;
+  }
+  activeHost = await openPracticeDocument(
+    session.session_id,
+    vscode.ViewColumn.Active,
+    session.accepted_text,
+  );
+  activeController = new CorePracticeDocumentController(
+    activeHost,
+    core,
+    session,
+  );
+  vscode.window.showInformationMessage(
+    `GEWU: Resumed Shadow Typing for ${session.unit_id}.`,
+  );
+}
+
+async function discardSelectedCheckpoint(
+  core: GewuCoreClient,
+  checkpointId: string,
+): Promise<void> {
+  await core.discardCheckpoint(checkpointId);
+  if (activeCheckpointId() === checkpointId) await closeActivePracticeUi();
+}
+
+function activeCheckpointId(): string | undefined {
+  const sessionId = activeController?.sessionId ?? activeFlow?.session_id;
+  return sessionId === undefined ? undefined : `checkpoint-${sessionId}`;
 }
 
 function progress(session: CoreSession): string {
@@ -381,7 +443,7 @@ async function showHistory(): Promise<void> {
   }
   await vscode.window.showQuickPick(
     attempts.map((attempt) => ({
-      label: `${attempt.mode} ${attempt.terminal_reason}`,
+      label: `${displayMode(attempt.mode)} | ${displayTerminalReason(attempt.terminal_reason)}`,
       description: `${attempt.unit_id} r${attempt.revision}`,
       detail: attemptDetail(attempt),
     })),
@@ -422,20 +484,28 @@ function formatLocalDate(value: string): string {
 function attemptDetail(
   attempt: import("./core-client.js").AttemptSummary,
 ): string {
-  return `${formatLocalDate(attempt.created_at)} | accepted ${attempt.accepted_input_count} | rejected ${attempt.rejected_input_count} | prompts ${attempt.prompt_count}`;
+  if (attempt.mode === "shadow_typing") {
+    return `${formatLocalDate(attempt.created_at)} | accepted ${attempt.accepted_input_count} characters | rejected ${attempt.rejected_input_count} characters`;
+  }
+  return `${formatLocalDate(attempt.created_at)} | completed ${attempt.accepted_input_count} steps | rejected ${attempt.rejected_input_count} answers | prompts ${attempt.prompt_count}`;
 }
 
 function displayMode(mode: PracticeMode): string {
   return mode === "shadow_typing" ? "Shadow Typing" : "Flow Recall";
 }
 
-function disposeWithoutTerminalAttempt(): void {
-  closeActivePracticeUi();
+function displayTerminalReason(reason: "completed" | "stopped"): string {
+  return reason === "completed" ? "Completed" : "Stopped";
+}
+
+async function disposeWithoutTerminalAttempt(): Promise<void> {
+  await closeActivePracticeUi();
   client?.dispose();
   client = undefined;
 }
 
-function closeActivePracticeUi(): void {
+async function closeActivePracticeUi(): Promise<void> {
+  const host = activeHost;
   activeController?.dispose();
   activeController = undefined;
   activeHost?.dispose();
@@ -443,6 +513,7 @@ function closeActivePracticeUi(): void {
   activeFlowPanel?.dispose();
   activeFlowPanel = undefined;
   activeFlow = undefined;
+  await host?.closeEditor();
 }
 
 async function ensureClient(): Promise<GewuCoreClient> {

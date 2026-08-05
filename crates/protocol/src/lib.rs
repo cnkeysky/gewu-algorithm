@@ -273,15 +273,41 @@ pub struct DeleteAttemptsParams {
     pub ids: Vec<String>,
 }
 
-/// Saves, restores, or discards the one active versioned-unit checkpoint.
+/// Saves an active versioned-unit checkpoint.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CheckpointParams {
     pub session_id: String,
 }
+
+/// Stable checkpoint identity used for explicit recovery or removal.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CheckpointIdParams {
+    pub checkpoint_id: String,
+}
+
+/// A recoverable interrupted session without replayable event contents.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CheckpointSummary {
+    pub id: String,
+    pub unit_id: String,
+    pub unit_title: String,
+    pub revision: u64,
+    pub mode: PracticeModeDto,
+    pub completed_steps: usize,
+    pub total_steps: usize,
+    pub accepted_characters: usize,
+    pub target_characters: usize,
+    pub saved_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ListCheckpointsResult {
+    pub checkpoints: Vec<CheckpointSummary>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ResumeCheckpointResult {
     pub session: Option<SessionView>,
-    pub saved_at: Option<String>,
 }
 
 /// Protocol serialization or frame validation failure.

@@ -33,6 +33,9 @@ operating system, keyboard layout, and result in the issue or release notes.
 - Complete the final newline. `GEWU: Complete` must appear after one final Enter
   and offer `Close` and `Restart`. Restart must clear the same controlled editor
   and begin a fresh active session.
+- During an active Shadow Typing session, run `GEWU: Restart Practice` from the
+  Command Palette. It must replace the current checkpoint rather than create a
+  second checkpoint for the same task.
 - Run `GEWU: Stop Practice`. The modal must ask `Stop practice?` with `Confirm`
   and `Cancel`. Confirm must close the practice editor without a save prompt.
 
@@ -42,15 +45,18 @@ operating system, keyboard layout, and result in the issue or release notes.
   correct prefix, then
   close the Extension Development Host without Stop or completion.
 - Start F5 again and run `GEWU: Show Recent Attempts`. It must report no attempts.
-- Run `GEWU: Resume Interrupted Practice`. The accepted prefix and cursor at its
-  end must be restored. Before opening it, the confirmation must identify the
-  unit, mode, revision, progress, and local saved time. Continue typing from the
-  restored position.
+- Run `GEWU: Resume Interrupted Practice`. The picker must identify each
+  checkpoint by unit, mode, revision, progress, and local saved time. Select
+  the Shadow checkpoint; its accepted prefix and cursor at the end must be
+  restored. Continue typing from the restored position.
 - To exercise serialized rapid input, type a full canonical line continuously
   without waiting for ghost text updates. Characters must remain ordered and no
   accepted input may disappear. Pasting is a separate atomic-paste case.
-- Run `GEWU: Discard Interrupted Practice`, restart the host, and verify Resume
-  reports that no interrupted session exists.
+- Start Flow Recall, answer one step, then close the panel without Stop. Restart
+  the host and verify Resume lists both checkpoints. Discard only the Flow
+  checkpoint, restart again, and verify the Shadow checkpoint remains resumable
+  while the discarded Flow checkpoint is absent. Attempt history must remain
+  unchanged by either interruption or discard.
 
 ## Flow Recall
 
@@ -68,8 +74,13 @@ operating system, keyboard layout, and result in the issue or release notes.
   the answer field clears, and the next step remains hidden.
 - Close the panel while active, run Resume, confirm the Flow checkpoint identity,
   and verify the panel restores completed steps and current progress.
-- Start another practice while a Flow checkpoint exists. Confirm the extension
-  requires Resume, Discard, or Cancel and never silently overwrites it.
+- Start Flow Recall while Shadow and Flow checkpoints exist. Confirm the Start
+  picker shows only Flow Recall checkpoints plus `Start new Flow Recall`; Shadow
+  checkpoints remain available through the dedicated Resume and Discard
+  commands. Choosing Start new must retain the others and close the prior
+  practice UI before opening the new one.
+- In the subsequent unit picker, a unit with the same revision and requested
+  mode as an existing checkpoint must not be offered for a duplicate session.
 - Choose Stop in the Flow panel. It must stop immediately without opening a
   redundant confirmation dialog. The command-palette `GEWU: Stop Practice`
   remains the guarded path and must still ask for confirmation.
@@ -84,15 +95,22 @@ operating system, keyboard layout, and result in the issue or release notes.
 - Run `GEWU: Delete Practice Attempts`, select one or more attempts, confirm
   the Quick Pick selection once, and verify only those attempts are gone. There
   must be no redundant second confirmation. Select all for a full reset.
+- Run `GEWU: Discard Interrupted Practice`, select multiple checkpoints in one
+  picker, and verify they are all discarded without reopening the Command
+  Palette or creating terminal attempts.
 
 `stopped` is a terminal attempt summary, not resumable editor state. Explicit
-Stop records metrics and clears the active checkpoint. Only an interrupted
-active checkpoint can be resumed.
+Stop records metrics and clears only its active checkpoint. Only interrupted
+active checkpoints can be resumed.
 
 ## Editor Boundaries
 
 - Open two sessions in sequence. The first practice document must close without
   a save prompt and must not leave duplicate listeners or decorations.
+- Switch from a practice editor to another tab and back. Guidance must reappear,
+  and typing must remain controlled. Starting another practice while the old
+  practice tab is hidden must close that tab rather than leave an independent
+  untitled document.
 - Confirm the repository source document remains byte-for-byte unchanged during
   every practice mutation.
 - Test at least one CJK input method. Composition must not jump the cursor,

@@ -24,6 +24,9 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
   readonly #guidanceDecorationType: vscode.TextEditorDecorationType;
   #snapshot: string;
   #listener: vscode.Disposable | undefined;
+  #visibilityListener: vscode.Disposable;
+  #decorationState: DecorationState | undefined;
+  #closePromise: Promise<void> | undefined;
   #restoring = false;
   #closed = false;
 
@@ -45,6 +48,11 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
           color: new vscode.ThemeColor("editorGhostText.foreground"),
           fontStyle: "italic",
         },
+      },
+    );
+    this.#visibilityListener = vscode.window.onDidChangeVisibleTextEditors(
+      () => {
+        this.#renderDecorations();
       },
     );
   }
@@ -81,6 +89,7 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
         return;
       const beforeText = this.#snapshot;
       const afterText = event.document.getText();
+      const editor = this.#currentEditor();
       this.#snapshot = afterText;
       if (this.#restoring) {
         this.#restoring = false;
@@ -102,7 +111,7 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
                 ? "delete"
                 : "replace",
         })),
-        selectionCount: this.#editor.selections.length,
+        selectionCount: editor.selections.length,
         reason: this.#reason(event.reason),
       };
       const translated = translateHostTransaction(transaction);
@@ -124,24 +133,33 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
 
   public setDecorations(state: DecorationState): void {
     if (this.#closed) return;
+    this.#decorationState = state;
+    this.#renderDecorations();
+  }
+
+  #renderDecorations(): void {
+    if (this.#closed || this.#decorationState === undefined) return;
+    const state = this.#decorationState;
     const mismatch =
       state.mismatch === undefined ? [] : [this.#range(state.mismatch)];
-    this.#editor.setDecorations(this.#decorationType, mismatch);
     const cursor = this.#range({
       start: state.accepted.end,
       end: state.accepted.end,
     });
-    this.#editor.setDecorations(
-      this.#guidanceDecorationType,
-      state.guidanceText.length === 0
-        ? []
-        : [
-            {
-              range: cursor,
-              renderOptions: { after: { contentText: state.guidanceText } },
-            },
-          ],
-    );
+    for (const editor of this.#visibleEditors()) {
+      editor.setDecorations(this.#decorationType, mismatch);
+      editor.setDecorations(
+        this.#guidanceDecorationType,
+        state.guidanceText.length === 0
+          ? []
+          : [
+              {
+                range: cursor,
+                renderOptions: { after: { contentText: state.guidanceText } },
+              },
+            ],
+      );
+    }
   }
 
   public notifyComplete(actions: CompletionActions): void {
@@ -156,19 +174,20 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
   public replace(text: string): void {
     if (this.#closed) return;
     this.#restoring = true;
+    const editor = this.#currentEditor();
     const fullRange = new vscode.Range(
       this.#document.positionAt(0),
       this.#document.positionAt(this.#document.getText().length),
     );
-    void this.#editor
+    void editor
       .edit((edit) => edit.replace(fullRange, text))
       .then(
         () => {
           const end = this.#document.positionAt(
             this.#document.getText().length,
           );
-          this.#editor.selection = new vscode.Selection(end, end);
-          this.#editor.revealRange(new vscode.Range(end, end));
+          editor.selection = new vscode.Selection(end, end);
+          editor.revealRange(new vscode.Range(end, end));
           if (this.#snapshot === this.#document.getText())
             this.#restoring = false;
         },
@@ -179,24 +198,66 @@ export class VsCodePracticeHost implements PracticeDocumentHost, Disposable {
   }
 
   public close(): void {
+    void this.closeEditor();
+  }
+
+  public closeEditor(): Promise<void> {
+    this.#closePromise ??= this.#performClose();
+    return this.#closePromise;
+  }
+
+  async #performClose(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
-    this.#editor.setDecorations(this.#decorationType, []);
-    this.#editor.setDecorations(this.#guidanceDecorationType, []);
+    for (const editor of this.#visibleEditors()) {
+      editor.setDecorations(this.#decorationType, []);
+      editor.setDecorations(this.#guidanceDecorationType, []);
+    }
     this.#decorationType.dispose();
     this.#guidanceDecorationType.dispose();
+    this.#visibilityListener.dispose();
     this.#listener?.dispose();
     this.#listener = undefined;
+    if (!this.#isOpen()) return;
     const active = vscode.window.activeTextEditor;
-    if (active?.document.uri.toString() === this.#document.uri.toString()) {
-      void vscode.commands.executeCommand(
-        "workbench.action.revertAndCloseActiveEditor",
-      );
+    if (active?.document.uri.toString() !== this.#document.uri.toString()) {
+      await vscode.window.showTextDocument(this.#document, {
+        preserveFocus: false,
+        preview: false,
+      });
     }
+    await vscode.commands.executeCommand(
+      "workbench.action.revertAndCloseActiveEditor",
+    );
   }
 
   public dispose(): void {
     this.close();
+  }
+
+  #visibleEditors(): readonly vscode.TextEditor[] {
+    const uri = this.#document.uri.toString();
+    return vscode.window.visibleTextEditors.filter(
+      (editor) => editor.document.uri.toString() === uri,
+    );
+  }
+
+  #currentEditor(): vscode.TextEditor {
+    const uri = this.#document.uri.toString();
+    const active = vscode.window.activeTextEditor;
+    if (active?.document.uri.toString() === uri) return active;
+    return this.#visibleEditors()[0] ?? this.#editor;
+  }
+
+  #isOpen(): boolean {
+    const uri = this.#document.uri.toString();
+    return vscode.window.tabGroups.all.some((group) =>
+      group.tabs.some(
+        (tab) =>
+          tab.input instanceof vscode.TabInputText &&
+          tab.input.uri.toString() === uri,
+      ),
+    );
   }
 
   #range(range: TextRange): vscode.Range {

@@ -24,7 +24,7 @@ TypeScript is the primary implementation language for the VS Code extension. The
 
 The Stage 2 spike compares the three options and selects a native text editor plus decorations backed by a dedicated untitled practice document. Leading indentation is practiced incrementally using the editor's ordinary Tab width before the current-line ghost text is revealed. See [the spike report](vscode-interaction-spike.md) and [ADR 0007](../decisions/0007-vscode-native-practice-document.md). The implementation defines behavior for paste, multi-cursor, Undo/Redo, formatting, completion providers, snippets, Tab, input methods, line endings, and external mutations. IME composition remains a manual real-host check until a reliable VS Code automation boundary is established.
 
-The Stage 3 development extension launches the local `gewu` CLI through Cargo, performs a protocol handshake before enabling practice commands, and uses repository fixtures as local content. Packaged native binary selection remains a release-packaging task. The extension translates editor events and renders core-returned state; it does not score sessions or write persistence files.
+The Stage 3 development extension launches the local `gewu` CLI through Cargo, performs a protocol handshake before enabling practice commands, and uses repository fixtures as local content. Packaged native binary selection remains a release-packaging task. The extension translates editor events and renders core-returned state; it does not score sessions or write persistence files. It may show only one active practice UI. Start remains scoped to its requested mode, Resume lists all persisted checkpoints, and Discard supports selecting multiple explicit objects.
 
 ## Zed
 

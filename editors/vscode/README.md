@@ -1,6 +1,6 @@
 # VS Code Local MVP Client
 
-This package is the Stage 3 local `cnkeysky.gewu-algorithm` client. It launches the Rust `gewu` stdio host, performs a versioned handshake, renders Rust-owned Shadow Typing state in a dedicated untitled document, and hosts ordered Flow Recall in a structured Webview panel. Local attempt history and checkpoint recovery remain core-backed and offline.
+This package is the Stage 3 local `cnkeysky.gewu-algorithm` client. It launches the Rust `gewu` stdio host, performs a versioned handshake, renders Rust-owned Shadow Typing state in a dedicated untitled document, and hosts ordered Flow Recall in a structured Webview panel. Local attempt history and selectable checkpoint recovery remain core-backed and offline; only one practice UI is active at a time.
 
 Requirements are the system-provided Node.js `v24.15.0` and npm `11.17.0`. Install the locked development dependencies and run:
 

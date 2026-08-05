@@ -16,8 +16,9 @@ use gewu_practice::{
     TimedEvent,
 };
 use gewu_protocol::{
-    ApplyEventParams, AttemptSummary, ElapsedDto, PracticeEventDto, PracticeModeDto,
-    SessionStatusDto, SessionView, StartSessionParams, TerminalReasonDto, UnitSummary,
+    ApplyEventParams, AttemptSummary, CheckpointSummary, ElapsedDto, PracticeEventDto,
+    PracticeModeDto, SessionStatusDto, SessionView, StartSessionParams, TerminalReasonDto,
+    UnitSummary,
 };
 use gewu_storage::{LocalStore, StoredAttempt, StoredCheckpoint, StoredEvent};
 use gewu_template::{LoadError, load_algorithm_unit};
@@ -190,6 +191,7 @@ impl Core {
             .ok_or_else(|| CoreError::UnknownSession(session_id.to_owned()))?
             .start_params();
         let restarted = self.start_session(params)?;
+        self.store.clear_checkpoint(&checkpoint_id(session_id))?;
         self.sessions.remove(session_id);
         Ok(restarted)
     }
@@ -205,11 +207,39 @@ impl Core {
         Ok(())
     }
 
-    /// Resumes the one local checkpoint. It is never a terminal practice attempt.
-    pub fn resume_checkpoint(&mut self) -> Result<Option<SessionView>, CoreError> {
-        let Some(checkpoint) = self.store.load_checkpoint()? else {
+    /// Lists recoverable active sessions without exposing replayable event contents.
+    pub fn list_checkpoints(&self) -> Result<Vec<CheckpointSummary>, CoreError> {
+        self.store
+            .list_checkpoints()?
+            .into_iter()
+            .map(|checkpoint| {
+                Ok(CheckpointSummary {
+                    id: checkpoint.id,
+                    unit_id: checkpoint.unit_id,
+                    unit_title: checkpoint.unit_title,
+                    revision: checkpoint.revision,
+                    mode: parse_mode(&checkpoint.mode)?,
+                    completed_steps: checkpoint.completed_steps,
+                    total_steps: checkpoint.total_steps,
+                    accepted_characters: checkpoint.accepted_characters,
+                    target_characters: checkpoint.target_characters,
+                    saved_at: checkpoint.saved_at,
+                })
+            })
+            .collect()
+    }
+
+    /// Resumes one selected local checkpoint. It is never a terminal practice attempt.
+    pub fn resume_checkpoint(
+        &mut self,
+        checkpoint_id: &str,
+    ) -> Result<Option<SessionView>, CoreError> {
+        let Some(checkpoint) = self.store.load_checkpoint(checkpoint_id)? else {
             return Ok(None);
         };
+        if let Some(session) = self.sessions.get(&checkpoint.session_id) {
+            return Ok(Some(session.view(&checkpoint.session_id)));
+        }
         let unit = self.find_unit(&checkpoint.unit_id)?;
         if unit.revision.get() != checkpoint.revision {
             return Err(CoreError::CheckpointRevisionChanged {
@@ -247,14 +277,16 @@ impl Core {
         Ok(Some(self.session_view(&view.session_id)?))
     }
 
-    pub fn discard_checkpoint(&self) -> Result<(), CoreError> {
-        Ok(self.store.clear_checkpoint()?)
-    }
-    pub fn checkpoint_saved_at(&self) -> Result<Option<String>, CoreError> {
-        Ok(self
+    pub fn discard_checkpoint(&mut self, checkpoint_id: &str) -> Result<bool, CoreError> {
+        let session_id = self
             .store
-            .load_checkpoint()?
-            .map(|checkpoint| checkpoint.saved_at))
+            .load_checkpoint(checkpoint_id)?
+            .map(|checkpoint| checkpoint.session_id);
+        let removed = self.store.clear_checkpoint(checkpoint_id)?;
+        if removed && let Some(session_id) = session_id {
+            self.sessions.remove(&session_id);
+        }
+        Ok(removed)
     }
     pub fn recent_attempts(&self, limit: usize) -> Result<Vec<AttemptSummary>, CoreError> {
         let values = self.store.list_attempts(limit)?;
@@ -349,7 +381,7 @@ impl Core {
             .ok_or_else(|| CoreError::UnknownSession(session_id.to_owned()))?;
         if let Some(attempt) = session.terminal_attempt(session_id) {
             self.store.append_attempt(attempt)?;
-            self.store.clear_checkpoint()?;
+            self.store.clear_checkpoint(&checkpoint_id(session_id))?;
         } else {
             self.store
                 .save_checkpoint(session.checkpoint(session_id)?)?;
@@ -507,12 +539,18 @@ impl ActiveSession {
             } => {
                 ensure_active(session.status())?;
                 Ok(StoredCheckpoint {
+                    id: checkpoint_id(session_id),
                     session_id: session_id.to_owned(),
                     unit_id: unit.id.to_string(),
+                    unit_title: unit.title.clone(),
                     revision: unit.revision.get(),
                     mode: "shadow_typing".to_owned(),
                     implementation: Some(implementation.clone()),
                     events: events.clone(),
+                    completed_steps: 0,
+                    total_steps: 0,
+                    accepted_characters: session.accepted_text().chars().count(),
+                    target_characters: session.target().chars().count(),
                     saved_at: utc_now(),
                 })
             }
@@ -523,12 +561,18 @@ impl ActiveSession {
             } => {
                 ensure_active(session.status())?;
                 Ok(StoredCheckpoint {
+                    id: checkpoint_id(session_id),
                     session_id: session_id.to_owned(),
                     unit_id: unit.id.to_string(),
+                    unit_title: unit.title.clone(),
                     revision: unit.revision.get(),
                     mode: "flow_recall".to_owned(),
                     implementation: None,
                     events: events.clone(),
+                    completed_steps: session.completed_step_count(),
+                    total_steps: session.total_step_count(),
+                    accepted_characters: 0,
+                    target_characters: 0,
                     saved_at: utc_now(),
                 })
             }
@@ -630,6 +674,10 @@ fn parse_mode(value: &str) -> Result<PracticeModeDto, CoreError> {
         "flow_recall" => Ok(PracticeModeDto::FlowRecall),
         _ => Err(CoreError::UnsupportedCheckpointMode(value.to_owned())),
     }
+}
+
+fn checkpoint_id(session_id: &str) -> String {
+    format!("checkpoint-{session_id}")
 }
 fn duration_ms(value: Duration) -> u64 {
     value.as_millis().try_into().unwrap_or(u64::MAX)
@@ -879,9 +927,9 @@ mod tests {
         );
         assert!(
             core.store
-                .load_checkpoint()
-                .unwrap_or_else(|error| panic!("checkpoint: {error}"))
-                .is_none()
+                .list_checkpoints()
+                .unwrap_or_else(|error| panic!("checkpoints: {error}"))
+                .is_empty()
         );
         fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
@@ -897,9 +945,10 @@ mod tests {
                 implementation: None,
             })
             .unwrap_or_else(|error| panic!("start: {error}"));
+        let checkpoint_id = checkpoint_id(&session.session_id);
         let _ = core
             .apply_event(ApplyEventParams {
-                session_id: session.session_id,
+                session_id: session.session_id.clone(),
                 event: PracticeEventDto::InsertText {
                     text: "from".to_owned(),
                 },
@@ -910,12 +959,13 @@ mod tests {
             Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
         assert!(
             resumed
-                .checkpoint_saved_at()
-                .unwrap_or_else(|error| panic!("saved at: {error}"))
-                .is_some()
+                .list_checkpoints()
+                .unwrap_or_else(|error| panic!("checkpoints: {error}"))
+                .iter()
+                .any(|checkpoint| checkpoint.id == checkpoint_id)
         );
         let state = resumed
-            .resume_checkpoint()
+            .resume_checkpoint(&checkpoint_id)
             .unwrap_or_else(|error| panic!("resume: {error}"))
             .unwrap_or_else(|| panic!("checkpoint"));
         assert_eq!(state.accepted_text, "from");
@@ -924,7 +974,7 @@ mod tests {
     }
 
     #[test]
-    fn starting_a_session_replaces_the_checkpoint_before_the_first_event() {
+    fn persists_a_checkpoint_before_the_first_event() {
         let data = data_root();
         let mut core =
             Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
@@ -939,7 +989,7 @@ mod tests {
         let mut reopened =
             Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
         let resumed = reopened
-            .resume_checkpoint()
+            .resume_checkpoint(&checkpoint_id(&started.session_id))
             .unwrap_or_else(|error| panic!("resume: {error}"))
             .unwrap_or_else(|| panic!("new session checkpoint"));
         assert_eq!(resumed.session_id, started.session_id);
@@ -1010,15 +1060,142 @@ mod tests {
         assert_eq!(restarted.status, SessionStatusDto::Active);
         assert!(restarted.accepted_text.is_empty());
         assert!(core.session_view(&started.session_id).is_err());
+        let checkpoints = core
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list after restart: {error}"));
+        assert_eq!(checkpoints.len(), 1);
+        assert_eq!(checkpoints[0].id, checkpoint_id(&restarted.session_id));
 
         let mut reopened =
             Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
         let checkpoint = reopened
-            .resume_checkpoint()
+            .resume_checkpoint(&checkpoint_id(&restarted.session_id))
             .unwrap_or_else(|error| panic!("resume: {error}"))
             .unwrap_or_else(|| panic!("restart checkpoint"));
         assert_eq!(checkpoint.session_id, restarted.session_id);
         assert!(checkpoint.accepted_text.is_empty());
+
+        fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+
+    #[test]
+    fn selectively_recovers_and_discards_persisted_checkpoints_without_touching_history() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let shadow = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::ShadowTyping,
+                implementation: None,
+            })
+            .unwrap_or_else(|error| panic!("shadow start: {error}"));
+        let shadow_checkpoint = checkpoint_id(&shadow.session_id);
+        core.apply_event(ApplyEventParams {
+            session_id: shadow.session_id.clone(),
+            event: PracticeEventDto::InsertText {
+                text: "from".to_owned(),
+            },
+            elapsed: elapsed(1),
+        })
+        .unwrap_or_else(|error| panic!("shadow event: {error}"));
+        let flow = core
+            .start_session(StartSessionParams {
+                unit_id: "search.binary-search".to_owned(),
+                mode: PracticeModeDto::FlowRecall,
+                implementation: None,
+            })
+            .unwrap_or_else(|error| panic!("flow start: {error}"));
+        let flow_checkpoint = checkpoint_id(&flow.session_id);
+
+        let mut reopened =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
+        let checkpoints = reopened
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list: {error}"));
+        assert_eq!(checkpoints.len(), 2);
+        assert!(checkpoints.iter().any(|checkpoint| {
+            checkpoint.id == shadow_checkpoint
+                && checkpoint.mode == PracticeModeDto::ShadowTyping
+                && checkpoint.accepted_characters == 4
+                && checkpoint.target_characters > checkpoint.accepted_characters
+        }));
+        assert!(checkpoints.iter().any(|checkpoint| {
+            checkpoint.id == flow_checkpoint
+                && checkpoint.mode == PracticeModeDto::FlowRecall
+                && checkpoint.completed_steps == 0
+                && checkpoint.total_steps > 0
+        }));
+
+        let resumed = reopened
+            .resume_checkpoint(&shadow_checkpoint)
+            .unwrap_or_else(|error| panic!("resume selected: {error}"))
+            .unwrap_or_else(|| panic!("selected checkpoint"));
+        assert_eq!(resumed.accepted_text, "from");
+        reopened
+            .stop_session(&shadow.session_id, elapsed(2))
+            .unwrap_or_else(|error| panic!("stop selected: {error}"));
+        let remaining = reopened
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list after stop: {error}"));
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, flow_checkpoint);
+        assert_eq!(
+            reopened
+                .recent_attempts(10)
+                .unwrap_or_else(|error| panic!("history: {error}"))
+                .len(),
+            1
+        );
+        assert!(
+            reopened
+                .discard_checkpoint(&flow_checkpoint)
+                .unwrap_or_else(|error| panic!("discard selected: {error}"))
+        );
+        assert!(
+            reopened
+                .list_checkpoints()
+                .unwrap_or_else(|error| panic!("final checkpoints: {error}"))
+                .is_empty()
+        );
+
+        fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+
+    #[test]
+    fn discarding_shadow_checkpoint_does_not_create_a_stopped_attempt() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let session = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::ShadowTyping,
+                implementation: None,
+            })
+            .unwrap_or_else(|error| panic!("start: {error}"));
+        core.apply_event(ApplyEventParams {
+            session_id: session.session_id.clone(),
+            event: PracticeEventDto::InsertText {
+                text: "from".to_owned(),
+            },
+            elapsed: elapsed(1),
+        })
+        .unwrap_or_else(|error| panic!("event: {error}"));
+
+        assert!(
+            core.discard_checkpoint(&checkpoint_id(&session.session_id))
+                .unwrap_or_else(|error| panic!("discard: {error}"))
+        );
+        assert!(matches!(
+            core.stop_session(&session.session_id, elapsed(2)),
+            Err(CoreError::UnknownSession(_))
+        ));
+        assert!(
+            core.recent_attempts(10)
+                .unwrap_or_else(|error| panic!("history: {error}"))
+                .is_empty()
+        );
 
         fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }

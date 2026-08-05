@@ -60,6 +60,14 @@ export class CorePracticeDocumentController implements Disposable {
     return this.#document.uri;
   }
 
+  public get sessionId(): string {
+    return this.#session.session_id;
+  }
+
+  public get unitTitle(): string {
+    return this.#session.unit_title;
+  }
+
   public async stop(): Promise<void> {
     if (this.#closed || this.#commandPending) return;
     this.#commandPending = true;

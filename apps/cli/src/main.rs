@@ -8,9 +8,10 @@ use std::{
 
 use gewu_core::{CORE_VERSION, Core};
 use gewu_protocol::{
-    ApplyEventParams, CheckpointParams, DeleteAttemptsParams, DeleteHistoryResult, HandshakeParams,
-    HandshakeResult, JsonRpcRequest, JsonRpcResponse, PROTOCOL_VERSION, RecentAttemptsParams,
-    RecentAttemptsResult, RpcError, StartSessionParams, StopSessionParams,
+    ApplyEventParams, CheckpointIdParams, CheckpointParams, DeleteAttemptsParams,
+    DeleteHistoryResult, HandshakeParams, HandshakeResult, JsonRpcRequest, JsonRpcResponse,
+    ListCheckpointsResult, PROTOCOL_VERSION, RecentAttemptsParams, RecentAttemptsResult, RpcError,
+    StartSessionParams, StopSessionParams,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -136,21 +137,22 @@ fn dispatch(core: &mut Core, handshaken: &mut bool, request: JsonRpcRequest) -> 
         "gewu/saveCheckpoint" => decode::<CheckpointParams>(request.params)
             .and_then(|params| core.save_checkpoint(&params.session_id).map_err(core_error))
             .and_then(|()| value(json!({}))),
-        "gewu/resumeCheckpoint" => core
-            .checkpoint_saved_at()
+        "gewu/listCheckpoints" => core
+            .list_checkpoints()
             .map_err(core_error)
-            .and_then(|saved_at| {
-                core.resume_checkpoint()
+            .and_then(|checkpoints| value(ListCheckpointsResult { checkpoints })),
+        "gewu/resumeCheckpoint" => decode::<CheckpointIdParams>(request.params)
+            .and_then(|params| {
+                core.resume_checkpoint(&params.checkpoint_id)
                     .map_err(core_error)
-                    .map(|session| (session, saved_at))
             })
-            .and_then(|(session, saved_at)| {
-                value(json!({"session": session, "saved_at": saved_at}))
-            }),
-        "gewu/discardCheckpoint" => core
-            .discard_checkpoint()
-            .map_err(core_error)
-            .and_then(|()| value(json!({}))),
+            .and_then(|session| value(json!({"session": session}))),
+        "gewu/discardCheckpoint" => decode::<CheckpointIdParams>(request.params)
+            .and_then(|params| {
+                core.discard_checkpoint(&params.checkpoint_id)
+                    .map_err(core_error)
+            })
+            .and_then(|_| value(json!({}))),
         _ => Err(RpcError::new(
             "method_not_found",
             "unsupported GEWU protocol method",

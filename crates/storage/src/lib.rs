@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const HISTORY_FILE: &str = "attempts-v1.json";
-const CHECKPOINT_FILE: &str = "checkpoint-v1.json";
-const FORMAT_VERSION: u32 = 1;
+const CHECKPOINTS_FILE: &str = "checkpoints-v2.json";
+const HISTORY_FORMAT_VERSION: u32 = 1;
+const CHECKPOINT_FORMAT_VERSION: u32 = 2;
 
 /// A terminal attempt persisted without user source or answer contents.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -35,12 +36,18 @@ pub struct StoredAttempt {
 /// A recoverable active versioned-unit session. Ad-hoc source is deliberately absent.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StoredCheckpoint {
+    pub id: String,
     pub session_id: String,
     pub unit_id: String,
+    pub unit_title: String,
     pub revision: u64,
     pub mode: String,
     pub implementation: Option<String>,
     pub events: Vec<StoredEvent>,
+    pub completed_steps: usize,
+    pub total_steps: usize,
+    pub accepted_characters: usize,
+    pub target_characters: usize,
     pub saved_at: String,
 }
 
@@ -60,7 +67,7 @@ struct HistoryDocument {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct CheckpointDocument {
     format_version: u32,
-    checkpoint: Option<StoredCheckpoint>,
+    checkpoints: Vec<StoredCheckpoint>,
 }
 
 /// Local data store rooted at a caller-selected portable directory.
@@ -104,7 +111,7 @@ impl LocalStore {
         self.write_json(
             HISTORY_FILE,
             &HistoryDocument {
-                format_version: FORMAT_VERSION,
+                format_version: HISTORY_FORMAT_VERSION,
                 attempts: Vec::new(),
             },
         )?;
@@ -119,51 +126,68 @@ impl LocalStore {
         self.write_json(HISTORY_FILE, &document)?;
         Ok(before - document.attempts.len())
     }
-    pub fn load_checkpoint(&self) -> Result<Option<StoredCheckpoint>, StorageError> {
-        Ok(self.read_checkpoint()?.checkpoint)
+    /// Lists checkpoint-v2 records. The legacy checkpoint-v1.json file is deliberately ignored.
+    pub fn list_checkpoints(&self) -> Result<Vec<StoredCheckpoint>, StorageError> {
+        let mut checkpoints = self.read_checkpoints()?.checkpoints;
+        checkpoints.reverse();
+        Ok(checkpoints)
     }
     pub fn save_checkpoint(&self, checkpoint: StoredCheckpoint) -> Result<(), StorageError> {
-        self.write_json(
-            CHECKPOINT_FILE,
-            &CheckpointDocument {
-                format_version: FORMAT_VERSION,
-                checkpoint: Some(checkpoint),
-            },
-        )
+        let mut document = self.read_checkpoints()?;
+        document
+            .checkpoints
+            .retain(|existing| existing.id != checkpoint.id);
+        document.checkpoints.push(checkpoint);
+        self.write_json(CHECKPOINTS_FILE, &document)
     }
-    pub fn clear_checkpoint(&self) -> Result<(), StorageError> {
-        self.write_json(
-            CHECKPOINT_FILE,
-            &CheckpointDocument {
-                format_version: FORMAT_VERSION,
-                checkpoint: None,
-            },
-        )
+    pub fn load_checkpoint(&self, id: &str) -> Result<Option<StoredCheckpoint>, StorageError> {
+        Ok(self
+            .read_checkpoints()?
+            .checkpoints
+            .into_iter()
+            .find(|checkpoint| checkpoint.id == id))
+    }
+    pub fn clear_checkpoint(&self, id: &str) -> Result<bool, StorageError> {
+        let mut document = self.read_checkpoints()?;
+        let before = document.checkpoints.len();
+        document
+            .checkpoints
+            .retain(|checkpoint| checkpoint.id != id);
+        self.write_json(CHECKPOINTS_FILE, &document)?;
+        Ok(before != document.checkpoints.len())
     }
     fn read_history(&self) -> Result<HistoryDocument, StorageError> {
         let document = self.read_json(
             HISTORY_FILE,
             HistoryDocument {
-                format_version: FORMAT_VERSION,
+                format_version: HISTORY_FORMAT_VERSION,
                 attempts: Vec::new(),
             },
         )?;
-        self.ensure_version(HISTORY_FILE, document.format_version)?;
+        self.ensure_version(
+            HISTORY_FILE,
+            document.format_version,
+            HISTORY_FORMAT_VERSION,
+        )?;
         Ok(document)
     }
-    fn read_checkpoint(&self) -> Result<CheckpointDocument, StorageError> {
+    fn read_checkpoints(&self) -> Result<CheckpointDocument, StorageError> {
         let document = self.read_json(
-            CHECKPOINT_FILE,
+            CHECKPOINTS_FILE,
             CheckpointDocument {
-                format_version: FORMAT_VERSION,
-                checkpoint: None,
+                format_version: CHECKPOINT_FORMAT_VERSION,
+                checkpoints: Vec::new(),
             },
         )?;
-        self.ensure_version(CHECKPOINT_FILE, document.format_version)?;
+        self.ensure_version(
+            CHECKPOINTS_FILE,
+            document.format_version,
+            CHECKPOINT_FORMAT_VERSION,
+        )?;
         Ok(document)
     }
-    fn ensure_version(&self, name: &str, found: u32) -> Result<(), StorageError> {
-        if found == FORMAT_VERSION {
+    fn ensure_version(&self, name: &str, found: u32, expected: u32) -> Result<(), StorageError> {
+        if found == expected {
             Ok(())
         } else {
             Err(StorageError::UnsupportedVersion {
@@ -256,6 +280,23 @@ mod tests {
             wall_ms: 1,
         }
     }
+    fn checkpoint(id: &str) -> StoredCheckpoint {
+        StoredCheckpoint {
+            id: id.to_owned(),
+            session_id: format!("session-{id}"),
+            unit_id: "graph.bfs".to_owned(),
+            unit_title: "Breadth-First Search".to_owned(),
+            revision: 1,
+            mode: "shadow_typing".to_owned(),
+            implementation: Some("rust".to_owned()),
+            events: Vec::new(),
+            completed_steps: 0,
+            total_steps: 0,
+            accepted_characters: 0,
+            target_characters: 10,
+            saved_at: "2026-01-01T00:00:00Z".to_owned(),
+        }
+    }
     #[test]
     fn round_trips_history_and_deletion() {
         let root = root();
@@ -320,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_versions_and_deduplicates_attempt_ids() {
+    fn ignores_legacy_singleton_checkpoints_and_rejects_unknown_v2_versions() {
         let root = root();
         let store = LocalStore::open(&root).unwrap_or_else(|error| panic!("open: {error}"));
         store
@@ -338,14 +379,76 @@ mod tests {
         );
 
         fs::write(
-            root.join(CHECKPOINT_FILE),
+            root.join("checkpoint-v1.json"),
             r#"{"format_version":2,"checkpoint":null}"#,
+        )
+        .unwrap_or_else(|error| panic!("write legacy checkpoint: {error}"));
+        assert!(
+            store
+                .list_checkpoints()
+                .unwrap_or_else(|error| panic!("list v2 checkpoints: {error}"))
+                .is_empty()
+        );
+        fs::write(
+            root.join(CHECKPOINTS_FILE),
+            r#"{"format_version":3,"checkpoints":[]}"#,
         )
         .unwrap_or_else(|error| panic!("write version: {error}"));
         assert!(matches!(
-            store.load_checkpoint(),
-            Err(StorageError::UnsupportedVersion { found: 2, .. })
+            store.list_checkpoints(),
+            Err(StorageError::UnsupportedVersion { found: 3, .. })
         ));
+        fs::remove_dir_all(root).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+
+    #[test]
+    fn persists_multiple_checkpoints_and_clears_only_the_selected_id() {
+        let root = root();
+        let store = LocalStore::open(&root).unwrap_or_else(|error| panic!("open: {error}"));
+        store
+            .save_checkpoint(checkpoint("first"))
+            .unwrap_or_else(|error| panic!("first save: {error}"));
+        store
+            .save_checkpoint(checkpoint("second"))
+            .unwrap_or_else(|error| panic!("second save: {error}"));
+        let mut replacement = checkpoint("first");
+        replacement.saved_at = "2026-01-02T00:00:00Z".to_owned();
+        store
+            .save_checkpoint(replacement)
+            .unwrap_or_else(|error| panic!("replace: {error}"));
+
+        let checkpoints = store
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list: {error}"));
+        assert_eq!(checkpoints.len(), 2);
+        assert_eq!(checkpoints[0].id, "first");
+        assert!(
+            store
+                .clear_checkpoint("first")
+                .unwrap_or_else(|error| panic!("clear: {error}"))
+        );
+        assert_eq!(
+            store
+                .load_checkpoint("second")
+                .unwrap_or_else(|error| panic!("load second: {error}"))
+                .map(|value| value.id),
+            Some("second".to_owned())
+        );
+        assert!(
+            store
+                .load_checkpoint("first")
+                .unwrap_or_else(|error| panic!("load first: {error}"))
+                .is_none()
+        );
+
+        let reopened = LocalStore::open(&root).unwrap_or_else(|error| panic!("reopen: {error}"));
+        assert_eq!(
+            reopened
+                .list_checkpoints()
+                .unwrap_or_else(|error| panic!("reopen list: {error}"))
+                .len(),
+            1
+        );
         fs::remove_dir_all(root).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
 }

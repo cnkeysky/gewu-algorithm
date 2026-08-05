@@ -5,8 +5,8 @@
 | Record | Written when | Contains | Cleared when |
 | --- | --- | --- | --- |
 | Terminal attempt | completion or explicit Stop | unit/revision/schema, mode, aggregate metrics, duration, terminal reason | user deletes history |
-| Checkpoint | active versioned-unit activity | unit/revision, mode, implementation, replayable typed events | completion, Stop, or discard |
+| Checkpoint | active versioned-unit activity | stable ID, unit/title/revision, mode, display-safe progress, implementation, replayable typed events | completion, Stop, or discard of that checkpoint |
 
-An interrupted checkpoint is not an attempt. Resume is explicit, and the core verifies the content revision before replaying it. Ad-hoc selected source is intentionally not checkpointed in the MVP, avoiding silent long-term persistence of arbitrary editor contents. Invalid JSON yields a typed corruption error rather than a panic.
+Interrupted checkpoints are stored as a selectable collection in `checkpoints-v2.json`; the prior `checkpoint-v1.json` is ignored without migration. A checkpoint is not an attempt. Resume is explicit by stable checkpoint ID, and the core verifies the content revision before replaying it. Ad-hoc selected source is intentionally not checkpointed in the MVP, avoiding silent long-term persistence of arbitrary editor contents. Invalid JSON yields a typed corruption error rather than a panic.
 
 Cross-platform packaged-binary and concurrent-writer checks remain release work. A second core process must not share one data root until an explicit locking or conflict policy is implemented.

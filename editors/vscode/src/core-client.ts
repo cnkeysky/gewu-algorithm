@@ -169,20 +169,37 @@ export class GewuCoreClient {
     );
   }
 
-  public async resumeCheckpoint(): Promise<CheckpointResume | undefined> {
-    const result = await this.request("gewu/resumeCheckpoint", {});
+  public async listCheckpoints(): Promise<readonly CheckpointSummary[]> {
+    const result = await this.request("gewu/listCheckpoints", {});
+    if (
+      !isObject(result) ||
+      !Array.isArray(result.checkpoints) ||
+      !result.checkpoints.every(isCheckpointSummary)
+    )
+      throw new Error("GEWU core returned an invalid checkpoint list");
+    return result.checkpoints;
+  }
+
+  public async resumeCheckpoint(
+    checkpointId: string,
+  ): Promise<CheckpointResume | undefined> {
+    const result = await this.request("gewu/resumeCheckpoint", {
+      checkpoint_id: checkpointId,
+    });
     if (!isObject(result))
       throw new Error("GEWU core returned an invalid resume result");
     if (result.session === null) return undefined;
-    return isCoreSession(result.session) && typeof result.saved_at === "string"
-      ? { session: result.session, savedAt: result.saved_at }
+    return isCoreSession(result.session)
+      ? { session: result.session }
       : (() => {
           throw new Error("GEWU core returned an invalid checkpoint session");
         })();
   }
 
-  public async discardCheckpoint(): Promise<void> {
-    await this.request("gewu/discardCheckpoint", {});
+  public async discardCheckpoint(checkpointId: string): Promise<void> {
+    await this.request("gewu/discardCheckpoint", {
+      checkpoint_id: checkpointId,
+    });
   }
 
   public async recentAttempts(): Promise<readonly AttemptSummary[]> {
@@ -273,7 +290,58 @@ export interface Elapsed {
 }
 export interface CheckpointResume {
   readonly session: CoreSession;
-  readonly savedAt: string;
+}
+export interface CheckpointSummary {
+  readonly id: string;
+  readonly unit_id: string;
+  readonly unit_title: string;
+  readonly revision: number;
+  readonly mode: PracticeMode;
+  readonly completed_steps: number;
+  readonly total_steps: number;
+  readonly accepted_characters: number;
+  readonly target_characters: number;
+  readonly saved_at: string;
+}
+export type CheckpointStartAction =
+  | { readonly action: "start"; readonly mode: PracticeMode }
+  | {
+      readonly action: "resume" | "discard";
+      readonly checkpoint_id: string;
+    };
+
+/** Builds explicit choices so starting never silently replaces a checkpoint. */
+export function checkpointStartActions(
+  checkpoints: readonly CheckpointSummary[],
+  requestedMode: PracticeMode,
+): readonly CheckpointStartAction[] {
+  return [
+    { action: "start", mode: requestedMode },
+    ...checkpoints
+      .filter((checkpoint) => checkpoint.mode === requestedMode)
+      .flatMap((checkpoint) => [
+        { action: "resume" as const, checkpoint_id: checkpoint.id },
+        { action: "discard" as const, checkpoint_id: checkpoint.id },
+      ]),
+  ];
+}
+
+export function checkpointProgressPercentage(
+  checkpoint: CheckpointSummary,
+): number {
+  const completed =
+    checkpoint.mode === "flow_recall"
+      ? checkpoint.completed_steps
+      : checkpoint.accepted_characters;
+  const total =
+    checkpoint.mode === "flow_recall"
+      ? checkpoint.total_steps
+      : checkpoint.target_characters;
+  if (total === 0) return 0;
+  return Math.min(
+    100,
+    Math.max(completed > 0 ? 1 : 0, Math.round((completed / total) * 100)),
+  );
 }
 export interface UnitSummary {
   readonly id: string;
@@ -363,5 +431,20 @@ function isAttemptSummary(value: unknown): value is AttemptSummary {
     typeof value.prompt_count === "number" &&
     typeof value.active_ms === "number" &&
     typeof value.wall_ms === "number"
+  );
+}
+function isCheckpointSummary(value: unknown): value is CheckpointSummary {
+  return (
+    isObject(value) &&
+    typeof value.id === "string" &&
+    typeof value.unit_id === "string" &&
+    typeof value.unit_title === "string" &&
+    typeof value.revision === "number" &&
+    (value.mode === "shadow_typing" || value.mode === "flow_recall") &&
+    typeof value.completed_steps === "number" &&
+    typeof value.total_steps === "number" &&
+    typeof value.accepted_characters === "number" &&
+    typeof value.target_characters === "number" &&
+    typeof value.saved_at === "string"
   );
 }

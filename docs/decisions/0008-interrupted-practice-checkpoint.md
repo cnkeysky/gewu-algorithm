@@ -1,6 +1,6 @@
 # ADR 0008: Treat Interrupted Practice as a Separate Checkpoint
 
-- Status: accepted
+- Status: superseded by [ADR 0010](0010-multiple-interrupted-practice-checkpoints.md)
 - Date: 2026-08-04
 
 ## Context

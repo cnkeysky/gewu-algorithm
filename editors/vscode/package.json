@@ -58,7 +58,7 @@
     "format:write": "prettier --write src test",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node dist/test/interaction.js && node dist/test/core-session.js"
+    "test": "npm run build && node dist/test/interaction.js && node dist/test/core-session.js && node dist/test/checkpoints.js"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

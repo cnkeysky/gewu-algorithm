@@ -57,7 +57,7 @@ Golden updates require review because they change a public boundary.
 
 ### Persistence Tests
 
-Cover round trips, atomic replacement, interrupted writes, corrupt input, migration, deletion, concurrent access policy, and path portability.
+Cover round trips, atomic replacement, interrupted writes, corrupt input, migration, deletion, concurrent access policy, and path portability. Checkpoint coverage must include multiple stable IDs, selective resume/discard, terminal cleanup of only the matching checkpoint, restart persistence, and preservation of terminal attempt history.
 
 ### VS Code Integration Tests
 
