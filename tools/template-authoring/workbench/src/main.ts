@@ -17,6 +17,14 @@ const assistance: Array<{ id: Assistance; label: string }> = [
   { id: "skeleton", label: "Skeleton" },
   { id: "none", label: "No hints" },
 ];
+const fallbackTasks = [
+  { taskId: "algorithm-unit-topological-sort-kahn", label: "AlgorithmUnit · Kahn topological sort", taskVersion: "3" },
+  { taskId: "algorithm-unit-binary-search", label: "AlgorithmUnit · Binary search", taskVersion: "1" },
+];
+const problemPresets: Record<string, string> = {
+  "algorithm-unit-topological-sort-kahn": "Implement Kahn's topological sorting algorithm for a directed graph represented as adjacency lists. Return a FIFO-deterministic ordering or an empty list when the graph contains a cycle.",
+  "algorithm-unit-binary-search": "Implement iterative binary search over a sorted ascending list and return the target index or -1.",
+};
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("workbench root is missing");
@@ -44,6 +52,9 @@ root.innerHTML = `
     <section class="workspace-grid">
       <form class="panel form-panel" id="draft-form">
         <div class="panel-heading"><div><p class="eyebrow">01 / Input</p><h2>New generation draft</h2></div><span class="required">Required</span></div>
+        <label class="field-label" for="task-id">Authoring task</label>
+        <select id="task-id" class="task-select">${fallbackTasks.map((task) => `<option value="${task.taskId}">${task.label} · v${task.taskVersion}</option>`).join("")}</select>
+        <p class="field-note task-note">The task owns its output schema and deterministic artifact validator.</p>
         <label class="field-label" for="problem">Algorithm problem</label>
         <textarea id="problem" rows="6" placeholder="Describe the problem, expected behavior, constraints, and boundaries.">Implement Kahn's topological sorting algorithm for a directed graph represented as adjacency lists. Return a FIFO-deterministic ordering or an empty list when the graph contains a cycle.</textarea>
         <div class="field-row">
@@ -94,9 +105,11 @@ const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
 const draftList = document.querySelector<HTMLDivElement>("#draft-list")!;
 const historyList = document.querySelector<HTMLDivElement>("#history-list")!;
 const selectAllModes = document.querySelector<HTMLInputElement>("#select-all-modes")!;
+const taskSelect = document.querySelector<HTMLSelectElement>("#task-id")!;
 
 interface DraftRecord {
   id: string;
+  taskId?: string;
   title: string;
   problem: string;
   provider: string;
@@ -135,6 +148,16 @@ async function syncFromApi(): Promise<void> {
     renderHistory();
   } catch {
     // The Vite client remains usable with local storage when the API is stopped.
+  }
+}
+async function syncTasks(): Promise<void> {
+  try {
+    const response = await fetch("/api/tasks");
+    if (!response.ok) return;
+    const payload = await response.json() as { tasks?: typeof fallbackTasks };
+    if (Array.isArray(payload.tasks) && payload.tasks.length) taskSelect.innerHTML = payload.tasks.map((task) => `<option value="${task.taskId}">${task.label} · v${task.taskVersion}</option>`).join("");
+  } catch {
+    // Built-in task options keep the form usable when the API is stopped.
   }
 }
 function formatDate(value: string): string { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
@@ -214,6 +237,7 @@ document.addEventListener("click", (event) => {
     const draft = readDrafts().find((item) => item.id === draftButton.dataset.draftId);
     if (draft) {
       (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
+      if (draft.taskId) taskSelect.value = draft.taskId;
       (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
       (document.querySelector<HTMLSelectElement>("#provider")!).value = draft.provider;
       document.querySelector<HTMLSelectElement>("#provider")!.dispatchEvent(new Event("change"));
@@ -263,6 +287,10 @@ document.querySelector<HTMLSelectElement>("#provider")!.addEventListener("change
   };
   model.innerHTML = (models[provider] ?? []).map((item) => `<option>${item}</option>`).join("");
 });
+taskSelect.addEventListener("change", () => {
+  const problem = document.querySelector<HTMLTextAreaElement>("#problem")!;
+  if (!problem.value.trim() || Object.values(problemPresets).includes(problem.value.trim())) problem.value = problemPresets[taskSelect.value] ?? problem.value;
+});
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const selectedModes = selectedValues<PracticeMode>("mode");
@@ -274,6 +302,7 @@ form.addEventListener("submit", async (event) => {
   const problem = document.querySelector<HTMLTextAreaElement>("#problem")!.value.trim();
   const record: DraftRecord = {
     id: crypto.randomUUID(),
+    taskId: taskSelect.value,
     title: problem.split(/\s+/).slice(0, 3).join(" ").replace(/[^a-zA-Z0-9 -]/g, "") || "Untitled algorithm",
     problem,
     provider: document.querySelector<HTMLSelectElement>("#provider")!.value,
@@ -306,3 +335,4 @@ updateProfile();
 renderDrafts();
 renderHistory();
 void syncFromApi();
+void syncTasks();
