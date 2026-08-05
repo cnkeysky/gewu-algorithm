@@ -64,6 +64,20 @@ function validateDraft(draft: DraftRecord): string[] {
   return errors;
 }
 
+function validatePersistedDraft(draft: DraftRecord): void {
+  const errors = validateDraft(draft);
+  if (errors.length > 0) {
+    throw new DraftInputError(errors);
+  }
+}
+
+class DraftInputError extends Error {
+  constructor(readonly errors: string[]) {
+    super(errors.join("; "));
+    this.name = "DraftInputError";
+  }
+}
+
 function loadState(): State {
   const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path FROM drafts ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
   const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, created_at FROM reviews ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
@@ -137,7 +151,7 @@ function send(response: ServerResponse, status: number, body: unknown): void {
     "cache-control": "no-store",
     "access-control-allow-origin": "http://127.0.0.1:5173",
     "access-control-allow-headers": "content-type",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
   });
   response.end(JSON.stringify(body));
 }
@@ -200,6 +214,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/reviews") return send(response, 200, { reviews: state.reviews });
     if (request.method === "POST" && url.pathname === "/api/drafts") {
       const draft = draftFrom(await body(request));
+      validatePersistedDraft(draft);
       state.drafts = [draft, ...state.drafts];
       await saveState(state);
       return send(response, 201, { draft });
@@ -213,6 +228,7 @@ const server = createServer(async (request, response) => {
       updated.createdAt = draft.createdAt;
       updated.status = "queued";
       updated.artifactPath = undefined;
+      validatePersistedDraft(updated);
       state.drafts = state.drafts.map((item) => item.id === draft.id ? updated : item);
       await saveState(state);
       return send(response, 200, { draft: updated });
@@ -267,6 +283,7 @@ const server = createServer(async (request, response) => {
     }
     return send(response, 404, { error: "route not found" });
   } catch (error) {
+    if (error instanceof DraftInputError) return send(response, 422, { status: "failed", errors: error.errors });
     return send(response, 400, { error: error instanceof Error ? error.message : "invalid request" });
   }
 });
