@@ -177,6 +177,17 @@ const server = createServer(async (request, response) => {
       await saveState(state);
       return send(response, 200, { status: "passed", draft });
     }
+    const acceptanceMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/accept$/);
+    if (request.method === "POST" && acceptanceMatch) {
+      const draft = state.drafts.find((item) => item.id === acceptanceMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      if (draft.status !== "validated") return send(response, 409, { error: "validate the draft before acceptance" });
+      const passedReview = state.reviews.some((review) => review.draftId === draft.id && review.verdict === "pass");
+      if (!passedReview) return send(response, 409, { error: "a passing role review is required before acceptance" });
+      draft.status = "accepted";
+      await saveState(state);
+      return send(response, 200, { status: "accepted", draft });
+    }
     const reviewMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/reviews$/);
     if (request.method === "POST" && reviewMatch) {
       const payload = await body(request);

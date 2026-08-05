@@ -105,4 +105,6 @@ topological-sort example, `POST /api/drafts/:id/generate` calls the configured
 Pi-ai provider and stores a contained artifact; `POST
 /api/drafts/:id/reviews` runs a role-specific review against that artifact. A
 different algorithm task is rejected until its output schema and validator are
-declared rather than being silently treated as Kahn.
+declared rather than being silently treated as Kahn. Finally,
+`POST /api/drafts/:id/accept` requires deterministic validation and a passing
+review before moving the draft to `accepted`.

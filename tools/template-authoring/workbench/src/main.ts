@@ -55,7 +55,7 @@ root.innerHTML = `
           <label class="field"><span>Implementation variants</span><input id="variants" type="number" min="1" max="5" value="1" /></label>
         </div>
         <fieldset>
-          <legend>Practice projections <button class="select-all" type="button" id="select-all-modes">Select all</button></legend>
+          <legend>Practice projections <label class="select-all"><input type="checkbox" id="select-all-modes" /><span>All modes</span></label></legend>
           <div class="mode-list">${modes.map((mode) => `<label class="mode-option"><input type="checkbox" name="mode" value="${mode.id}" ${mode.id === "shadow_typing" || mode.id === "flow_recall" ? "checked" : ""} /><span class="checkmark"></span><span><strong>${mode.label}</strong><small>${mode.hint}</small></span></label>`).join("")}</div>
         </fieldset>
         <fieldset id="assistance-fieldset" class="assistance-fieldset">
@@ -93,7 +93,7 @@ const assistanceFieldset = document.querySelector<HTMLFieldSetElement>("#assista
 const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
 const draftList = document.querySelector<HTMLDivElement>("#draft-list")!;
 const historyList = document.querySelector<HTMLDivElement>("#history-list")!;
-const selectAllModes = document.querySelector<HTMLButtonElement>("#select-all-modes")!;
+const selectAllModes = document.querySelector<HTMLInputElement>("#select-all-modes")!;
 
 interface DraftRecord {
   id: string;
@@ -141,7 +141,7 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat(unde
 function renderDrafts(): void {
   const drafts = readDrafts();
   document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
-  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="draft-row" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><button class="inline-action" type="button" data-generate-id="${draft.id}" ${draft.status === "generated" || draft.status === "validated" ? "disabled" : ""}>${draft.status === "generated" || draft.status === "validated" ? "Generated" : "Generate"}</button><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" ? "disabled" : ""}>${draft.status === "validated" ? "Validated" : "Validate"}</button><button class="inline-action" type="button" data-review-id="${draft.id}" ${draft.status === "queued" ? "disabled" : ""}>Review</button></span></div>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="draft-row" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><button class="inline-action" type="button" data-generate-id="${draft.id}" ${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "Generated" : "Generate"}</button><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "validated" || draft.status === "accepted" ? "Validated" : "Validate"}</button><button class="inline-action" type="button" data-review-id="${draft.id}" ${draft.status === "queued" || draft.status === "accepted" ? "disabled" : ""}>Review</button><button class="inline-action" type="button" data-accept-id="${draft.id}" ${draft.status !== "validated" ? "disabled" : ""}>${draft.status === "accepted" ? "Accepted" : "Accept"}</button></span></div>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
 }
 function renderHistory(): void {
   const drafts = readDrafts();
@@ -197,6 +197,18 @@ document.addEventListener("click", (event) => {
     }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
     return;
   }
+  const acceptButton = target.closest<HTMLButtonElement>("[data-accept-id]");
+  if (acceptButton) {
+    event.stopPropagation();
+    const id = acceptButton.dataset.acceptId;
+    void fetch(`/api/drafts/${id}/accept`, { method: "POST" }).then(async (response) => {
+      const payload = await response.json() as { error?: string };
+      message.textContent = response.ok ? "Draft accepted for publication." : `Acceptance failed: ${payload.error ?? "unknown error"}`;
+      message.className = response.ok ? "form-message success" : "form-message error";
+      if (response.ok) { await syncFromApi(); showView("drafts"); }
+    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+    return;
+  }
   const draftButton = target.closest<HTMLButtonElement>("[data-draft-id]");
   if (draftButton) {
     const draft = readDrafts().find((item) => item.id === draftButton.dataset.draftId);
@@ -229,16 +241,16 @@ function updateProfile(): void {
   profileState.textContent = selectedModes.length > 0 && language.length > 0 && variants > 0 ? "Ready" : "Needs input";
   profileState.className = `valid-badge ${profileState.textContent === "Ready" ? "" : "warning"}`;
   profileSummary.innerHTML = `<div class="summary-block"><span>Modes</span><div class="tag-list">${selectedModes.length ? selectedModes.map((mode) => `<span class="tag">${mode.replaceAll("_", " ")}</span>`).join("") : "<em>None selected</em>"}</div></div><div class="summary-block"><span>Assistance</span><div class="tag-list">${selectedAssistance.length ? selectedAssistance.map((item) => `<span class="tag muted">${item}</span>`).join("") : "<em>No hints selected</em>"}</div><small class="profile-note">${codeRecall ? "Applied to code recall." : "Configured, but inactive until code recall is selected."}</small></div><div class="summary-meta"><span>${language.join(", ")}</span><span>${Number.isFinite(variants) ? variants : 0} variant${variants === 1 ? "" : "s"}</span></div>`;
-  const allSelected = selectedModes.length === document.querySelectorAll<HTMLInputElement>("input[name=mode]").length;
-  selectAllModes.textContent = allSelected ? "Clear all" : "Select all";
-  selectAllModes.setAttribute("aria-pressed", String(allSelected));
+  const totalModes = document.querySelectorAll<HTMLInputElement>("input[name=mode]").length;
+  const allSelected = totalModes > 0 && selectedModes.length === totalModes;
+  selectAllModes.checked = allSelected;
+  selectAllModes.indeterminate = selectedModes.length > 0 && !allSelected;
 }
 
 document.querySelectorAll<HTMLInputElement>("input, select, textarea").forEach((input) => input.addEventListener("input", updateProfile));
-selectAllModes.addEventListener("click", () => {
+selectAllModes.addEventListener("change", () => {
   const inputs = [...document.querySelectorAll<HTMLInputElement>("input[name=mode]")];
-  const shouldSelect = inputs.some((input) => !input.checked);
-  inputs.forEach((input) => { input.checked = shouldSelect; });
+  inputs.forEach((input) => { input.checked = selectAllModes.checked; });
   updateProfile();
 });
 document.querySelector<HTMLSelectElement>("#provider")!.addEventListener("change", (event) => {
