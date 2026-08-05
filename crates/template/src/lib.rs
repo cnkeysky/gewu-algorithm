@@ -9,10 +9,11 @@ use std::{
 
 pub use gewu_domain::AlgorithmUnit;
 use gewu_domain::{
-    CheckStatus, Confidence, ContentStatus, FlowStep, Generator, Implementation, Normalization,
-    Pattern, Position, PracticeDefinition, Problem, Provenance, Relationship, RelationshipType,
-    Revision, ShadowTypingDefinition, Source, SupersededRevision, Understanding, UnitId,
-    ValidationState,
+    CheckStatus, CodeRecallAssistance, CodeRecallDefinition, Confidence, ContentStatus, FlowStep,
+    Generator, Implementation, Normalization, Pattern, Position, PracticeDefinition, Problem,
+    Provenance, ReasoningAspect, ReasoningRecallDefinition, Relationship, RelationshipType,
+    Revision, ShadowTypingDefinition, Source, SupersededRevision, TransferPracticeDefinition,
+    Understanding, UnitId, ValidationState,
 };
 use serde::Deserialize;
 use thiserror::Error;
@@ -62,9 +63,9 @@ fn validate_algorithm_unit(
         path: root.to_owned(),
         source,
     })?;
-    let implementations = validate_implementations(raw.implementations, &root)?;
-    let practice = validate_practice(raw.practice, &implementations)?;
     let patterns = validate_patterns(raw.patterns)?;
+    let implementations = validate_implementations(raw.implementations, &root)?;
+    let practice = validate_practice(raw.practice, &implementations, &patterns)?;
     let relationships = validate_relationships(raw.relationships, &id)?;
     let validation = validate_validation(raw.validation)?;
     let provenance = validate_provenance(raw.provenance)?;
@@ -369,6 +370,7 @@ fn resolve_source(root: &Path, source: &str, field_path: &str) -> Result<PathBuf
 fn validate_practice(
     practice: RawPractice,
     implementations: &[Implementation],
+    patterns: &[Pattern],
 ) -> Result<PracticeDefinition, LoadError> {
     require_nonempty(&practice.shadow_typing, "practice.shadow_typing")?;
     let implementation_keys: HashSet<&str> = implementations
@@ -423,10 +425,161 @@ fn validate_practice(
             aliases: step.aliases,
         });
     }
+
+    let code_recall = validate_code_recall(practice.code_recall, &implementation_keys)?;
+    let reasoning_recall = validate_reasoning_recall(practice.reasoning_recall)?;
+    let transfer_practice = validate_transfer_practice(practice.transfer_practice, patterns)?;
+
     Ok(PracticeDefinition {
         shadow_typing,
         flow_recall_steps,
+        code_recall,
+        reasoning_recall,
+        transfer_practice,
     })
+}
+
+fn validate_code_recall(
+    definitions: Vec<RawCodeRecallDefinition>,
+    implementation_keys: &HashSet<&str>,
+) -> Result<Vec<CodeRecallDefinition>, LoadError> {
+    let mut ids = HashSet::new();
+    let mut validated = Vec::with_capacity(definitions.len());
+    for (index, definition) in definitions.into_iter().enumerate() {
+        let base = format!("practice.code_recall[{index}]");
+        validate_slug(&definition.id, &format!("{base}.id"))?;
+        if !ids.insert(definition.id.clone()) {
+            return Err(validation(
+                format!("{base}.id"),
+                "duplicates a prior code recall ID",
+            ));
+        }
+        validate_slug(
+            &definition.implementation,
+            &format!("{base}.implementation"),
+        )?;
+        if !implementation_keys.contains(definition.implementation.as_str()) {
+            return Err(validation(
+                format!("{base}.implementation"),
+                "does not reference a declared implementation",
+            ));
+        }
+        validate_text(&definition.prompt, &format!("{base}.prompt"))?;
+        validate_optional_texts(&definition.scaffold, &format!("{base}.scaffold"))?;
+        match definition.assistance {
+            CodeRecallAssistance::None if !definition.scaffold.is_empty() => {
+                return Err(validation(
+                    format!("{base}.scaffold"),
+                    "must be empty when assistance is `none`",
+                ));
+            }
+            CodeRecallAssistance::None => {}
+            _ if definition.scaffold.is_empty() => {
+                return Err(validation(
+                    format!("{base}.scaffold"),
+                    "must contain at least one item when assistance is enabled",
+                ));
+            }
+            _ => {}
+        }
+        validated.push(CodeRecallDefinition {
+            id: definition.id,
+            implementation: definition.implementation,
+            assistance: definition.assistance,
+            prompt: definition.prompt,
+            scaffold: definition.scaffold,
+        });
+    }
+    Ok(validated)
+}
+
+fn validate_reasoning_recall(
+    definitions: Vec<RawReasoningRecallDefinition>,
+) -> Result<Vec<ReasoningRecallDefinition>, LoadError> {
+    let mut ids = HashSet::new();
+    let mut validated = Vec::with_capacity(definitions.len());
+    for (index, definition) in definitions.into_iter().enumerate() {
+        let base = format!("practice.reasoning_recall[{index}]");
+        validate_slug(&definition.id, &format!("{base}.id"))?;
+        if !ids.insert(definition.id.clone()) {
+            return Err(validation(
+                format!("{base}.id"),
+                "duplicates a prior reasoning recall ID",
+            ));
+        }
+        validate_text(&definition.prompt, &format!("{base}.prompt"))?;
+        validate_concepts(&definition.concepts, &format!("{base}.concepts"))?;
+        validate_optional_texts(&definition.aliases, &format!("{base}.aliases"))?;
+        validated.push(ReasoningRecallDefinition {
+            id: definition.id,
+            aspect: definition.aspect,
+            prompt: definition.prompt,
+            concepts: definition.concepts,
+            aliases: definition.aliases,
+        });
+    }
+    Ok(validated)
+}
+
+fn validate_transfer_practice(
+    definitions: Vec<RawTransferPracticeDefinition>,
+    patterns: &[Pattern],
+) -> Result<Vec<TransferPracticeDefinition>, LoadError> {
+    let pattern_ids: HashSet<&str> = patterns.iter().map(|pattern| pattern.id.as_str()).collect();
+    let mut ids = HashSet::new();
+    let mut validated = Vec::with_capacity(definitions.len());
+    for (index, definition) in definitions.into_iter().enumerate() {
+        let base = format!("practice.transfer_practice[{index}]");
+        validate_slug(&definition.id, &format!("{base}.id"))?;
+        if !ids.insert(definition.id.clone()) {
+            return Err(validation(
+                format!("{base}.id"),
+                "duplicates a prior transfer practice ID",
+            ));
+        }
+        validate_slug(&definition.pattern, &format!("{base}.pattern"))?;
+        if !pattern_ids.contains(definition.pattern.as_str()) {
+            return Err(validation(
+                format!("{base}.pattern"),
+                "does not reference a declared pattern",
+            ));
+        }
+        validate_text(&definition.new_case, &format!("{base}.new_case"))?;
+        validate_text(&definition.prompt, &format!("{base}.prompt"))?;
+        validate_concepts(&definition.concepts, &format!("{base}.concepts"))?;
+        require_nonempty(&definition.transfers, &format!("{base}.transfers"))?;
+        validate_optional_texts(&definition.transfers, &format!("{base}.transfers"))?;
+        require_nonempty(&definition.differences, &format!("{base}.differences"))?;
+        validate_optional_texts(&definition.differences, &format!("{base}.differences"))?;
+        require_nonempty(&definition.boundaries, &format!("{base}.boundaries"))?;
+        validate_optional_texts(&definition.boundaries, &format!("{base}.boundaries"))?;
+        validated.push(TransferPracticeDefinition {
+            id: definition.id,
+            pattern: definition.pattern,
+            new_case: definition.new_case,
+            prompt: definition.prompt,
+            concepts: definition.concepts,
+            transfers: definition.transfers,
+            differences: definition.differences,
+            boundaries: definition.boundaries,
+        });
+    }
+    Ok(validated)
+}
+
+fn validate_concepts(values: &[String], path: &str) -> Result<(), LoadError> {
+    require_nonempty(values, path)?;
+    let mut seen = HashSet::new();
+    for (index, value) in values.iter().enumerate() {
+        validate_slug(value, &format!("{path}[{index}]"))?;
+        if !seen.insert(value.as_str()) {
+            return Err(validation(
+                format!("{path}[{index}]"),
+                "duplicates a prior concept",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn validate_patterns(patterns: Vec<RawPattern>) -> Result<Vec<Pattern>, LoadError> {
@@ -676,6 +829,12 @@ struct RawRelationship {
 struct RawPractice {
     shadow_typing: Vec<RawShadowTypingDefinition>,
     flow_recall: RawFlowRecall,
+    #[serde(default)]
+    code_recall: Vec<RawCodeRecallDefinition>,
+    #[serde(default)]
+    reasoning_recall: Vec<RawReasoningRecallDefinition>,
+    #[serde(default)]
+    transfer_practice: Vec<RawTransferPracticeDefinition>,
 }
 
 #[derive(Deserialize)]
@@ -698,6 +857,39 @@ struct RawFlowStep {
     prompt: String,
     concepts: Vec<String>,
     aliases: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawCodeRecallDefinition {
+    id: String,
+    implementation: String,
+    assistance: CodeRecallAssistance,
+    prompt: String,
+    scaffold: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawReasoningRecallDefinition {
+    id: String,
+    aspect: ReasoningAspect,
+    prompt: String,
+    concepts: Vec<String>,
+    aliases: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawTransferPracticeDefinition {
+    id: String,
+    pattern: String,
+    new_case: String,
+    prompt: String,
+    concepts: Vec<String>,
+    transfers: Vec<String>,
+    differences: Vec<String>,
+    boundaries: Vec<String>,
 }
 
 #[derive(Deserialize)]

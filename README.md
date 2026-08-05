@@ -22,7 +22,10 @@ Validation, Revision, and Review
 
 ## Status
 
-The project is currently **pre-alpha**. The immediate goal is to validate the domain model, template format, practice engine, and VS Code shadow-typing interaction before expanding into LLM generation, knowledge graphs, synchronization, or additional editors.
+The project is currently **pre-alpha**. The local MVP and VS Code interaction
+spikes are complete. Current work prioritizes platform-independent learning
+contracts, additional core practice modes, template authoring, and review policy
+before further editor expansion.
 
 No claim is currently made that this practice method improves long-term learning outcomes. The project will treat that as a question to be tested through real usage and measurable review results.
 
@@ -35,9 +38,9 @@ No claim is currently made that this practice method improves long-term learning
 - LLMs may generate drafts and analysis, but are not a source of truth.
 - Personal practice records, API keys, and unreviewed generated content remain local by default.
 
-## Initial Scope
+## Current Scope
 
-The first usable milestone will provide:
+The local MVP provides:
 
 - local, versioned `AlgorithmUnit` content;
 - exact-match shadow typing for one supported editor;
@@ -48,6 +51,11 @@ The first usable milestone will provide:
 - a VS Code extension as the first complete editor integration.
 
 Zed integration remains a later compatibility target because its extension surface does not yet provide all interaction capabilities needed by the planned practice experience.
+
+The next core stages add progressive Code Recall, Reasoning Recall, Transfer
+Practice, typed template generation, and retention-oriented review. Their state
+machines and scoring rules remain usable without VS Code, Zed, or a network
+connection.
 
 ## Repository Layout
 

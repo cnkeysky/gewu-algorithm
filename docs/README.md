@@ -13,3 +13,5 @@ The repository documentation is organized by responsibility:
 Normative documents should have one clear responsibility. README files may summarize them, but behavior should be defined in requirements, architecture documents, schemas, or ADRs rather than duplicated in several places.
 
 Stable domain names and serialized values are defined in [architecture/terminology.md](architecture/terminology.md).
+Platform-independent mode content is defined in
+[architecture/practice-content-contracts.md](architecture/practice-content-contracts.md).

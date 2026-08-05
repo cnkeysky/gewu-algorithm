@@ -108,7 +108,51 @@
           "aliases": ["visit and enqueue unseen neighbors"]
         }
       ]
-    }
+    },
+    "code_recall": [
+      {
+        "id": "bfs-comments",
+        "implementation": "python-teaching",
+        "assistance": "comments",
+        "prompt": "Reconstruct the traversal from the reviewed operation comments.",
+        "scaffold": [
+          "Initialize the FIFO frontier and discovered set.",
+          "Expand one frontier state at a time.",
+          "Mark each neighbor before enqueueing it."
+        ]
+      },
+      {
+        "id": "bfs-no-hints",
+        "implementation": "python-teaching",
+        "assistance": "none",
+        "prompt": "Reconstruct the canonical BFS implementation without code guidance.",
+        "scaffold": []
+      }
+    ],
+    "reasoning_recall": [
+      {
+        "id": "fifo-shortest-distance",
+        "aspect": "invariant",
+        "prompt": "Why does this frontier order preserve nondecreasing edge distance?",
+        "concepts": ["fifo", "distance", "frontier"],
+        "aliases": ["a FIFO queue processes each discovery layer before the next"]
+      }
+    ],
+    "transfer_practice": [
+      {
+        "id": "rotting-oranges",
+        "pattern": "frontier-expansion",
+        "new_case": "A grid where rotten cells spread to adjacent fresh cells once per minute.",
+        "prompt": "Explain how frontier expansion applies to simultaneous rotting in a grid.",
+        "concepts": ["queue", "layer", "grid"],
+        "transfers": ["Use a FIFO frontier to process one distance layer at a time."],
+        "differences": [
+          "The initial frontier contains every rotten orange.",
+          "Each BFS layer represents one minute of propagation."
+        ],
+        "boundaries": ["The grid transitions must all represent equal time per step."]
+      }
+    ]
   },
   "validation": {
     "schema": "passed",

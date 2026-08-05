@@ -13,5 +13,7 @@ Fixtures exercise public schemas and domain behavior. They are not automatically
 | `invalid/missing-source.json` | declared implementation source is unavailable |
 | `invalid/traversing-source.json` | implementation source attempts parent traversal |
 | `invalid/unknown-shadow/unit.json` | shadow typing references an undeclared implementation |
+| `invalid/unknown-code-recall/unit.json` | code recall references an undeclared implementation |
+| `invalid/duplicate-reasoning-recall/unit.json` | reasoning recall IDs are duplicated |
 
 The BFS and binary-search fixtures remain drafts. Their presence demonstrates that graph traversal and ordered-search units are representable; it does not establish reviewed learning quality or validated content.

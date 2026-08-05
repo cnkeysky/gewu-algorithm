@@ -41,7 +41,29 @@
     "flow_recall": {"steps": [
       {"id": "set-bounds", "prompt": "Set inclusive left and right bounds around the candidate interval.", "concepts": ["left", "right", "interval"], "aliases": ["initialize the search bounds"]},
       {"id": "compare-middle", "prompt": "Compare the middle value and retain only the possible half.", "concepts": ["middle", "comparison"], "aliases": ["halve the candidate interval"]}
-    ]}
+    ]},
+    "code_recall": [{
+      "id": "binary-search-keywords",
+      "implementation": "python-iterative",
+      "assistance": "keywords",
+      "prompt": "Reconstruct the iterative interval-halving implementation from these operations.",
+      "scaffold": ["left", "right", "middle", "comparison"]
+    }],
+    "reasoning_recall": [{
+      "id": "preserve-candidate-interval", "aspect": "invariant",
+      "prompt": "What invariant keeps a target from being discarded when it is present?",
+      "concepts": ["interval", "ordered", "target"],
+      "aliases": ["the remaining sorted interval still contains the target when it exists"]
+    }],
+    "transfer_practice": [{
+      "id": "first-true", "pattern": "interval-halving",
+      "new_case": "A sorted boolean predicate whose first true position must be found.",
+      "prompt": "Adapt the ordered-interval pattern to find the first true predicate value.",
+      "concepts": ["monotonic", "interval", "predicate"],
+      "transfers": ["Retain an interval that contains the first true position."],
+      "differences": ["The comparison is replaced by a monotonic boolean predicate."],
+      "boundaries": ["The predicate must be monotonic over the search interval."]
+    }]
   },
   "validation": {"schema": "passed", "code": "pending", "content_review": "pending", "transfer_review": "pending", "last_validated_at": null},
   "provenance": {"authors": ["gewu-algorithm maintainers"], "generated_by": null, "reviewed_by": [], "sources": [], "license": "MIT"},

@@ -6,7 +6,12 @@ This document defines the initial product requirements for `gewu-algorithm`. Req
 
 ## 2. Product Scope
 
-The product provides structured algorithm practice based on versioned `AlgorithmUnit` content. It begins with `shadow_typing` and `flow_recall`, then may add `code_recall`, `reasoning_recall`, and `transfer_practice` after their interaction and scoring contracts are specified.
+The product provides structured algorithm practice based on versioned
+`AlgorithmUnit` content. Its core learning progression is `shadow_typing`,
+`code_recall`, `flow_recall`, `reasoning_recall`, and `transfer_practice`.
+Practice definitions, state transitions, attempt facts, scoring, progression,
+and review policy are platform-independent. Editors and other clients translate
+input events and render core state; they do not define learning behavior.
 
 It is not initially a problem judge, a complete spaced-repetition platform, a social network, or an automatic replacement for editorial review.
 
@@ -17,6 +22,7 @@ It is not initially a problem judge, a complete spaced-repetition platform, a so
 | `AlgorithmUnit` | Versioned learning content describing a problem, implementation, reasoning, boundaries, practice activities, provenance, and validation state |
 | Practice mode | A defined interaction and scoring strategy applied to an `AlgorithmUnit`; stable values are defined in the domain terminology |
 | Shadow Typing | `shadow_typing`: exact reconstruction of one specified code variant with progressive visual guidance |
+| Code Recall | `code_recall`: reconstruction of one specified implementation with reduced or absent code guidance |
 | Flow Recall | `flow_recall`: reconstruction of reviewed execution states or steps without exact prose matching |
 | Reasoning Recall | `reasoning_recall`: reconstruction of mechanism, invariant, trade-offs, boundaries, and failure conditions |
 | Transfer Practice | `transfer_practice`: application of a pattern to a new case while identifying differences and limits |
@@ -48,15 +54,24 @@ It is not initially a problem judge, a complete spaced-repetition platform, a so
 - **FR-108:** A practice session shall remain usable without an LLM provider or network connection.
 - **FR-109:** Flow Recall shall ask the learner to reconstruct reviewed ordered steps in natural language; stable step IDs shall not be ordinary learning content.
 - **FR-110:** Flow Recall shall retain problem context, completed steps, current progress, and explicit Reveal, Restart, and Stop actions in one structured view.
+- **FR-111:** Code Recall shall reconstruct a selected implementation using a reviewed assistance policy chosen from structural skeleton, comments, keywords, cloze regions, or no code guidance.
+- **FR-112:** Assistance variants shall not become separate persisted practice modes unless their learning objective, event contract, or scoring semantics differ.
+- **FR-113:** Code-oriented modes may share normalization and editing primitives, but Shadow Typing and Code Recall shall retain distinct mode identities and attempt records.
+- **FR-114:** Reasoning Recall shall target reviewed mechanisms, invariants, trade-offs, boundaries, and failure conditions through explicit required concepts and optional accepted expressions.
+- **FR-115:** Transfer Practice shall identify a source pattern, a new case, what transfers, what differs, and the limits or failure conditions of the transfer.
+- **FR-116:** Practice completion and immutable attempt facts shall not require a network connection or live model judgment.
+- **FR-117:** Answers requiring qualitative review shall preserve deterministic session facts and an explicit pending-review outcome instead of presenting model output as ground truth.
 
 ### History and Review
 
 - **FR-200:** The system shall store practice attempts locally by default.
 - **FR-201:** The user shall be able to inspect recent attempts and the content revision used.
 - **FR-202:** The system shall support deletion of local practice history.
+- **FR-203:** Future review scheduling shall consume attempt data through a stable domain interface rather than editor-specific storage.
 - **FR-204:** Resume and discard shall identify the checkpoint unit, mode, revision, progress, and saved time before applying the action.
 - **FR-205:** Starting a new practice shall not silently replace an existing active checkpoint.
-- **FR-203:** Future review scheduling shall consume attempt data through a stable domain interface rather than editor-specific storage.
+- **FR-206:** Progression and review recommendations shall consider mode, completion, assistance usage, prior attempts, and elapsed review interval through a versioned core policy.
+- **FR-207:** A user shall be able to select a practice mode directly even when the core recommends a different next activity.
 
 ### Editor Integration
 
@@ -74,12 +89,13 @@ It is not initially a problem judge, a complete spaced-repetition platform, a so
 - **FR-403:** Generated structured output shall be schema-validated before storage.
 - **FR-404:** The user shall see what content will be sent to a remote provider before the first transmission for a workflow.
 - **FR-405:** API credentials shall use editor or operating-system secret storage and shall never be written to logs or templates.
+- **FR-406:** Template generation tasks shall target implemented, versioned content contracts and shall not invent fields or scoring behavior outside those contracts.
 
 ## 5. Non-Functional Requirements
 
 - **NFR-001 Performance:** Character feedback for an ordinary practice unit should be perceived as immediate; blocking network or model calls are forbidden on the input path.
 - **NFR-002 Determinism:** Identical content, configuration, and input events shall produce identical practice state and scoring.
-- **NFR-003 Offline Operation:** Local content loading, Shadow Typing, Flow Recall, and history access shall work offline.
+- **NFR-003 Offline Operation:** Local content loading, all deterministic practice modes, review-state inspection, and history access shall work offline.
 - **NFR-004 Privacy:** User code, practice data, and telemetry shall remain local unless the user explicitly enables an external action.
 - **NFR-005 Security:** Remote text, generated content, and template files shall be treated as untrusted input.
 - **NFR-006 Compatibility:** Public schemas and client protocols shall be versioned and have documented compatibility rules.
@@ -114,6 +130,7 @@ The first MVP is acceptable when:
 
 - Should whitespace normalization be a separate mode or remain strict in the MVP?
 - When should Flow Recall evolve from ordered steps with optional state descriptions to explicit state-transition diagrams?
+- Which response forms for Reasoning Recall and Transfer Practice can be scored mechanically, and which require explicit human review?
 - Which attempt data is necessary to evaluate delayed retention without collecting excessive personal data?
 - What minimum evidence is required before an official template is marked `validated`?
 - When should official content move to a separate `gewu-algorithm-templates` repository?

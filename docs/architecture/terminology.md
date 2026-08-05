@@ -20,9 +20,9 @@ Display wording may evolve without migrating stored data. Serialized values requ
 | --- | --- | --- | --- | --- |
 | `ShadowTyping` | `shadow_typing` | Shadow Typing | Reconstruct one selected canonical implementation while progressive visual guidance remains visible | MVP |
 | `FlowRecall` | `flow_recall` | Flow Recall | Reconstruct reviewed execution states or steps without requiring exact prose | MVP |
-| `CodeRecall` | `code_recall` | Code Recall | Reconstruct a selected implementation with substantially reduced or absent code guidance | Reserved, post-MVP |
-| `ReasoningRecall` | `reasoning_recall` | Reasoning Recall | Reconstruct why an approach works, including state, invariant, trade-offs, and failure conditions | Reserved, post-MVP |
-| `TransferPractice` | `transfer_practice` | Transfer Practice | Apply a reviewed pattern to a new case and identify what transfers, what differs, and where it fails | Reserved, post-MVP |
+| `CodeRecall` | `code_recall` | Code Recall | Reconstruct a selected implementation with substantially reduced or absent code guidance | Content contract in Stage 4; engine in Stage 5 |
+| `ReasoningRecall` | `reasoning_recall` | Reasoning Recall | Reconstruct why an approach works, including state, invariant, trade-offs, and failure conditions | Content contract in Stage 4; engine in Stage 6 |
+| `TransferPractice` | `transfer_practice` | Transfer Practice | Apply a reviewed pattern to a new case and identify what transfers, what differs, and where it fails | Content contract in Stage 4; engine in Stage 6 |
 
 ### Terms Not Used as Mode Identifiers
 
@@ -54,7 +54,8 @@ Display wording may evolve without migrating stored data. Serialized values requ
 | `HintUsage` | Facts describing which assistance was explicitly revealed or consumed |
 | `ScoringVersion` | Version identifying how attempt facts are converted into derived scores |
 
-Local persistence of `PracticeAttempt` belongs to the MVP. Review scheduling and retention recommendations remain separate post-MVP capabilities.
+Local persistence of `PracticeAttempt` belongs to the MVP. Platform-independent
+review scheduling and progression recommendations are planned for Stage 8.
 
 ## Historical Phrase
 

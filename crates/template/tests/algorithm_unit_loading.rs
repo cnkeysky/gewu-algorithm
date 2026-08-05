@@ -1,6 +1,8 @@
 use std::{error::Error, path::PathBuf};
 
-use gewu_domain::{CheckStatus, Confidence, RelationshipType};
+use gewu_domain::{
+    CheckStatus, CodeRecallAssistance, Confidence, ReasoningAspect, RelationshipType,
+};
 use gewu_template::{LoadError, load_algorithm_unit};
 
 fn fixture(path: &str) -> PathBuf {
@@ -36,6 +38,26 @@ fn loads_bfs_with_a_contained_source_file() -> Result<(), Box<dyn Error>> {
         unit.practice.shadow_typing[0].implementation,
         "python-teaching"
     );
+    assert_eq!(unit.practice.code_recall.len(), 2);
+    assert_eq!(
+        unit.practice.code_recall[0].assistance,
+        CodeRecallAssistance::Comments
+    );
+    assert!(unit.practice.code_recall[1].scaffold.is_empty());
+    assert_eq!(
+        unit.practice.reasoning_recall[0].id,
+        "fifo-shortest-distance"
+    );
+    assert_eq!(
+        unit.practice.reasoning_recall[0].aspect,
+        ReasoningAspect::Invariant
+    );
+    assert_eq!(
+        unit.practice.transfer_practice[0].pattern,
+        "frontier-expansion"
+    );
+    assert!(unit.practice.transfer_practice[0].new_case.contains("grid"));
+    assert_eq!(unit.practice.transfer_practice[0].transfers.len(), 1);
     assert_eq!(unit.patterns[0].id, "frontier-expansion");
     assert_eq!(
         unit.relationships[0].relationship_type,
@@ -53,6 +75,12 @@ fn loads_a_contrasting_binary_search_unit() -> Result<(), Box<dyn Error>> {
 
     assert_eq!(unit.id.as_str(), "search.binary-search");
     assert_eq!(unit.practice.flow_recall_steps.len(), 2);
+    assert_eq!(unit.practice.code_recall.len(), 1);
+    assert_eq!(
+        unit.practice.code_recall[0].assistance,
+        CodeRecallAssistance::Keywords
+    );
+    assert_eq!(unit.practice.transfer_practice[0].id, "first-true");
     assert_eq!(unit.patterns[0].id, "interval-halving");
     assert_eq!(
         unit.relationships[0].target.as_str(),
@@ -107,5 +135,29 @@ fn rejects_shadow_typing_that_references_an_unknown_implementation() {
             assert_eq!(path, "practice.shadow_typing[0].implementation");
         }
         other => panic!("expected a shadow typing reference error, got {other:?}"),
+    }
+}
+
+#[test]
+fn rejects_code_recall_that_references_an_unknown_implementation() {
+    let result = load_algorithm_unit(fixture("invalid/unknown-code-recall/unit.json"));
+
+    match result {
+        Err(LoadError::Validation { path, .. }) => {
+            assert_eq!(path, "practice.code_recall[0].implementation");
+        }
+        other => panic!("expected a code recall reference error, got {other:?}"),
+    }
+}
+
+#[test]
+fn rejects_duplicate_reasoning_recall_ids() {
+    let result = load_algorithm_unit(fixture("invalid/duplicate-reasoning-recall/unit.json"));
+
+    match result {
+        Err(LoadError::Validation { path, .. }) => {
+            assert_eq!(path, "practice.reasoning_recall[1].id");
+        }
+        other => panic!("expected a reasoning recall ID error, got {other:?}"),
     }
 }

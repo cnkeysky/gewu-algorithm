@@ -168,6 +168,27 @@
               }
             }
           }
+        },
+        "code_recall": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/codeRecall"
+          },
+          "default": []
+        },
+        "reasoning_recall": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reasoningRecall"
+          },
+          "default": []
+        },
+        "transfer_practice": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transferPractice"
+          },
+          "default": []
         }
       }
     },
@@ -371,10 +392,13 @@
     "flowStep": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "prompt", "concepts", "aliases"],
+      "required": ["id", "aspect", "prompt", "concepts", "aliases"],
       "properties": {
         "id": {
           "$ref": "#/$defs/slug"
+        },
+        "aspect": {
+          "enum": ["mechanism", "invariant", "trade_off", "boundary", "failure_condition"]
         },
         "prompt": {
           "$ref": "#/$defs/nonEmptyString"
@@ -388,6 +412,106 @@
         },
         "aliases": {
           "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "codeRecall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "implementation", "assistance", "prompt", "scaffold"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "implementation": {
+          "$ref": "#/$defs/slug"
+        },
+        "assistance": {
+          "enum": ["skeleton", "comments", "keywords", "cloze", "none"]
+        },
+        "prompt": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "scaffold": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "reasoningRecall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "prompt", "concepts", "aliases"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "prompt": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "concepts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/slug"
+          },
+          "uniqueItems": true
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "transferPractice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "pattern", "new_case", "prompt", "concepts", "transfers", "differences", "boundaries"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "pattern": {
+          "$ref": "#/$defs/slug"
+        },
+        "new_case": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "prompt": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "concepts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/slug"
+          },
+          "uniqueItems": true
+        },
+        "transfers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "differences": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        },
+        "boundaries": {
+          "type": "array",
+          "minItems": 1,
           "items": {
             "$ref": "#/$defs/nonEmptyString"
           }

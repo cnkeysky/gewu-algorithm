@@ -10,6 +10,11 @@
 
 Keeping these responsibilities separate prevents an editor API or LLM provider from becoming the product's domain model.
 
+All practice modes, including code-oriented typing interactions, are core
+capabilities. A client may receive keystrokes, manage focus, and render guidance,
+but target selection, assistance state, accepted progress, hint facts,
+completion, and scoring remain platform-independent.
+
 ## System Shape
 
 ```text
@@ -46,8 +51,8 @@ crates/
 ├── domain/            # IDs, lifecycle, attempts, relations, domain errors
 ├── template/          # Schema-aware loading, validation, and migration
 ├── practice/          # Deterministic practice modes and state machines
-├── review/            # Review policy and scheduling, post-MVP
-├── llm/               # Typed generation tasks and provider adapters, post-MVP
+├── review/            # Platform-independent review and progression policy
+├── llm/               # Typed generation tasks and optional provider adapters
 ├── protocol/          # Versioned client messages and JSON-RPC mapping
 ├── storage/           # Local attempt and content persistence ports and adapters
 └── core/              # Application services that compose domain capabilities
@@ -71,8 +76,8 @@ Repository directories use short responsibility names because the repository roo
 | `crates/domain` | `gewu-domain` | Domain IDs and value objects, content lifecycle, relationships, attempts, and typed domain errors |
 | `crates/template` | `gewu-template` | `AlgorithmUnit` parsing, structural and semantic validation, source-file resolution, and schema migration |
 | `crates/practice` | `gewu-practice` | Deterministic practice-mode state machines, event transitions, progress facts, hints, and completion rules |
-| `crates/review` | `gewu-review` | User review state, scheduling policies, and retention-oriented recommendations; post-MVP |
-| `crates/llm` | `gewu-llm` | Typed generation tasks, prompt versions, structured-output parsing, and provider adapters; post-MVP |
+| `crates/review` | `gewu-review` | User review state, scheduling policies, and retention-oriented recommendations; planned for Stage 8 |
+| `crates/llm` | `gewu-llm` | Typed generation tasks, task versions, structured-output parsing, and optional provider adapters; planned for Stage 7 |
 | `crates/protocol` | `gewu-protocol` | Versioned transport DTOs, handshake contracts, JSON-RPC methods, and domain-boundary conversions |
 | `crates/storage` | `gewu-storage` | MVP local attempt and content persistence, atomic writes, migrations, and deletion |
 | `crates/core` | `gewu-core` | Application use cases that coordinate domain, templates, practice, protocol-independent persistence, and optional capabilities |

@@ -30,6 +30,12 @@ units/
 
 The manifest contains identity and structured semantics. Source code remains in normal language files so formatters, compilers, syntax highlighting, and diffs work naturally.
 
+Practice content follows the platform-independent contracts in
+[Practice Content Contracts](practice-content-contracts.md). In particular,
+comment-guided reconstruction, keyword hints, structural skeletons, and cloze
+regions are assistance policies for `code_recall`, not editor features or new
+persisted practice modes.
+
 ## Authoring Rules
 
 - Human-authored YAML is validated against a versioned JSON Schema.
@@ -40,6 +46,8 @@ The manifest contains identity and structured semantics. Source code remains in 
 - Counterexamples identify cases where a tempting pattern is invalid or insufficient.
 - Published code variants include executable tests where practical.
 - Generated content remains under local draft storage until reviewed.
+- Generation tasks may emit only fields defined by an implemented schema
+  contract; a provider response cannot extend practice semantics implicitly.
 
 ## Schema Evolution
 

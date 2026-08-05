@@ -54,17 +54,61 @@ and real extension-host validation.
 
 Exit according to [MVP criteria](product/mvp.md).
 
-## Stage 4: Core Template Authoring Pipeline
+## Stage 4: Core Learning Contracts and Template Schema
 
-- define typed, provider-neutral template drafting tasks aligned with the
-  Project-GEWU philosophy and `AlgorithmUnit` authoring rules;
+Status: in progress as of 2026-08-05.
+
+- specify platform-independent content, assistance, event, and scoring contracts
+  for all reserved practice modes;
+- model progressive code assistance without turning every presentation variant
+  into a persisted practice mode;
+- extend `AlgorithmUnit` and its semantic validation for `code_recall`,
+  `reasoning_recall`, and `transfer_practice`;
+- add representative valid and invalid fixtures for the new contracts;
+- document compatibility rules before exposing the contracts through clients or
+  generation providers.
+
+Exit when the Rust core can load and validate representative content for all
+five practice modes without an editor, network connection, or LLM provider.
+
+## Stage 5: Core Progressive Code Practice
+
+- implement deterministic `code_recall` sessions over the shared code-practice
+  foundation;
+- support reviewed skeleton, comment, keyword, cloze, and absent-code assistance;
+- keep assistance usage separate from correctness, completion, and elapsed-time
+  facts;
+- test replay, Unicode, line endings, restart, stop, and terminal attempt
+  creation without an editor;
+- expose the mode through core application services and a host-free CLI harness.
+
+Exit when progressive code practice can be replayed and scored deterministically
+through core tests and the CLI.
+
+## Stage 6: Core Reasoning and Transfer Practice
+
+- implement `reasoning_recall` against reviewed concepts, invariants,
+  trade-offs, boundaries, and failure conditions;
+- implement `transfer_practice` against reviewed cases, transferable structure,
+  differences, and limits;
+- define deterministic attempt facts and explicit human-review boundaries for
+  answers that cannot be scored mechanically;
+- keep live model evaluation optional and outside completion-state ownership.
+
+Exit when both modes are usable offline with deterministic session transitions
+and stable attempt facts.
+
+## Stage 7: Core Template Authoring Pipeline
+
+- define typed, provider-neutral drafting tasks aligned with the Project-GEWU
+  philosophy and the implemented `AlgorithmUnit` contracts;
 - add deterministic scaffold, validate, and local-draft CLI workflows before
   connecting a live provider;
 - parse structured generation output into ordinary manifest and source files;
 - validate schema, semantics, source containment, and executable code where
   practical;
-- record prompt/task versions, selected-input hashes, provider metadata, and
-  review state without committing raw private prompts or responses;
+- record task versions, selected-input hashes, provider metadata, and review
+  state without committing raw private prompts or responses;
 - require explicit human review before generated content can enter an official
   content pack.
 
@@ -72,16 +116,30 @@ Exit when a fake provider can exercise the full deterministic pipeline and at
 least two contrasting local draft units can be generated, validated, reviewed,
 and loaded without any editor dependency.
 
-## Stage 5: Review and Retention Experiment
+## Stage 8: Review, Progression, and Retention
 
-- add minimal delayed-review prompts;
-- measure prompt dependency and reconstruction after delay;
-- remove attempt fields and content fields that do not change decisions;
+- derive progression recommendations from attempts and assistance dependence;
+- add minimal delayed-review scheduling through a platform-independent policy;
+- measure reconstruction after delay across practice modes;
+- allow user choice to override recommendations without corrupting history;
+- remove attempt and content fields that do not change decisions;
 - document inconclusive and negative findings.
 
-## Stage 6: Content Ecosystem and Additional Clients
+Exit when the same attempt history produces the same review recommendations in
+core tests and at least one host-free client.
 
-- evaluate extracting `gewu-algorithm-templates`;
-- define signed or checksummed content-pack releases;
-- add knowledge relationships only after they improve real recommendations;
-- revisit Zed, web, and synchronization using current platform capabilities.
+## Stage 9: Content Lifecycle and Distribution
+
+- define checksummed content-pack manifests and compatibility checks;
+- harden draft, review, validation, revision, and deprecation workflows;
+- evaluate extracting `gewu-algorithm-templates` only after the schema and
+  contribution cadence satisfy the documented split criteria;
+- add knowledge relationships only after they improve real recommendations.
+
+## Stage 10: Client and Editor Expansion
+
+- adapt the completed core modes to VS Code without redefining their scoring or
+  persistence behavior;
+- revisit Zed, web, and synchronization using current platform capabilities;
+- treat client-specific interaction polish as adapter work rather than a blocker
+  for platform-independent core development.

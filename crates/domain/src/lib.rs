@@ -290,6 +290,9 @@ pub struct Relationship {
 pub struct PracticeDefinition {
     pub shadow_typing: Vec<ShadowTypingDefinition>,
     pub flow_recall_steps: Vec<FlowStep>,
+    pub code_recall: Vec<CodeRecallDefinition>,
+    pub reasoning_recall: Vec<ReasoningRecallDefinition>,
+    pub transfer_practice: Vec<TransferPracticeDefinition>,
 }
 
 /// One exact-match practice configuration.
@@ -306,6 +309,61 @@ pub struct FlowStep {
     pub prompt: String,
     pub concepts: Vec<String>,
     pub aliases: Vec<String>,
+}
+
+/// The visible support retained while reconstructing an implementation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeRecallAssistance {
+    Skeleton,
+    Comments,
+    Keywords,
+    Cloze,
+    None,
+}
+
+/// One reduced-guidance code reconstruction configuration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodeRecallDefinition {
+    pub id: String,
+    pub implementation: String,
+    pub assistance: CodeRecallAssistance,
+    pub prompt: String,
+    pub scaffold: Vec<String>,
+}
+
+/// One deterministic recall prompt about an algorithm's mechanism or boundaries.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningAspect {
+    Mechanism,
+    Invariant,
+    TradeOff,
+    Boundary,
+    FailureCondition,
+}
+
+/// One deterministic recall prompt about an algorithm's mechanism or boundaries.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReasoningRecallDefinition {
+    pub id: String,
+    pub aspect: ReasoningAspect,
+    pub prompt: String,
+    pub concepts: Vec<String>,
+    pub aliases: Vec<String>,
+}
+
+/// One new-case practice configuration grounded in a declared algorithm pattern.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TransferPracticeDefinition {
+    pub id: String,
+    pub pattern: String,
+    pub new_case: String,
+    pub prompt: String,
+    pub concepts: Vec<String>,
+    pub transfers: Vec<String>,
+    pub differences: Vec<String>,
+    pub boundaries: Vec<String>,
 }
 
 /// A link from this revision to a prior revision.
