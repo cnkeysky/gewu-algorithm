@@ -2,6 +2,14 @@
 
 `crates/storage` owns the versioned JSON format and same-filesystem temporary-file replacement; `crates/core` decides when to write. The MVP assumes one core writer per data root. Editors never write persistent files directly. The CLI defaults to `$XDG_DATA_HOME/gewu-algorithm`, then `$HOME/.local/share/gewu-algorithm`; `GEWU_DATA_DIR` or `--data-root` provides a portable override.
 
+The Template Authoring Workbench is a separate bounded context. Its SQLite
+database at `tools/template-authoring/drafts/.workbench/authoring.sqlite`
+stores draft and review workflow metadata; it does not replace or share the
+Rust Core attempt/checkpoint store. Practice attempts, checkpoints, and editor
+history therefore continue to use the versioned Rust storage adapter. Keeping
+these stores separate prevents authoring review lifecycle from being confused
+with learner practice facts and leaves each context free to evolve its format.
+
 | Record | Written when | Contains | Cleared when |
 | --- | --- | --- | --- |
 | Terminal attempt | completion or explicit Stop | unit/revision/schema, mode, aggregate metrics, duration, terminal reason | user deletes history |
