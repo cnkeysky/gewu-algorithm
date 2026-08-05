@@ -120,6 +120,24 @@ The MVP Flow Recall mode uses reviewed ordered concepts with optional aliases. I
 
 Semantic LLM grading is out of scope for deterministic completion. An LLM may later provide non-authoritative feedback alongside a deterministic result.
 
+## Reasoning Recall (`reasoning_recall`)
+
+Reasoning Recall presents one reviewed mechanism, invariant, trade-off,
+boundary, or failure-condition definition at a time. An answer is accepted only
+when it matches the reviewed identifier, alias, or every reviewed concept term
+after deterministic case and punctuation normalization. Prompt reveals,
+rejections, restarts, elapsed time, and terminal reason are recorded separately.
+The engine does not claim to judge open-ended explanation quality; that remains a
+human-review or optional feedback concern.
+
+## Transfer Practice (`transfer_practice`)
+
+Transfer Practice presents a reviewed new case grounded in a declared pattern.
+Deterministic completion requires coverage of the reviewed concepts, transferred
+structure, differences, and boundaries. These facet facts are intentionally
+separate from correctness and can be supplemented by human review without
+rewriting the immutable attempt.
+
 ## Invariants
 
 - Applying the same event sequence to the same initial state produces the same result.

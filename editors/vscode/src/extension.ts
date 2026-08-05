@@ -94,10 +94,7 @@ async function startPractice(mode: PracticeMode): Promise<void> {
     return;
   }
   const selected = await vscode.window.showQuickPick(choices, {
-    placeHolder:
-      mode === "shadow_typing"
-        ? "Choose a local unit for Shadow Typing"
-        : "Choose a local unit for Flow Recall",
+    placeHolder: `Choose a local unit for ${displayMode(mode)}`,
   });
   if (selected === undefined) return;
   await closeActivePracticeUi();
@@ -491,7 +488,18 @@ function attemptDetail(
 }
 
 function displayMode(mode: PracticeMode): string {
-  return mode === "shadow_typing" ? "Shadow Typing" : "Flow Recall";
+  switch (mode) {
+    case "shadow_typing":
+      return "Shadow Typing";
+    case "flow_recall":
+      return "Flow Recall";
+    case "code_recall":
+      return "Code Recall";
+    case "reasoning_recall":
+      return "Reasoning Recall";
+    case "transfer_practice":
+      return "Transfer Practice";
+  }
 }
 
 function displayTerminalReason(reason: "completed" | "stopped"): string {

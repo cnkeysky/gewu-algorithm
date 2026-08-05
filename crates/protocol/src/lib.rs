@@ -127,6 +127,8 @@ pub enum PracticeModeDto {
     ShadowTyping,
     FlowRecall,
     CodeRecall,
+    ReasoningRecall,
+    TransferPractice,
 }
 
 /// Starts a session from a loaded, versioned unit.
@@ -389,9 +391,29 @@ mod tests {
             json!("code_recall")
         );
         assert_eq!(
+            serde_json::to_value(PracticeModeDto::ReasoningRecall)
+                .unwrap_or_else(|error| panic!("serialize mode: {error}")),
+            json!("reasoning_recall")
+        );
+        assert_eq!(
+            serde_json::to_value(PracticeModeDto::TransferPractice)
+                .unwrap_or_else(|error| panic!("serialize mode: {error}")),
+            json!("transfer_practice")
+        );
+        assert_eq!(
             serde_json::to_value(PracticeEventDto::RevealScaffold { index: 2 })
                 .unwrap_or_else(|error| panic!("serialize event: {error}")),
             json!({"type": "reveal_scaffold", "index": 2})
+        );
+        assert_eq!(
+            serde_json::to_value(PracticeModeDto::ReasoningRecall)
+                .unwrap_or_else(|error| panic!("serialize mode: {error}")),
+            json!("reasoning_recall")
+        );
+        assert_eq!(
+            serde_json::to_value(PracticeModeDto::TransferPractice)
+                .unwrap_or_else(|error| panic!("serialize mode: {error}")),
+            json!("transfer_practice")
         );
     }
 

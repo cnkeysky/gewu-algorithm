@@ -18,3 +18,4 @@ Statuses are `proposed`, `accepted`, `deprecated`, and `superseded`.
 | [0010](0010-multiple-interrupted-practice-checkpoints.md) | Persist selectable interrupted practice checkpoints | Accepted |
 | [0011](0011-platform-independent-practice-contracts.md) | Define practice content independently of clients | Accepted |
 | [0012](0012-code-recall-core-protocol-boundary.md) | Expose Code Recall through the core boundary | Accepted |
+| [0013](0013-reasoning-transfer-core-boundary.md) | Keep reasoning and transfer completion deterministic and reviewable | Accepted |

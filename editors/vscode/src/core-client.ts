@@ -1,7 +1,12 @@
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import * as readline from "node:readline";
 
-export type PracticeMode = "shadow_typing" | "flow_recall";
+export type PracticeMode =
+  | "shadow_typing"
+  | "flow_recall"
+  | "code_recall"
+  | "reasoning_recall"
+  | "transfer_practice";
 export type SessionStatus = "active" | "completed" | "stopped";
 
 export interface CoreSession {
@@ -329,14 +334,16 @@ export function checkpointStartActions(
 export function checkpointProgressPercentage(
   checkpoint: CheckpointSummary,
 ): number {
-  const completed =
-    checkpoint.mode === "flow_recall"
-      ? checkpoint.completed_steps
-      : checkpoint.accepted_characters;
-  const total =
-    checkpoint.mode === "flow_recall"
-      ? checkpoint.total_steps
-      : checkpoint.target_characters;
+  const stepMode =
+    checkpoint.mode === "flow_recall" ||
+    checkpoint.mode === "reasoning_recall" ||
+    checkpoint.mode === "transfer_practice";
+  const completed = stepMode
+    ? checkpoint.completed_steps
+    : checkpoint.accepted_characters;
+  const total = stepMode
+    ? checkpoint.total_steps
+    : checkpoint.target_characters;
   if (total === 0) return 0;
   return Math.min(
     100,
@@ -380,7 +387,7 @@ function isCoreSession(value: unknown): value is CoreSession {
     typeof value.unit_title === "string" &&
     typeof value.problem_question === "string" &&
     typeof value.revision === "number" &&
-    (value.mode === "shadow_typing" || value.mode === "flow_recall") &&
+    isPracticeMode(value.mode) &&
     (value.status === "active" ||
       value.status === "completed" ||
       value.status === "stopped") &&
@@ -411,7 +418,7 @@ function isUnitSummary(value: unknown): value is UnitSummary {
     typeof value.title === "string" &&
     Array.isArray(value.modes) &&
     value.modes.every(
-      (mode) => mode === "shadow_typing" || mode === "flow_recall",
+      (mode) => isPracticeMode(mode),
     )
   );
 }
@@ -422,7 +429,7 @@ function isAttemptSummary(value: unknown): value is AttemptSummary {
     typeof value.created_at === "string" &&
     typeof value.unit_id === "string" &&
     typeof value.revision === "number" &&
-    (value.mode === "shadow_typing" || value.mode === "flow_recall") &&
+    isPracticeMode(value.mode) &&
     (value.terminal_reason === "completed" ||
       value.terminal_reason === "stopped") &&
     typeof value.accepted_input_count === "number" &&
@@ -440,11 +447,20 @@ function isCheckpointSummary(value: unknown): value is CheckpointSummary {
     typeof value.unit_id === "string" &&
     typeof value.unit_title === "string" &&
     typeof value.revision === "number" &&
-    (value.mode === "shadow_typing" || value.mode === "flow_recall") &&
+    isPracticeMode(value.mode) &&
     typeof value.completed_steps === "number" &&
     typeof value.total_steps === "number" &&
     typeof value.accepted_characters === "number" &&
     typeof value.target_characters === "number" &&
     typeof value.saved_at === "string"
+  );
+}
+function isPracticeMode(value: unknown): value is PracticeMode {
+  return (
+    value === "shadow_typing" ||
+    value === "flow_recall" ||
+    value === "code_recall" ||
+    value === "reasoning_recall" ||
+    value === "transfer_practice"
   );
 }

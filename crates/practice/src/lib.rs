@@ -3,6 +3,8 @@
 
 mod code_recall;
 mod flow;
+mod reasoning_recall;
+mod transfer_practice;
 
 pub use code_recall::{
     CodeRecallAttempt, CodeRecallConfig, CodeRecallEvent, CodeRecallGuidance, CodeRecallOutcome,
@@ -12,6 +14,15 @@ pub use code_recall::{
 pub use flow::{
     FlowRecallAttempt, FlowRecallConfig, FlowRecallEvent, FlowRecallOutcome, FlowRecallSession,
     FlowRecallStartError, FlowRecallTransitionError,
+};
+pub use reasoning_recall::{
+    ReasoningRecallAttempt, ReasoningRecallConfig, ReasoningRecallEvent, ReasoningRecallOutcome,
+    ReasoningRecallSession, ReasoningRecallStartError, ReasoningRecallTransitionError,
+};
+pub use transfer_practice::{
+    TransferPracticeAttempt, TransferPracticeConfig, TransferPracticeEvent,
+    TransferPracticeOutcome, TransferPracticeSession, TransferPracticeStartError,
+    TransferPracticeTransitionError,
 };
 
 use std::time::Duration;

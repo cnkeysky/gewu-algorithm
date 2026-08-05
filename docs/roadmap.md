@@ -92,9 +92,9 @@ through core tests and the CLI.
 
 ## Stage 6: Core Reasoning and Transfer Practice
 
-Status: in progress as of 2026-08-05. The next slice starts with an offline,
-deterministic session contract and explicit attempt facts for reasoning and
-transfer answers.
+Status: complete as of 2026-08-05. Both modes now run through the offline
+practice engine and Core/Protocol boundary with deterministic transitions,
+checkpoint replay, and immutable attempt facts.
 
 - implement `reasoning_recall` against reviewed concepts, invariants,
   trade-offs, boundaries, and failure conditions;

@@ -12,8 +12,10 @@ use std::{
 use gewu_domain::{AlgorithmUnit, CodeRecallAssistance};
 use gewu_practice::{
     CharacterRange, CodeRecallConfig, CodeRecallEvent, CodeRecallGuidance, CodeRecallSession,
-    ElapsedTime, FlowRecallConfig, FlowRecallEvent, FlowRecallSession, SessionStatus,
-    ShadowTypingConfig, ShadowTypingEvent, ShadowTypingSession, TerminalReason, TimedEvent,
+    ElapsedTime, FlowRecallConfig, FlowRecallEvent, FlowRecallSession, ReasoningRecallConfig,
+    ReasoningRecallEvent, ReasoningRecallSession, SessionStatus, ShadowTypingConfig,
+    ShadowTypingEvent, ShadowTypingSession, TerminalReason, TimedEvent, TransferPracticeConfig,
+    TransferPracticeEvent, TransferPracticeSession,
 };
 use gewu_protocol::{
     ApplyEventParams, AttemptSummary, CheckpointSummary, ElapsedDto, PracticeEventDto,
@@ -52,6 +54,18 @@ enum ActiveSession {
         implementation: String,
         practice_id: String,
         session: Box<CodeRecallSession>,
+        events: Vec<StoredEvent>,
+    },
+    Reasoning {
+        unit: Box<AlgorithmUnit>,
+        practice_id: String,
+        session: Box<ReasoningRecallSession>,
+        events: Vec<StoredEvent>,
+    },
+    Transfer {
+        unit: Box<AlgorithmUnit>,
+        practice_id: String,
+        session: Box<TransferPracticeSession>,
         events: Vec<StoredEvent>,
     },
 }
@@ -98,108 +112,141 @@ impl Core {
     pub fn start_session(&mut self, params: StartSessionParams) -> Result<SessionView, CoreError> {
         let unit = self.find_unit(&params.unit_id)?;
         let session_id = self.allocate_session_id();
-        let active =
-            match params.mode {
-                PracticeModeDto::ShadowTyping => {
-                    let definition = unit.practice.shadow_typing.first().ok_or(
-                        CoreError::UnsupportedPractice {
+        let active = match params.mode {
+            PracticeModeDto::ShadowTyping => {
+                let definition =
+                    unit.practice
+                        .shadow_typing
+                        .first()
+                        .ok_or(CoreError::UnsupportedPractice {
                             unit_id: params.unit_id.clone(),
                             mode: "shadow_typing",
-                        },
-                    )?;
-                    let implementation = params
-                        .implementation
-                        .unwrap_or_else(|| definition.implementation.clone());
-                    if implementation != definition.implementation {
-                        return Err(CoreError::UnknownImplementation {
-                            unit_id: params.unit_id,
-                            implementation,
-                        });
-                    }
-                    let implementation_data = unit
-                        .implementations
-                        .iter()
-                        .find(|value| value.key == implementation)
-                        .ok_or_else(|| CoreError::UnknownImplementation {
-                            unit_id: unit.id.to_string(),
-                            implementation: implementation.clone(),
                         })?;
-                    let source =
-                        fs::read_to_string(&implementation_data.source_path).map_err(|source| {
-                            CoreError::Source {
-                                path: implementation_data.source_path.clone(),
-                                source,
-                            }
-                        })?;
-                    let session = ShadowTypingSession::start(ShadowTypingConfig::new(
-                        unit.id.clone(),
-                        unit.revision,
-                        unit.schema_version.clone(),
-                        implementation.clone(),
-                        source,
-                        implementation_data.normalization.clone(),
-                    ))?;
-                    ActiveSession::Shadow {
-                        unit: Box::new(unit),
+                let implementation = params
+                    .implementation
+                    .unwrap_or_else(|| definition.implementation.clone());
+                if implementation != definition.implementation {
+                    return Err(CoreError::UnknownImplementation {
+                        unit_id: params.unit_id,
                         implementation,
-                        session: Box::new(session),
-                        events: Vec::new(),
-                    }
+                    });
                 }
-                PracticeModeDto::FlowRecall => {
-                    let session = FlowRecallSession::start(FlowRecallConfig::new(
-                        unit.id.clone(),
-                        unit.revision,
-                        unit.schema_version.clone(),
-                        unit.practice.flow_recall_steps.clone(),
-                    ))?;
-                    ActiveSession::Flow {
-                        unit: Box::new(unit),
-                        session: Box::new(session),
-                        events: Vec::new(),
-                    }
+                let implementation_data = unit
+                    .implementations
+                    .iter()
+                    .find(|value| value.key == implementation)
+                    .ok_or_else(|| CoreError::UnknownImplementation {
+                        unit_id: unit.id.to_string(),
+                        implementation: implementation.clone(),
+                    })?;
+                let source =
+                    fs::read_to_string(&implementation_data.source_path).map_err(|source| {
+                        CoreError::Source {
+                            path: implementation_data.source_path.clone(),
+                            source,
+                        }
+                    })?;
+                let session = ShadowTypingSession::start(ShadowTypingConfig::new(
+                    unit.id.clone(),
+                    unit.revision,
+                    unit.schema_version.clone(),
+                    implementation.clone(),
+                    source,
+                    implementation_data.normalization.clone(),
+                ))?;
+                ActiveSession::Shadow {
+                    unit: Box::new(unit),
+                    implementation,
+                    session: Box::new(session),
+                    events: Vec::new(),
                 }
-                PracticeModeDto::CodeRecall => {
-                    let definition = select_code_recall(&unit, params.practice_id.as_deref())?;
-                    let practice_id = definition.id.clone();
-                    let implementation = definition.implementation.clone();
-                    let implementation_data = unit
-                        .implementations
-                        .iter()
-                        .find(|value| value.key == implementation)
-                        .ok_or_else(|| CoreError::UnknownImplementation {
-                            unit_id: unit.id.to_string(),
-                            implementation: implementation.clone(),
-                        })?;
-                    let source =
-                        fs::read_to_string(&implementation_data.source_path).map_err(|source| {
-                            CoreError::Source {
-                                path: implementation_data.source_path.clone(),
-                                source,
-                            }
-                        })?;
-                    let session = CodeRecallSession::start(CodeRecallConfig::new(
-                        unit.id.clone(),
-                        unit.revision,
-                        unit.schema_version.clone(),
-                        implementation.clone(),
-                        source,
-                        CodeRecallGuidance::new(
-                            definition.assistance,
-                            definition.prompt.clone(),
-                            definition.scaffold.clone(),
-                        ),
-                        implementation_data.normalization.clone(),
-                    ))?;
-                    ActiveSession::Code {
-                        unit: Box::new(unit),
-                        implementation,
-                        practice_id,
-                        session: Box::new(session),
-                        events: Vec::new(),
-                    }
+            }
+            PracticeModeDto::FlowRecall => {
+                let session = FlowRecallSession::start(FlowRecallConfig::new(
+                    unit.id.clone(),
+                    unit.revision,
+                    unit.schema_version.clone(),
+                    unit.practice.flow_recall_steps.clone(),
+                ))?;
+                ActiveSession::Flow {
+                    unit: Box::new(unit),
+                    session: Box::new(session),
+                    events: Vec::new(),
                 }
-            };
+            }
+            PracticeModeDto::CodeRecall => {
+                let definition = select_code_recall(&unit, params.practice_id.as_deref())?;
+                let practice_id = definition.id.clone();
+                let implementation = definition.implementation.clone();
+                let implementation_data = unit
+                    .implementations
+                    .iter()
+                    .find(|value| value.key == implementation)
+                    .ok_or_else(|| CoreError::UnknownImplementation {
+                        unit_id: unit.id.to_string(),
+                        implementation: implementation.clone(),
+                    })?;
+                let source =
+                    fs::read_to_string(&implementation_data.source_path).map_err(|source| {
+                        CoreError::Source {
+                            path: implementation_data.source_path.clone(),
+                            source,
+                        }
+                    })?;
+                let session = CodeRecallSession::start(CodeRecallConfig::new(
+                    unit.id.clone(),
+                    unit.revision,
+                    unit.schema_version.clone(),
+                    implementation.clone(),
+                    source,
+                    CodeRecallGuidance::new(
+                        definition.assistance,
+                        definition.prompt.clone(),
+                        definition.scaffold.clone(),
+                    ),
+                    implementation_data.normalization.clone(),
+                ))?;
+                ActiveSession::Code {
+                    unit: Box::new(unit),
+                    implementation,
+                    practice_id,
+                    session: Box::new(session),
+                    events: Vec::new(),
+                }
+            }
+            PracticeModeDto::ReasoningRecall => {
+                let definition = select_reasoning_recall(&unit, params.practice_id.as_deref())?;
+                let practice_id = definition.id.clone();
+                let session = ReasoningRecallSession::start(ReasoningRecallConfig::new(
+                    unit.id.clone(),
+                    unit.revision,
+                    unit.schema_version.clone(),
+                    vec![definition.clone()],
+                ))?;
+                ActiveSession::Reasoning {
+                    unit: Box::new(unit),
+                    practice_id,
+                    session: Box::new(session),
+                    events: Vec::new(),
+                }
+            }
+            PracticeModeDto::TransferPractice => {
+                let definition = select_transfer_practice(&unit, params.practice_id.as_deref())?;
+                let practice_id = definition.id.clone();
+                let session = TransferPracticeSession::start(TransferPracticeConfig::new(
+                    unit.id.clone(),
+                    unit.revision,
+                    unit.schema_version.clone(),
+                    vec![definition.clone()],
+                ))?;
+                ActiveSession::Transfer {
+                    unit: Box::new(unit),
+                    practice_id,
+                    session: Box::new(session),
+                    events: Vec::new(),
+                }
+            }
+        };
         let view = active.view(&session_id);
         self.store
             .save_checkpoint(active.checkpoint(&session_id)?)?;
@@ -443,6 +490,38 @@ impl Core {
                     events: Vec::new(),
                 }
             }
+            PracticeModeDto::ReasoningRecall => {
+                let definition = select_reasoning_recall(&unit, params.practice_id.as_deref())?;
+                let practice_id = definition.id.clone();
+                ActiveSession::Reasoning {
+                    session: Box::new(ReasoningRecallSession::start(ReasoningRecallConfig::new(
+                        unit.id.clone(),
+                        unit.revision,
+                        unit.schema_version.clone(),
+                        vec![definition.clone()],
+                    ))?),
+                    unit: Box::new(unit),
+                    practice_id,
+                    events: Vec::new(),
+                }
+            }
+            PracticeModeDto::TransferPractice => {
+                let definition = select_transfer_practice(&unit, params.practice_id.as_deref())?;
+                let practice_id = definition.id.clone();
+                ActiveSession::Transfer {
+                    session: Box::new(TransferPracticeSession::start(
+                        TransferPracticeConfig::new(
+                            unit.id.clone(),
+                            unit.revision,
+                            unit.schema_version.clone(),
+                            vec![definition.clone()],
+                        ),
+                    )?),
+                    unit: Box::new(unit),
+                    practice_id,
+                    events: Vec::new(),
+                }
+            }
         };
         let view = active.view(&session_id);
         self.sessions.insert(session_id, active);
@@ -531,6 +610,22 @@ impl ActiveSession {
                 implementation: Some(implementation.clone()),
                 practice_id: Some(practice_id.clone()),
             },
+            Self::Reasoning {
+                unit, practice_id, ..
+            } => StartSessionParams {
+                unit_id: unit.id.to_string(),
+                mode: PracticeModeDto::ReasoningRecall,
+                implementation: None,
+                practice_id: Some(practice_id.clone()),
+            },
+            Self::Transfer {
+                unit, practice_id, ..
+            } => StartSessionParams {
+                unit_id: unit.id.to_string(),
+                mode: PracticeModeDto::TransferPractice,
+                implementation: None,
+                practice_id: Some(practice_id.clone()),
+            },
         }
     }
 
@@ -571,6 +666,28 @@ impl ActiveSession {
                     wall_ms: elapsed.wall().as_millis() as u64,
                 });
             }
+            Self::Reasoning {
+                session, events, ..
+            } => {
+                let event = reasoning_event(event)?;
+                let _ = session.apply(event, elapsed)?;
+                events.push(StoredEvent {
+                    event: serialized,
+                    active_ms: elapsed.active().as_millis() as u64,
+                    wall_ms: elapsed.wall().as_millis() as u64,
+                });
+            }
+            Self::Transfer {
+                session, events, ..
+            } => {
+                let event = transfer_event(event)?;
+                let _ = session.apply(event, elapsed)?;
+                events.push(StoredEvent {
+                    event: serialized,
+                    active_ms: elapsed.active().as_millis() as u64,
+                    wall_ms: elapsed.wall().as_millis() as u64,
+                });
+            }
         }
         Ok(())
     }
@@ -585,6 +702,12 @@ impl ActiveSession {
             }
             Self::Code { session, .. } => {
                 let _ = session.apply(CodeRecallEvent::Stop, elapsed)?;
+            }
+            Self::Reasoning { session, .. } => {
+                let _ = session.apply(ReasoningRecallEvent::Stop, elapsed)?;
+            }
+            Self::Transfer { session, .. } => {
+                let _ = session.apply(TransferPracticeEvent::Stop, elapsed)?;
             }
         }
         Ok(())
@@ -681,6 +804,64 @@ impl ActiveSession {
                     .collect(),
                 revealed_scaffold_indices: session.revealed_scaffold_indices().to_vec(),
             },
+            Self::Reasoning { unit, session, .. } => SessionView {
+                session_id: session_id.to_owned(),
+                unit_id: unit.id.to_string(),
+                unit_title: unit.title.clone(),
+                problem_question: unit.problem.question.clone(),
+                revision: unit.revision.get(),
+                mode: PracticeModeDto::ReasoningRecall,
+                status: status(session.status()),
+                accepted_text: String::new(),
+                target_text: String::new(),
+                current_prompt: session
+                    .current_definition()
+                    .map(|value| value.prompt.clone()),
+                completed_prompts: Vec::new(),
+                completed_steps: session.completed_step_count(),
+                total_steps: session.total_step_count(),
+                accepted_input_count: session.completed_step_count() as u64,
+                rejected_input_count: session.rejected_answer_count(),
+                correction_count: 0,
+                prompt_count: session.prompt_count(),
+                scaffold_reveal_count: 0,
+                active_ms: duration_ms(session.elapsed().active()),
+                wall_ms: duration_ms(session.elapsed().wall()),
+                terminal_reason: terminal(session.status()),
+                code_assistance: None,
+                scaffold_count: 0,
+                visible_scaffold: Vec::new(),
+                revealed_scaffold_indices: Vec::new(),
+            },
+            Self::Transfer { unit, session, .. } => SessionView {
+                session_id: session_id.to_owned(),
+                unit_id: unit.id.to_string(),
+                unit_title: unit.title.clone(),
+                problem_question: unit.problem.question.clone(),
+                revision: unit.revision.get(),
+                mode: PracticeModeDto::TransferPractice,
+                status: status(session.status()),
+                accepted_text: String::new(),
+                target_text: String::new(),
+                current_prompt: session
+                    .current_definition()
+                    .map(|value| value.prompt.clone()),
+                completed_prompts: Vec::new(),
+                completed_steps: session.completed_case_count(),
+                total_steps: session.total_case_count(),
+                accepted_input_count: session.completed_case_count() as u64,
+                rejected_input_count: session.rejected_answer_count(),
+                correction_count: 0,
+                prompt_count: session.prompt_count(),
+                scaffold_reveal_count: 0,
+                active_ms: duration_ms(session.elapsed().active()),
+                wall_ms: duration_ms(session.elapsed().wall()),
+                terminal_reason: terminal(session.status()),
+                code_assistance: None,
+                scaffold_count: 0,
+                visible_scaffold: Vec::new(),
+                revealed_scaffold_indices: Vec::new(),
+            },
         }
     }
     fn checkpoint(&self, session_id: &str) -> Result<StoredCheckpoint, CoreError> {
@@ -757,6 +938,54 @@ impl ActiveSession {
                     saved_at: utc_now(),
                 })
             }
+            Self::Reasoning {
+                unit,
+                practice_id,
+                events,
+                session,
+            } => {
+                ensure_active(session.status())?;
+                Ok(StoredCheckpoint {
+                    id: checkpoint_id(session_id),
+                    session_id: session_id.to_owned(),
+                    unit_id: unit.id.to_string(),
+                    unit_title: unit.title.clone(),
+                    revision: unit.revision.get(),
+                    mode: "reasoning_recall".to_owned(),
+                    implementation: None,
+                    practice_id: Some(practice_id.clone()),
+                    events: events.clone(),
+                    completed_steps: session.completed_step_count(),
+                    total_steps: session.total_step_count(),
+                    accepted_characters: 0,
+                    target_characters: 0,
+                    saved_at: utc_now(),
+                })
+            }
+            Self::Transfer {
+                unit,
+                practice_id,
+                events,
+                session,
+            } => {
+                ensure_active(session.status())?;
+                Ok(StoredCheckpoint {
+                    id: checkpoint_id(session_id),
+                    session_id: session_id.to_owned(),
+                    unit_id: unit.id.to_string(),
+                    unit_title: unit.title.clone(),
+                    revision: unit.revision.get(),
+                    mode: "transfer_practice".to_owned(),
+                    implementation: None,
+                    practice_id: Some(practice_id.clone()),
+                    events: events.clone(),
+                    completed_steps: session.completed_case_count(),
+                    total_steps: session.total_case_count(),
+                    accepted_characters: 0,
+                    target_characters: 0,
+                    saved_at: utc_now(),
+                })
+            }
         }
     }
     fn terminal_attempt(&self, session_id: &str) -> Option<StoredAttempt> {
@@ -770,6 +999,12 @@ impl ActiveSession {
             Self::Code { session, .. } => session
                 .attempt()
                 .map(|attempt| code_attempt(attempt, session_id)),
+            Self::Reasoning { session, .. } => session
+                .attempt()
+                .map(|attempt| reasoning_attempt(attempt, session_id)),
+            Self::Transfer { session, .. } => session
+                .attempt()
+                .map(|attempt| transfer_attempt(attempt, session_id)),
         }
     }
 }
@@ -850,10 +1085,40 @@ fn code_event(event: PracticeEventDto) -> Result<CodeRecallEvent, CoreError> {
         }),
     }
 }
+fn reasoning_event(event: PracticeEventDto) -> Result<ReasoningRecallEvent, CoreError> {
+    match event {
+        PracticeEventDto::SubmitAnswer { answer } => Ok(ReasoningRecallEvent::SubmitAnswer(answer)),
+        PracticeEventDto::RevealPrompt => Ok(ReasoningRecallEvent::RevealPrompt),
+        PracticeEventDto::Restart => Ok(ReasoningRecallEvent::Restart),
+        other => Err(CoreError::UnsupportedEvent {
+            mode: "reasoning_recall",
+            event: format!("{other:?}"),
+        }),
+    }
+}
+fn transfer_event(event: PracticeEventDto) -> Result<TransferPracticeEvent, CoreError> {
+    match event {
+        PracticeEventDto::SubmitAnswer { answer } => {
+            Ok(TransferPracticeEvent::SubmitAnswer(answer))
+        }
+        PracticeEventDto::RevealPrompt => Ok(TransferPracticeEvent::RevealPrompt),
+        PracticeEventDto::Restart => Ok(TransferPracticeEvent::Restart),
+        other => Err(CoreError::UnsupportedEvent {
+            mode: "transfer_practice",
+            event: format!("{other:?}"),
+        }),
+    }
+}
 fn modes_for(unit: &AlgorithmUnit) -> Vec<PracticeModeDto> {
     let mut modes = vec![PracticeModeDto::ShadowTyping, PracticeModeDto::FlowRecall];
     if !unit.practice.code_recall.is_empty() {
         modes.push(PracticeModeDto::CodeRecall);
+    }
+    if !unit.practice.reasoning_recall.is_empty() {
+        modes.push(PracticeModeDto::ReasoningRecall);
+    }
+    if !unit.practice.transfer_practice.is_empty() {
+        modes.push(PracticeModeDto::TransferPractice);
     }
     modes
 }
@@ -877,6 +1142,64 @@ fn select_code_recall<'a>(
                 practice_id: id.to_owned(),
             }),
         None => Ok(&definitions[0]),
+    }
+}
+fn select_reasoning_recall<'a>(
+    unit: &'a AlgorithmUnit,
+    requested: Option<&str>,
+) -> Result<&'a gewu_domain::ReasoningRecallDefinition, CoreError> {
+    select_definition(
+        &unit.practice.reasoning_recall,
+        requested,
+        unit.id.as_str(),
+        "reasoning_recall",
+    )
+}
+fn select_transfer_practice<'a>(
+    unit: &'a AlgorithmUnit,
+    requested: Option<&str>,
+) -> Result<&'a gewu_domain::TransferPracticeDefinition, CoreError> {
+    select_definition(
+        &unit.practice.transfer_practice,
+        requested,
+        unit.id.as_str(),
+        "transfer_practice",
+    )
+}
+fn select_definition<'a, T: HasPracticeId>(
+    definitions: &'a [T],
+    requested: Option<&str>,
+    unit_id: &str,
+    mode: &'static str,
+) -> Result<&'a T, CoreError> {
+    if definitions.is_empty() {
+        return Err(CoreError::UnsupportedPractice {
+            unit_id: unit_id.to_owned(),
+            mode,
+        });
+    }
+    match requested {
+        Some(id) => definitions
+            .iter()
+            .find(|definition| definition.practice_id() == id)
+            .ok_or_else(|| CoreError::UnknownPracticeDefinition {
+                unit_id: unit_id.to_owned(),
+                practice_id: id.to_owned(),
+            }),
+        None => Ok(&definitions[0]),
+    }
+}
+trait HasPracticeId {
+    fn practice_id(&self) -> &str;
+}
+impl HasPracticeId for gewu_domain::ReasoningRecallDefinition {
+    fn practice_id(&self) -> &str {
+        &self.id
+    }
+}
+impl HasPracticeId for gewu_domain::TransferPracticeDefinition {
+    fn practice_id(&self) -> &str {
+        &self.id
     }
 }
 fn assistance_label(value: CodeRecallAssistance) -> &'static str {
@@ -914,6 +1237,8 @@ fn parse_mode(value: &str) -> Result<PracticeModeDto, CoreError> {
         "shadow_typing" => Ok(PracticeModeDto::ShadowTyping),
         "flow_recall" => Ok(PracticeModeDto::FlowRecall),
         "code_recall" => Ok(PracticeModeDto::CodeRecall),
+        "reasoning_recall" => Ok(PracticeModeDto::ReasoningRecall),
+        "transfer_practice" => Ok(PracticeModeDto::TransferPractice),
         _ => Err(CoreError::UnsupportedCheckpointMode(value.to_owned())),
     }
 }
@@ -987,6 +1312,54 @@ fn code_attempt(value: &gewu_practice::CodeRecallAttempt, session_id: &str) -> S
         wall_ms: duration_ms(value.wall_clock_duration()),
     }
 }
+fn reasoning_attempt(
+    value: &gewu_practice::ReasoningRecallAttempt,
+    session_id: &str,
+) -> StoredAttempt {
+    StoredAttempt {
+        id: format!("attempt-{session_id}"),
+        created_at: utc_now(),
+        unit_id: value.unit_id().to_string(),
+        revision: value.revision().get(),
+        schema_version: value.schema_version().to_owned(),
+        mode: "reasoning_recall".to_owned(),
+        terminal_reason: match value.terminal_reason() {
+            TerminalReason::Completed => "completed".to_owned(),
+            TerminalReason::Stopped => "stopped".to_owned(),
+        },
+        accepted_input_count: value.accepted_step_count(),
+        rejected_input_count: value.rejected_answer_count(),
+        correction_count: 0,
+        prompt_count: value.prompt_count(),
+        scaffold_reveal_count: 0,
+        active_ms: duration_ms(value.active_duration()),
+        wall_ms: duration_ms(value.wall_clock_duration()),
+    }
+}
+fn transfer_attempt(
+    value: &gewu_practice::TransferPracticeAttempt,
+    session_id: &str,
+) -> StoredAttempt {
+    StoredAttempt {
+        id: format!("attempt-{session_id}"),
+        created_at: utc_now(),
+        unit_id: value.unit_id().to_string(),
+        revision: value.revision().get(),
+        schema_version: value.schema_version().to_owned(),
+        mode: "transfer_practice".to_owned(),
+        terminal_reason: match value.terminal_reason() {
+            TerminalReason::Completed => "completed".to_owned(),
+            TerminalReason::Stopped => "stopped".to_owned(),
+        },
+        accepted_input_count: value.accepted_case_count(),
+        rejected_input_count: value.rejected_answer_count(),
+        correction_count: 0,
+        prompt_count: value.prompt_count(),
+        scaffold_reveal_count: 0,
+        active_ms: duration_ms(value.active_duration()),
+        wall_ms: duration_ms(value.wall_clock_duration()),
+    }
+}
 fn stored_attempt_view(value: StoredAttempt) -> Result<AttemptSummary, CoreError> {
     Ok(AttemptSummary {
         id: value.id,
@@ -1010,6 +1383,8 @@ fn parse_stored_mode(value: &str) -> Result<PracticeModeDto, CoreError> {
         "shadow_typing" => Ok(PracticeModeDto::ShadowTyping),
         "flow_recall" => Ok(PracticeModeDto::FlowRecall),
         "code_recall" => Ok(PracticeModeDto::CodeRecall),
+        "reasoning_recall" => Ok(PracticeModeDto::ReasoningRecall),
+        "transfer_practice" => Ok(PracticeModeDto::TransferPractice),
         _ => Err(CoreError::UnsupportedStoredMode(value.to_owned())),
     }
 }
@@ -1102,12 +1477,20 @@ pub enum CoreError {
     FlowPractice(#[from] gewu_practice::FlowRecallTransitionError),
     #[error("code recall transition failed: {0}")]
     CodePractice(#[from] gewu_practice::CodeRecallTransitionError),
+    #[error("reasoning recall transition failed: {0}")]
+    ReasoningPractice(#[from] gewu_practice::ReasoningRecallTransitionError),
+    #[error("transfer practice transition failed: {0}")]
+    TransferPractice(#[from] gewu_practice::TransferPracticeTransitionError),
     #[error("practice start failed: {0}")]
     Start(#[from] gewu_practice::StartError),
     #[error("flow recall start failed: {0}")]
     FlowStart(#[from] gewu_practice::FlowRecallStartError),
     #[error("code recall start failed: {0}")]
     CodeStart(#[from] gewu_practice::CodeRecallStartError),
+    #[error("reasoning recall start failed: {0}")]
+    ReasoningStart(#[from] gewu_practice::ReasoningRecallStartError),
+    #[error("transfer practice start failed: {0}")]
+    TransferStart(#[from] gewu_practice::TransferPracticeStartError),
     #[error("invalid character range: {0}")]
     Range(#[from] gewu_practice::RangeError),
     #[error("invalid elapsed time: {0}")]
@@ -1340,6 +1723,180 @@ mod tests {
         assert_eq!(resumed.mode, PracticeModeDto::CodeRecall);
         assert_eq!(resumed.accepted_text, "from ");
         assert!(resumed.visible_scaffold.is_empty());
+    }
+
+    #[test]
+    fn completes_reasoning_and_transfer_practice_with_separate_attempt_modes() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let unit = core
+            .load_unit("search.binary-search")
+            .unwrap_or_else(|error| panic!("load: {error}"));
+        assert!(unit.modes.contains(&PracticeModeDto::ReasoningRecall));
+        assert!(unit.modes.contains(&PracticeModeDto::TransferPractice));
+
+        let reasoning = core
+            .start_session(StartSessionParams {
+                unit_id: "search.binary-search".to_owned(),
+                mode: PracticeModeDto::ReasoningRecall,
+                implementation: None,
+                practice_id: Some("preserve-candidate-interval".to_owned()),
+            })
+            .unwrap_or_else(|error| panic!("start reasoning: {error}"));
+        assert_eq!(reasoning.completed_steps, 0);
+        let reasoning = core
+            .apply_event(ApplyEventParams {
+                session_id: reasoning.session_id,
+                event: PracticeEventDto::SubmitAnswer {
+                    answer: "interval ordered target".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .unwrap_or_else(|error| panic!("complete reasoning: {error}"));
+        assert_eq!(reasoning.mode, PracticeModeDto::ReasoningRecall);
+        assert_eq!(reasoning.status, SessionStatusDto::Completed);
+
+        let transfer = core
+            .start_session(StartSessionParams {
+                unit_id: "search.binary-search".to_owned(),
+                mode: PracticeModeDto::TransferPractice,
+                implementation: None,
+                practice_id: Some("first-true".to_owned()),
+            })
+            .unwrap_or_else(|error| panic!("start transfer: {error}"));
+        let transfer = core
+            .apply_event(ApplyEventParams {
+                session_id: transfer.session_id,
+                event: PracticeEventDto::SubmitAnswer {
+                    answer: "monotonic interval predicate Retain an interval that contains the first true position. The comparison is replaced by a monotonic boolean predicate. The predicate must be monotonic over the search interval.".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .unwrap_or_else(|error| panic!("complete transfer: {error}"));
+        assert_eq!(transfer.mode, PracticeModeDto::TransferPractice);
+        assert_eq!(transfer.status, SessionStatusDto::Completed);
+
+        let attempts = core
+            .recent_attempts(10)
+            .unwrap_or_else(|error| panic!("attempts: {error}"));
+        assert!(attempts.iter().any(|attempt| {
+            attempt.mode == PracticeModeDto::ReasoningRecall
+                && attempt.terminal_reason == TerminalReasonDto::Completed
+        }));
+        assert!(attempts.iter().any(|attempt| {
+            attempt.mode == PracticeModeDto::TransferPractice
+                && attempt.terminal_reason == TerminalReasonDto::Completed
+        }));
+        fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+
+    #[test]
+    fn resumes_reasoning_and_transfer_checkpoints_by_practice_id() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let reasoning = core
+            .start_session(StartSessionParams {
+                unit_id: "search.binary-search".to_owned(),
+                mode: PracticeModeDto::ReasoningRecall,
+                implementation: None,
+                practice_id: Some("preserve-candidate-interval".to_owned()),
+            })
+            .unwrap_or_else(|error| panic!("start reasoning: {error}"));
+        core.apply_event(ApplyEventParams {
+            session_id: reasoning.session_id,
+            event: PracticeEventDto::RevealPrompt,
+            elapsed: elapsed(1),
+        })
+        .unwrap_or_else(|error| panic!("reveal reasoning: {error}"));
+        let reasoning_checkpoint = core
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list reasoning checkpoints: {error}"))
+            .into_iter()
+            .find(|value| value.mode == PracticeModeDto::ReasoningRecall)
+            .unwrap_or_else(|| panic!("reasoning checkpoint"));
+
+        let transfer = core
+            .start_session(StartSessionParams {
+                unit_id: "search.binary-search".to_owned(),
+                mode: PracticeModeDto::TransferPractice,
+                implementation: None,
+                practice_id: Some("first-true".to_owned()),
+            })
+            .unwrap_or_else(|error| panic!("start transfer: {error}"));
+        core.apply_event(ApplyEventParams {
+            session_id: transfer.session_id,
+            event: PracticeEventDto::RevealPrompt,
+            elapsed: elapsed(1),
+        })
+        .unwrap_or_else(|error| panic!("reveal transfer: {error}"));
+        let transfer_checkpoint = core
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list transfer checkpoints: {error}"))
+            .into_iter()
+            .find(|value| value.mode == PracticeModeDto::TransferPractice)
+            .unwrap_or_else(|| panic!("transfer checkpoint"));
+        drop(core);
+
+        let mut reopened =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
+        let resumed_reasoning = reopened
+            .resume_checkpoint(&reasoning_checkpoint.id)
+            .unwrap_or_else(|error| panic!("resume reasoning: {error}"))
+            .unwrap_or_else(|| panic!("resumed reasoning"));
+        assert_eq!(resumed_reasoning.mode, PracticeModeDto::ReasoningRecall);
+        assert_eq!(resumed_reasoning.prompt_count, 1);
+        let resumed_transfer = reopened
+            .resume_checkpoint(&transfer_checkpoint.id)
+            .unwrap_or_else(|error| panic!("resume transfer: {error}"))
+            .unwrap_or_else(|| panic!("resumed transfer"));
+        assert_eq!(resumed_transfer.mode, PracticeModeDto::TransferPractice);
+        assert_eq!(resumed_transfer.prompt_count, 1);
+        fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+
+    #[test]
+    fn resumes_reasoning_checkpoint_with_selected_practice_id() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let session = core
+            .start_session(StartSessionParams {
+                unit_id: "search.binary-search".to_owned(),
+                mode: PracticeModeDto::ReasoningRecall,
+                implementation: None,
+                practice_id: Some("preserve-candidate-interval".to_owned()),
+            })
+            .unwrap_or_else(|error| panic!("start: {error}"));
+        let rejected = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id,
+                event: PracticeEventDto::SubmitAnswer {
+                    answer: "not enough evidence".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .unwrap_or_else(|error| panic!("reject: {error}"));
+        assert_eq!(rejected.rejected_input_count, 1);
+        let checkpoint = core
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list: {error}"))
+            .into_iter()
+            .find(|value| value.mode == PracticeModeDto::ReasoningRecall)
+            .unwrap_or_else(|| panic!("reasoning checkpoint"));
+        drop(core);
+
+        let mut reopened =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
+        let resumed = reopened
+            .resume_checkpoint(&checkpoint.id)
+            .unwrap_or_else(|error| panic!("resume: {error}"))
+            .unwrap_or_else(|| panic!("resumed session"));
+        assert_eq!(resumed.mode, PracticeModeDto::ReasoningRecall);
+        assert_eq!(resumed.completed_steps, 0);
+        assert_eq!(resumed.rejected_input_count, 1);
+        fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
 
     #[test]
