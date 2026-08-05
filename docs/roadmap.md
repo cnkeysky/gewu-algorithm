@@ -109,6 +109,11 @@ and stable attempt facts.
 
 ## Stage 7: Core Template Authoring Pipeline
 
+Status: complete as of 2026-08-05. Provider-neutral generation contracts,
+Pi-ai authoring integration, structured draft parsing, review-gated artifacts,
+local draft persistence, and template-loader validation are covered by tests
+with two contrasting fixture units.
+
 - define typed, provider-neutral drafting tasks aligned with the Project-GEWU
   philosophy and the implemented `AlgorithmUnit` contracts;
 - add deterministic scaffold, validate, and local-draft CLI workflows before
@@ -126,6 +131,8 @@ least two contrasting local draft units can be generated, validated, reviewed,
 and loaded without any editor dependency.
 
 ## Stage 8: Review, Progression, and Retention
+
+Status: in progress as of 2026-08-05.
 
 - derive progression recommendations from attempts and assistance dependence;
 - add minimal delayed-review scheduling through a platform-independent policy;

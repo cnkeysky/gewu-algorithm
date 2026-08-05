@@ -26,6 +26,22 @@ Each task defines typed input, expected structured output, a prompt version, val
 
 Provider adapters may support remote and local models, but concrete SDK types and error types must remain inside the adapter. Common capabilities should be discovered explicitly; the abstraction must not assume every provider supports embeddings, reranking, tools, or identical sampling parameters.
 
+The Stage 7 boundary reuses `@earendil-works/pi-ai` as the provider adapter. It
+follows Pi's provider registry model:
+provider identity and protocol style are separate, and custom providers can
+declare an OpenAI-compatible endpoint. GEWU does not depend on Pi's agent loop,
+tool runtime, session store, or prompt renderer. `gewu-llm` owns only typed
+generation tasks, structured responses, review-gated draft artifacts, and a
+fake-provider pipeline used by tests. A small TypeScript bridge will translate
+Pi-ai stream events into these contracts.
+
+The initial profiles identify OpenAI Responses and the OpenAI-compatible
+Completions style used by DeepSeek, Moonshot/Kimi, Zhipu/GLM, and Xiaomi MiMo.
+Base URLs, credentials, model catalogs, and compatibility flags are owned by the
+Pi-ai adapter configuration; GEWU does not duplicate those defaults. Provider-
+specific reasoning, tools, audio, web search, and streaming fields must be
+opt-in extensions rather than silently flattened into the common task contract.
+
 ## Generation Pipeline
 
 ```text

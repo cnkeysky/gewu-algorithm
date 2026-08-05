@@ -35,6 +35,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gewu-llm"
+version = "0.1.0"
+dependencies = [
+ "gewu-template",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "gewu-practice"
 version = "0.1.0"
 dependencies = [

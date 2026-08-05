@@ -1,0 +1,13 @@
+[package]
+name = "gewu-llm"
+version = "0.1.0"
+description = "Provider-neutral LLM contracts and deterministic draft pipeline primitives"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gewu-template = { path = "../template" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

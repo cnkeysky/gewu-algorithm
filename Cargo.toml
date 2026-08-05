@@ -3,6 +3,7 @@ members = [
     "apps/cli",
     "crates/core",
     "crates/domain",
+    "crates/llm",
     "crates/practice",
     "crates/protocol",
     "crates/storage",
