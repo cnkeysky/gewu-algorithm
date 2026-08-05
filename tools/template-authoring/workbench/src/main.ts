@@ -66,7 +66,7 @@ root.innerHTML = `
         </fieldset>
         <fieldset id="assistance-fieldset" class="assistance-fieldset">
           <legend>Code recall assistance</legend>
-          <div class="assistance-list">${assistance.map((item) => `<label><input type="checkbox" name="assistance" value="${item.id}" disabled /><span>${item.label}</span></label>`).join("")}</div>
+          <div class="assistance-list">${assistance.map((item) => `<label><input type="checkbox" name="assistance" value="${item.id}" /><span>${item.label}</span></label>`).join("")}</div>
           <p class="field-note" id="assistance-note">Select Code recall above to enable these hints.</p>
         </fieldset>
         <div class="form-actions"><button class="button secondary" type="button" id="reset">Reset</button><button class="button primary" type="submit" id="submit-draft">Create draft <span aria-hidden="true">&#8594;</span></button></div>
