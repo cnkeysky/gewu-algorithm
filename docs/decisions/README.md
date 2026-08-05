@@ -17,3 +17,4 @@ Statuses are `proposed`, `accepted`, `deprecated`, and `superseded`.
 | [0009](0009-flow-recall-webview.md) | Use a structured Webview for Flow Recall | Accepted |
 | [0010](0010-multiple-interrupted-practice-checkpoints.md) | Persist selectable interrupted practice checkpoints | Accepted |
 | [0011](0011-platform-independent-practice-contracts.md) | Define practice content independently of clients | Accepted |
+| [0012](0012-code-recall-core-protocol-boundary.md) | Expose Code Recall through the core boundary | Accepted |

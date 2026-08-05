@@ -120,12 +120,13 @@ pub struct UnitSummary {
     pub modes: Vec<PracticeModeDto>,
 }
 
-/// The two supported v1 mode values.
+/// Supported practice mode values.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PracticeModeDto {
     ShadowTyping,
     FlowRecall,
+    CodeRecall,
 }
 
 /// Starts a session from a loaded, versioned unit.
@@ -135,6 +136,8 @@ pub struct StartSessionParams {
     pub mode: PracticeModeDto,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub implementation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub practice_id: Option<String>,
 }
 
 /// Stable identity and immediately observable session state.
@@ -174,6 +177,9 @@ pub enum PracticeEventDto {
         answer: String,
     },
     RevealPrompt,
+    RevealScaffold {
+        index: usize,
+    },
     Restart,
 }
 
@@ -212,9 +218,27 @@ pub struct SessionView {
     pub rejected_input_count: u64,
     pub correction_count: u64,
     pub prompt_count: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub scaffold_reveal_count: u64,
     pub active_ms: u64,
     pub wall_ms: u64,
     pub terminal_reason: Option<TerminalReasonDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_assistance: Option<String>,
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub scaffold_count: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visible_scaffold: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revealed_scaffold_indices: Vec<usize>,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
+fn is_zero_usize(value: &usize) -> bool {
+    *value == 0
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -246,6 +270,8 @@ pub struct AttemptSummary {
     pub rejected_input_count: u64,
     pub correction_count: u64,
     pub prompt_count: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub scaffold_reveal_count: u64,
     pub active_ms: u64,
     pub wall_ms: u64,
 }
@@ -353,5 +379,40 @@ mod tests {
             .unwrap_or_else(|error| panic!("serialize response: {error}"));
         assert_eq!(value["error"]["code"], -32601);
         assert_eq!(value["error"]["data"]["kind"], "method_not_found");
+    }
+
+    #[test]
+    fn serializes_code_recall_mode_and_scaffold_reveal_events() {
+        assert_eq!(
+            serde_json::to_value(PracticeModeDto::CodeRecall)
+                .unwrap_or_else(|error| panic!("serialize mode: {error}")),
+            json!("code_recall")
+        );
+        assert_eq!(
+            serde_json::to_value(PracticeEventDto::RevealScaffold { index: 2 })
+                .unwrap_or_else(|error| panic!("serialize event: {error}")),
+            json!({"type": "reveal_scaffold", "index": 2})
+        );
+    }
+
+    #[test]
+    fn serializes_selected_code_recall_definition() {
+        let params = StartSessionParams {
+            unit_id: "graph.bfs".to_owned(),
+            mode: PracticeModeDto::CodeRecall,
+            implementation: None,
+            practice_id: Some("bfs-no-hints".to_owned()),
+        };
+
+        let value = serde_json::to_value(params)
+            .unwrap_or_else(|error| panic!("serialize start params: {error}"));
+        assert_eq!(
+            value,
+            json!({
+                "unit_id": "graph.bfs",
+                "mode": "code_recall",
+                "practice_id": "bfs-no-hints"
+            })
+        );
     }
 }

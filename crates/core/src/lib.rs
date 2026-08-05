@@ -9,11 +9,11 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use gewu_domain::AlgorithmUnit;
+use gewu_domain::{AlgorithmUnit, CodeRecallAssistance};
 use gewu_practice::{
-    CharacterRange, ElapsedTime, FlowRecallConfig, FlowRecallEvent, FlowRecallSession,
-    SessionStatus, ShadowTypingConfig, ShadowTypingEvent, ShadowTypingSession, TerminalReason,
-    TimedEvent,
+    CharacterRange, CodeRecallConfig, CodeRecallEvent, CodeRecallGuidance, CodeRecallSession,
+    ElapsedTime, FlowRecallConfig, FlowRecallEvent, FlowRecallSession, SessionStatus,
+    ShadowTypingConfig, ShadowTypingEvent, ShadowTypingSession, TerminalReason, TimedEvent,
 };
 use gewu_protocol::{
     ApplyEventParams, AttemptSummary, CheckpointSummary, ElapsedDto, PracticeEventDto,
@@ -47,6 +47,13 @@ enum ActiveSession {
         session: Box<FlowRecallSession>,
         events: Vec<StoredEvent>,
     },
+    Code {
+        unit: Box<AlgorithmUnit>,
+        implementation: String,
+        practice_id: String,
+        session: Box<CodeRecallSession>,
+        events: Vec<StoredEvent>,
+    },
 }
 
 impl Core {
@@ -71,8 +78,8 @@ impl Core {
             .map(|unit| UnitSummary {
                 id: unit.id.to_string(),
                 revision: unit.revision.get(),
-                title: unit.title,
-                modes: vec![PracticeModeDto::ShadowTyping, PracticeModeDto::FlowRecall],
+                title: unit.title.clone(),
+                modes: modes_for(&unit),
             })
             .collect())
     }
@@ -83,8 +90,8 @@ impl Core {
         Ok(UnitSummary {
             id: unit.id.to_string(),
             revision: unit.revision.get(),
-            title: unit.title,
-            modes: vec![PracticeModeDto::ShadowTyping, PracticeModeDto::FlowRecall],
+            title: unit.title.clone(),
+            modes: modes_for(&unit),
         })
     }
 
@@ -148,6 +155,46 @@ impl Core {
                     ))?;
                     ActiveSession::Flow {
                         unit: Box::new(unit),
+                        session: Box::new(session),
+                        events: Vec::new(),
+                    }
+                }
+                PracticeModeDto::CodeRecall => {
+                    let definition = select_code_recall(&unit, params.practice_id.as_deref())?;
+                    let practice_id = definition.id.clone();
+                    let implementation = definition.implementation.clone();
+                    let implementation_data = unit
+                        .implementations
+                        .iter()
+                        .find(|value| value.key == implementation)
+                        .ok_or_else(|| CoreError::UnknownImplementation {
+                            unit_id: unit.id.to_string(),
+                            implementation: implementation.clone(),
+                        })?;
+                    let source =
+                        fs::read_to_string(&implementation_data.source_path).map_err(|source| {
+                            CoreError::Source {
+                                path: implementation_data.source_path.clone(),
+                                source,
+                            }
+                        })?;
+                    let session = CodeRecallSession::start(CodeRecallConfig::new(
+                        unit.id.clone(),
+                        unit.revision,
+                        unit.schema_version.clone(),
+                        implementation.clone(),
+                        source,
+                        CodeRecallGuidance::new(
+                            definition.assistance,
+                            definition.prompt.clone(),
+                            definition.scaffold.clone(),
+                        ),
+                        implementation_data.normalization.clone(),
+                    ))?;
+                    ActiveSession::Code {
+                        unit: Box::new(unit),
+                        implementation,
+                        practice_id,
                         session: Box::new(session),
                         events: Vec::new(),
                     }
@@ -253,6 +300,7 @@ impl Core {
             unit_id: checkpoint.unit_id.clone(),
             mode,
             implementation: checkpoint.implementation.clone(),
+            practice_id: checkpoint.practice_id.clone(),
         };
         let view = self.start_session_with_id(params, checkpoint.session_id.clone())?;
         for stored in checkpoint.events {
@@ -358,6 +406,43 @@ impl Core {
                 unit: Box::new(unit),
                 events: Vec::new(),
             },
+            PracticeModeDto::CodeRecall => {
+                let definition = select_code_recall(&unit, params.practice_id.as_deref())?;
+                let practice_id = definition.id.clone();
+                let implementation = definition.implementation.clone();
+                let data = unit
+                    .implementations
+                    .iter()
+                    .find(|item| item.key == implementation)
+                    .ok_or_else(|| CoreError::UnknownImplementation {
+                        unit_id: unit.id.to_string(),
+                        implementation: implementation.clone(),
+                    })?;
+                let source =
+                    fs::read_to_string(&data.source_path).map_err(|source| CoreError::Source {
+                        path: data.source_path.clone(),
+                        source,
+                    })?;
+                ActiveSession::Code {
+                    session: Box::new(CodeRecallSession::start(CodeRecallConfig::new(
+                        unit.id.clone(),
+                        unit.revision,
+                        unit.schema_version.clone(),
+                        implementation.clone(),
+                        source,
+                        CodeRecallGuidance::new(
+                            definition.assistance,
+                            definition.prompt.clone(),
+                            definition.scaffold.clone(),
+                        ),
+                        data.normalization.clone(),
+                    ))?),
+                    unit: Box::new(unit),
+                    implementation,
+                    practice_id,
+                    events: Vec::new(),
+                }
+            }
         };
         let view = active.view(&session_id);
         self.sessions.insert(session_id, active);
@@ -427,11 +512,24 @@ impl ActiveSession {
                 unit_id: unit.id.to_string(),
                 mode: PracticeModeDto::ShadowTyping,
                 implementation: Some(implementation.clone()),
+                practice_id: None,
             },
             Self::Flow { unit, .. } => StartSessionParams {
                 unit_id: unit.id.to_string(),
                 mode: PracticeModeDto::FlowRecall,
                 implementation: None,
+                practice_id: None,
+            },
+            Self::Code {
+                unit,
+                implementation,
+                practice_id,
+                ..
+            } => StartSessionParams {
+                unit_id: unit.id.to_string(),
+                mode: PracticeModeDto::CodeRecall,
+                implementation: Some(implementation.clone()),
+                practice_id: Some(practice_id.clone()),
             },
         }
     }
@@ -462,6 +560,17 @@ impl ActiveSession {
                     wall_ms: elapsed.wall().as_millis() as u64,
                 });
             }
+            Self::Code {
+                session, events, ..
+            } => {
+                let event = code_event(event)?;
+                let _ = session.apply(event, elapsed)?;
+                events.push(StoredEvent {
+                    event: serialized,
+                    active_ms: elapsed.active().as_millis() as u64,
+                    wall_ms: elapsed.wall().as_millis() as u64,
+                });
+            }
         }
         Ok(())
     }
@@ -473,6 +582,9 @@ impl ActiveSession {
             }
             Self::Flow { session, .. } => {
                 let _ = session.apply(FlowRecallEvent::Stop, elapsed)?;
+            }
+            Self::Code { session, .. } => {
+                let _ = session.apply(CodeRecallEvent::Stop, elapsed)?;
             }
         }
         Ok(())
@@ -497,9 +609,14 @@ impl ActiveSession {
                 rejected_input_count: session.rejected_input_count(),
                 correction_count: session.correction_count(),
                 prompt_count: session.hint_count(),
+                scaffold_reveal_count: 0,
                 active_ms: duration_ms(session.elapsed().active()),
                 wall_ms: duration_ms(session.elapsed().wall()),
                 terminal_reason: terminal(session.status()),
+                code_assistance: None,
+                scaffold_count: 0,
+                visible_scaffold: Vec::new(),
+                revealed_scaffold_indices: Vec::new(),
             },
             Self::Flow { unit, session, .. } => SessionView {
                 session_id: session_id.to_owned(),
@@ -523,9 +640,46 @@ impl ActiveSession {
                 rejected_input_count: session.rejected_answer_count(),
                 correction_count: 0,
                 prompt_count: session.prompt_count(),
+                scaffold_reveal_count: 0,
                 active_ms: duration_ms(session.elapsed().active()),
                 wall_ms: duration_ms(session.elapsed().wall()),
                 terminal_reason: terminal(session.status()),
+                code_assistance: None,
+                scaffold_count: 0,
+                visible_scaffold: Vec::new(),
+                revealed_scaffold_indices: Vec::new(),
+            },
+            Self::Code { unit, session, .. } => SessionView {
+                session_id: session_id.to_owned(),
+                unit_id: unit.id.to_string(),
+                unit_title: unit.title.clone(),
+                problem_question: unit.problem.question.clone(),
+                revision: unit.revision.get(),
+                mode: PracticeModeDto::CodeRecall,
+                status: status(session.status()),
+                accepted_text: session.accepted_text().to_owned(),
+                target_text: session.target().to_owned(),
+                current_prompt: Some(session.prompt().to_owned()),
+                completed_prompts: Vec::new(),
+                completed_steps: 0,
+                total_steps: 0,
+                accepted_input_count: session.accepted_input_count(),
+                rejected_input_count: session.rejected_input_count(),
+                correction_count: session.correction_count(),
+                prompt_count: session.prompt_count(),
+                scaffold_reveal_count: session.scaffold_reveal_count(),
+                active_ms: duration_ms(session.elapsed().active()),
+                wall_ms: duration_ms(session.elapsed().wall()),
+                terminal_reason: terminal(session.status()),
+                code_assistance: Some(assistance_label(session.assistance()).to_owned()),
+                scaffold_count: session.scaffold().len(),
+                visible_scaffold: session
+                    .revealed_scaffold_indices()
+                    .iter()
+                    .filter_map(|index| session.scaffold().get(*index))
+                    .cloned()
+                    .collect(),
+                revealed_scaffold_indices: session.revealed_scaffold_indices().to_vec(),
             },
         }
     }
@@ -546,6 +700,7 @@ impl ActiveSession {
                     revision: unit.revision.get(),
                     mode: "shadow_typing".to_owned(),
                     implementation: Some(implementation.clone()),
+                    practice_id: None,
                     events: events.clone(),
                     completed_steps: 0,
                     total_steps: 0,
@@ -568,11 +723,37 @@ impl ActiveSession {
                     revision: unit.revision.get(),
                     mode: "flow_recall".to_owned(),
                     implementation: None,
+                    practice_id: None,
                     events: events.clone(),
                     completed_steps: session.completed_step_count(),
                     total_steps: session.total_step_count(),
                     accepted_characters: 0,
                     target_characters: 0,
+                    saved_at: utc_now(),
+                })
+            }
+            Self::Code {
+                unit,
+                implementation,
+                practice_id,
+                events,
+                session,
+            } => {
+                ensure_active(session.status())?;
+                Ok(StoredCheckpoint {
+                    id: checkpoint_id(session_id),
+                    session_id: session_id.to_owned(),
+                    unit_id: unit.id.to_string(),
+                    unit_title: unit.title.clone(),
+                    revision: unit.revision.get(),
+                    mode: "code_recall".to_owned(),
+                    implementation: Some(implementation.clone()),
+                    practice_id: Some(practice_id.clone()),
+                    events: events.clone(),
+                    completed_steps: 0,
+                    total_steps: session.scaffold().len(),
+                    accepted_characters: session.accepted_text().chars().count(),
+                    target_characters: session.target().chars().count(),
                     saved_at: utc_now(),
                 })
             }
@@ -586,6 +767,9 @@ impl ActiveSession {
             Self::Flow { session, .. } => session
                 .attempt()
                 .map(|attempt| flow_attempt(attempt, session_id)),
+            Self::Code { session, .. } => session
+                .attempt()
+                .map(|attempt| code_attempt(attempt, session_id)),
         }
     }
 }
@@ -647,6 +831,63 @@ fn flow_event(event: PracticeEventDto) -> Result<FlowRecallEvent, CoreError> {
         }),
     }
 }
+fn code_event(event: PracticeEventDto) -> Result<CodeRecallEvent, CoreError> {
+    match event {
+        PracticeEventDto::InsertText { text } => Ok(CodeRecallEvent::InsertText(text)),
+        PracticeEventDto::DeleteRange { start, end } => Ok(CodeRecallEvent::DeleteRange(
+            CharacterRange::new(start, end)?,
+        )),
+        PracticeEventDto::ReplaceRange { start, end, text } => Ok(CodeRecallEvent::ReplaceRange {
+            range: CharacterRange::new(start, end)?,
+            text,
+        }),
+        PracticeEventDto::RevealPrompt => Ok(CodeRecallEvent::RevealPrompt),
+        PracticeEventDto::RevealScaffold { index } => Ok(CodeRecallEvent::RevealScaffold { index }),
+        PracticeEventDto::Restart => Ok(CodeRecallEvent::Restart),
+        other => Err(CoreError::UnsupportedEvent {
+            mode: "code_recall",
+            event: format!("{other:?}"),
+        }),
+    }
+}
+fn modes_for(unit: &AlgorithmUnit) -> Vec<PracticeModeDto> {
+    let mut modes = vec![PracticeModeDto::ShadowTyping, PracticeModeDto::FlowRecall];
+    if !unit.practice.code_recall.is_empty() {
+        modes.push(PracticeModeDto::CodeRecall);
+    }
+    modes
+}
+fn select_code_recall<'a>(
+    unit: &'a AlgorithmUnit,
+    requested: Option<&str>,
+) -> Result<&'a gewu_domain::CodeRecallDefinition, CoreError> {
+    let definitions = &unit.practice.code_recall;
+    if definitions.is_empty() {
+        return Err(CoreError::UnsupportedPractice {
+            unit_id: unit.id.to_string(),
+            mode: "code_recall",
+        });
+    }
+    match requested {
+        Some(id) => definitions
+            .iter()
+            .find(|definition| definition.id == id)
+            .ok_or_else(|| CoreError::UnknownPracticeDefinition {
+                unit_id: unit.id.to_string(),
+                practice_id: id.to_owned(),
+            }),
+        None => Ok(&definitions[0]),
+    }
+}
+fn assistance_label(value: CodeRecallAssistance) -> &'static str {
+    match value {
+        CodeRecallAssistance::Skeleton => "skeleton",
+        CodeRecallAssistance::Comments => "comments",
+        CodeRecallAssistance::Keywords => "keywords",
+        CodeRecallAssistance::Cloze => "cloze",
+        CodeRecallAssistance::None => "none",
+    }
+}
 fn status(value: SessionStatus) -> SessionStatusDto {
     match value {
         SessionStatus::Active => SessionStatusDto::Active,
@@ -672,6 +913,7 @@ fn parse_mode(value: &str) -> Result<PracticeModeDto, CoreError> {
     match value {
         "shadow_typing" => Ok(PracticeModeDto::ShadowTyping),
         "flow_recall" => Ok(PracticeModeDto::FlowRecall),
+        "code_recall" => Ok(PracticeModeDto::CodeRecall),
         _ => Err(CoreError::UnsupportedCheckpointMode(value.to_owned())),
     }
 }
@@ -698,6 +940,7 @@ fn shadow_attempt(value: &gewu_practice::PracticeAttempt, session_id: &str) -> S
         rejected_input_count: value.rejected_input_count(),
         correction_count: value.correction_count(),
         prompt_count: value.hint_count(),
+        scaffold_reveal_count: 0,
         active_ms: duration_ms(value.active_duration()),
         wall_ms: duration_ms(value.wall_clock_duration()),
     }
@@ -718,6 +961,28 @@ fn flow_attempt(value: &gewu_practice::FlowRecallAttempt, session_id: &str) -> S
         rejected_input_count: value.rejected_answer_count(),
         correction_count: 0,
         prompt_count: value.prompt_count(),
+        scaffold_reveal_count: 0,
+        active_ms: duration_ms(value.active_duration()),
+        wall_ms: duration_ms(value.wall_clock_duration()),
+    }
+}
+fn code_attempt(value: &gewu_practice::CodeRecallAttempt, session_id: &str) -> StoredAttempt {
+    StoredAttempt {
+        id: format!("attempt-{session_id}"),
+        created_at: utc_now(),
+        unit_id: value.unit_id().to_string(),
+        revision: value.revision().get(),
+        schema_version: value.schema_version().to_owned(),
+        mode: "code_recall".to_owned(),
+        terminal_reason: match value.terminal_reason() {
+            TerminalReason::Completed => "completed".to_owned(),
+            TerminalReason::Stopped => "stopped".to_owned(),
+        },
+        accepted_input_count: value.accepted_input_count(),
+        rejected_input_count: value.rejected_input_count(),
+        correction_count: value.correction_count(),
+        prompt_count: value.prompt_count(),
+        scaffold_reveal_count: value.scaffold_reveal_count(),
         active_ms: duration_ms(value.active_duration()),
         wall_ms: duration_ms(value.wall_clock_duration()),
     }
@@ -735,6 +1000,7 @@ fn stored_attempt_view(value: StoredAttempt) -> Result<AttemptSummary, CoreError
         rejected_input_count: value.rejected_input_count,
         correction_count: value.correction_count,
         prompt_count: value.prompt_count,
+        scaffold_reveal_count: value.scaffold_reveal_count,
         active_ms: value.active_ms,
         wall_ms: value.wall_ms,
     })
@@ -743,6 +1009,7 @@ fn parse_stored_mode(value: &str) -> Result<PracticeModeDto, CoreError> {
     match value {
         "shadow_typing" => Ok(PracticeModeDto::ShadowTyping),
         "flow_recall" => Ok(PracticeModeDto::FlowRecall),
+        "code_recall" => Ok(PracticeModeDto::CodeRecall),
         _ => Err(CoreError::UnsupportedStoredMode(value.to_owned())),
     }
 }
@@ -818,6 +1085,11 @@ pub enum CoreError {
         unit_id: String,
         implementation: String,
     },
+    #[error("practice definition `{practice_id}` is not available for unit `{unit_id}`")]
+    UnknownPracticeDefinition {
+        unit_id: String,
+        practice_id: String,
+    },
     #[error("could not read canonical source at {path}: {source}")]
     Source {
         path: PathBuf,
@@ -828,10 +1100,14 @@ pub enum CoreError {
     Practice(#[from] gewu_practice::TransitionError),
     #[error("flow recall transition failed: {0}")]
     FlowPractice(#[from] gewu_practice::FlowRecallTransitionError),
+    #[error("code recall transition failed: {0}")]
+    CodePractice(#[from] gewu_practice::CodeRecallTransitionError),
     #[error("practice start failed: {0}")]
     Start(#[from] gewu_practice::StartError),
     #[error("flow recall start failed: {0}")]
     FlowStart(#[from] gewu_practice::FlowRecallStartError),
+    #[error("code recall start failed: {0}")]
+    CodeStart(#[from] gewu_practice::CodeRecallStartError),
     #[error("invalid character range: {0}")]
     Range(#[from] gewu_practice::RangeError),
     #[error("invalid elapsed time: {0}")]
@@ -894,6 +1170,7 @@ mod tests {
                 unit_id: "search.binary-search".to_owned(),
                 mode: PracticeModeDto::FlowRecall,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("start: {error}"));
         let first_step = core
@@ -933,6 +1210,138 @@ mod tests {
         );
         fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
+
+    #[test]
+    fn starts_and_completes_code_recall_through_the_host_free_core() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let unit = core
+            .list_units()
+            .unwrap_or_else(|error| panic!("list units: {error}"))
+            .into_iter()
+            .find(|unit| unit.id == "graph.bfs")
+            .unwrap_or_else(|| panic!("BFS unit must be listed"));
+        assert!(unit.modes.contains(&PracticeModeDto::CodeRecall));
+
+        let selected = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::CodeRecall,
+                implementation: None,
+                practice_id: Some("bfs-no-hints".to_owned()),
+            })
+            .unwrap_or_else(|error| panic!("start selected code recall: {error}"));
+        assert_eq!(selected.code_assistance.as_deref(), Some("none"));
+        assert_eq!(selected.scaffold_count, 0);
+        assert!(
+            core.discard_checkpoint(&checkpoint_id(&selected.session_id))
+                .unwrap_or_else(|error| panic!("discard selected: {error}"))
+        );
+
+        let session = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::CodeRecall,
+                implementation: None,
+                practice_id: None,
+            })
+            .unwrap_or_else(|error| panic!("start code recall: {error}"));
+        assert_eq!(session.mode, PracticeModeDto::CodeRecall);
+        assert!(session.current_prompt.is_some());
+        assert!(!session.target_text.is_empty());
+        assert!(session.visible_scaffold.is_empty());
+        assert_eq!(session.scaffold_count, 3);
+
+        let prompted = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id.clone(),
+                event: PracticeEventDto::RevealPrompt,
+                elapsed: elapsed(1),
+            })
+            .unwrap_or_else(|error| panic!("reveal prompt: {error}"));
+        assert_eq!(prompted.prompt_count, 1);
+
+        let revealed = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id.clone(),
+                event: PracticeEventDto::RevealScaffold { index: 0 },
+                elapsed: elapsed(2),
+            })
+            .unwrap_or_else(|error| panic!("reveal scaffold: {error}"));
+        assert_eq!(revealed.prompt_count, 1);
+        assert_eq!(revealed.scaffold_reveal_count, 1);
+        assert_eq!(
+            revealed.visible_scaffold,
+            vec!["Initialize the FIFO frontier and discovered set.".to_owned()]
+        );
+
+        let complete = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id,
+                event: PracticeEventDto::InsertText {
+                    text: revealed.target_text,
+                },
+                elapsed: elapsed(3),
+            })
+            .unwrap_or_else(|error| panic!("complete code recall: {error}"));
+        assert_eq!(complete.status, SessionStatusDto::Completed);
+        assert_eq!(complete.mode, PracticeModeDto::CodeRecall);
+        let attempts = core
+            .recent_attempts(10)
+            .unwrap_or_else(|error| panic!("attempts: {error}"));
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].mode, PracticeModeDto::CodeRecall);
+        assert!(
+            core.store
+                .list_checkpoints()
+                .unwrap_or_else(|error| panic!("checkpoints: {error}"))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn resumes_a_code_recall_checkpoint_without_exposing_unrevealed_scaffold() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let session = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::CodeRecall,
+                implementation: None,
+                practice_id: None,
+            })
+            .unwrap_or_else(|error| panic!("start: {error}"));
+        let partial = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id,
+                event: PracticeEventDto::InsertText {
+                    text: "from ".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .unwrap_or_else(|error| panic!("partial: {error}"));
+        assert!(partial.visible_scaffold.is_empty());
+        let checkpoint = core
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list: {error}"))
+            .into_iter()
+            .find(|value| value.mode == PracticeModeDto::CodeRecall)
+            .unwrap_or_else(|| panic!("code recall checkpoint"));
+        drop(core);
+
+        let mut reopened =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
+        let resumed = reopened
+            .resume_checkpoint(&checkpoint.id)
+            .unwrap_or_else(|error| panic!("resume: {error}"))
+            .unwrap_or_else(|| panic!("resumed session"));
+        assert_eq!(resumed.mode, PracticeModeDto::CodeRecall);
+        assert_eq!(resumed.accepted_text, "from ");
+        assert!(resumed.visible_scaffold.is_empty());
+    }
+
     #[test]
     fn resumes_only_a_versioned_unit_checkpoint() {
         let data = data_root();
@@ -943,6 +1352,7 @@ mod tests {
                 unit_id: "graph.bfs".to_owned(),
                 mode: PracticeModeDto::ShadowTyping,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("start: {error}"));
         let checkpoint_id = checkpoint_id(&session.session_id);
@@ -983,6 +1393,7 @@ mod tests {
                 unit_id: "search.binary-search".to_owned(),
                 mode: PracticeModeDto::FlowRecall,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("start: {error}"));
 
@@ -1009,6 +1420,7 @@ mod tests {
                 unit_id: "validation.crlf".to_owned(),
                 mode: PracticeModeDto::ShadowTyping,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("CRLF start: {error}"));
         assert!(!crlf.target_text.contains('\r'));
@@ -1019,6 +1431,7 @@ mod tests {
                 unit_id: "validation.unicode".to_owned(),
                 mode: PracticeModeDto::ShadowTyping,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("Unicode start: {error}"));
         assert!(
@@ -1041,6 +1454,7 @@ mod tests {
                 unit_id: "graph.bfs".to_owned(),
                 mode: PracticeModeDto::ShadowTyping,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("start: {error}"));
         let _ = core
@@ -1088,6 +1502,7 @@ mod tests {
                 unit_id: "graph.bfs".to_owned(),
                 mode: PracticeModeDto::ShadowTyping,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("shadow start: {error}"));
         let shadow_checkpoint = checkpoint_id(&shadow.session_id);
@@ -1104,6 +1519,7 @@ mod tests {
                 unit_id: "search.binary-search".to_owned(),
                 mode: PracticeModeDto::FlowRecall,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("flow start: {error}"));
         let flow_checkpoint = checkpoint_id(&flow.session_id);
@@ -1172,6 +1588,7 @@ mod tests {
                 unit_id: "graph.bfs".to_owned(),
                 mode: PracticeModeDto::ShadowTyping,
                 implementation: None,
+                practice_id: None,
             })
             .unwrap_or_else(|error| panic!("start: {error}"));
         core.apply_event(ApplyEventParams {

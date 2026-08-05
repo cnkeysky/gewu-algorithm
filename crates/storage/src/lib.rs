@@ -29,6 +29,8 @@ pub struct StoredAttempt {
     pub rejected_input_count: u64,
     pub correction_count: u64,
     pub prompt_count: u64,
+    #[serde(default)]
+    pub scaffold_reveal_count: u64,
     pub active_ms: u64,
     pub wall_ms: u64,
 }
@@ -43,6 +45,8 @@ pub struct StoredCheckpoint {
     pub revision: u64,
     pub mode: String,
     pub implementation: Option<String>,
+    #[serde(default)]
+    pub practice_id: Option<String>,
     pub events: Vec<StoredEvent>,
     pub completed_steps: usize,
     pub total_steps: usize,
@@ -276,6 +280,7 @@ mod tests {
             rejected_input_count: 0,
             correction_count: 0,
             prompt_count: 0,
+            scaffold_reveal_count: 0,
             active_ms: 1,
             wall_ms: 1,
         }
@@ -289,6 +294,7 @@ mod tests {
             revision: 1,
             mode: "shadow_typing".to_owned(),
             implementation: Some("rust".to_owned()),
+            practice_id: None,
             events: Vec::new(),
             completed_steps: 0,
             total_steps: 0,
