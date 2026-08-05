@@ -116,6 +116,18 @@ function readDrafts(): DraftRecord[] {
   } catch { return []; }
 }
 function saveDrafts(drafts: DraftRecord[]): void { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); }
+async function syncFromApi(): Promise<void> {
+  try {
+    const response = await fetch("/api/drafts");
+    if (!response.ok) return;
+    const payload = await response.json() as { drafts?: DraftRecord[] };
+    if (Array.isArray(payload.drafts)) saveDrafts(payload.drafts);
+    renderDrafts();
+    renderHistory();
+  } catch {
+    // The Vite client remains usable with local storage when the API is stopped.
+  }
+}
 function formatDate(value: string): string { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
 function renderDrafts(): void {
   const drafts = readDrafts();
@@ -185,7 +197,7 @@ document.querySelector<HTMLSelectElement>("#provider")!.addEventListener("change
   };
   model.innerHTML = (models[provider] ?? []).map((item) => `<option>${item}</option>`).join("");
 });
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const selectedModes = selectedValues<PracticeMode>("mode");
   if (!selectedModes.length) {
@@ -207,13 +219,24 @@ form.addEventListener("submit", (event) => {
     status: "queued",
     createdAt: new Date().toISOString(),
   };
-  saveDrafts([record, ...readDrafts()]);
+  let persisted = false;
+  try {
+    const response = await fetch("/api/drafts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(record) });
+    if (response.ok) {
+      const payload = await response.json() as { draft?: DraftRecord };
+      if (payload.draft) { saveDrafts([payload.draft, ...readDrafts().filter((item) => item.id !== payload.draft!.id)]); persisted = true; }
+    }
+  } catch {
+    // Local storage is the offline fallback for the authoring shell.
+  }
+  if (!persisted) saveDrafts([record, ...readDrafts()]);
   renderDrafts();
   renderHistory();
-  message.textContent = "Draft request queued locally. Connect the authoring API to start generation.";
+  message.textContent = persisted ? "Draft saved to the local authoring API." : "Draft queued in this browser. Start the authoring API to share it locally.";
   message.className = "form-message success";
 });
 document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => { form.reset(); updateProfile(); message.textContent = ""; });
 updateProfile();
 renderDrafts();
 renderHistory();
+void syncFromApi();

@@ -83,3 +83,19 @@ To run local non-network checks for the authoring adapter:
 ```sh
 npm test
 ```
+
+## Local authoring workbench
+
+Start the persistence API and Vite client in separate terminals:
+
+```sh
+npm run workbench:api
+npm run workbench:dev
+```
+
+The API stores draft metadata and pending review records in the ignored
+`drafts/.workbench/state.json`. It never accepts provider credentials. The UI
+falls back to browser local storage when the API is unavailable. Generation,
+deterministic validation, and role review remain the next server operations;
+the current API deliberately exposes their persistence boundary without
+claiming that a queued draft has been generated.
