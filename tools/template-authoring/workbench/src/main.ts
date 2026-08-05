@@ -74,12 +74,12 @@ root.innerHTML = `
     </div>
     <section id="drafts-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
-      <div class="draft-list"><button class="draft-row" type="button" data-go="new"><span class="draft-icon">TS</span><span><strong>topological-sort-kahn-r1</strong><small>Draft · Python · 5 practice projections</small></span><span class="draft-date">Just now</span></button><button class="draft-row" type="button" data-go="new"><span class="draft-icon">BF</span><span><strong>graph-bfs-r1</strong><small>Pending review · Python · 2 practice projections</small></span><span class="draft-date">Aug 04, 2026</span></button><button class="draft-row" type="button" data-go="new"><span class="draft-icon">BS</span><span><strong>binary-search-r1</strong><small>Accepted · Python · 3 practice projections</small></span><span class="draft-date">Aug 03, 2026</span></button></div>
+      <div class="draft-list" id="draft-list"></div>
       <p class="view-note">Draft entries will become API-backed once the local authoring service is connected.</p>
     </section>
     <section id="history-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Audit trail</p><h2>Review history</h2></div><span class="lock">Immutable reports</span></div>
-      <div class="history-list"><div class="history-row"><span class="review-mark pass">&#10003;</span><span><strong>Algorithm correctness</strong><small>binary-search-r1 · artifact sha256:7a21...c91e</small></span><span class="history-status">Pass</span></div><div class="history-row"><span class="review-mark pass">&#10003;</span><span><strong>Learning design</strong><small>graph-bfs-r1 · artifact sha256:12e4...a02d</small></span><span class="history-status">Pass</span></div><div class="history-row"><span class="review-mark pending-mark">&#8226;</span><span><strong>Provenance and safety</strong><small>topological-sort-kahn-r1 · awaiting generation</small></span><span class="history-status">Pending</span></div></div>
+      <div class="history-list" id="history-list"></div>
       <p class="view-note">Reports are tied to an artifact hash and cannot promote a draft without human acceptance.</p>
     </section>
   </main>
@@ -91,14 +91,71 @@ const profileSummary = document.querySelector<HTMLDivElement>("#profile-summary"
 const profileState = document.querySelector<HTMLSpanElement>("#profile-state")!;
 const assistanceFieldset = document.querySelector<HTMLFieldSetElement>("#assistance-fieldset")!;
 const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
+const draftList = document.querySelector<HTMLDivElement>("#draft-list")!;
+const historyList = document.querySelector<HTMLDivElement>("#history-list")!;
+
+interface DraftRecord {
+  id: string;
+  title: string;
+  problem: string;
+  provider: string;
+  model: string;
+  language: string;
+  variants: number;
+  modes: PracticeMode[];
+  assistance: Assistance[];
+  status: "draft" | "queued";
+  createdAt: string;
+}
+
+const DRAFTS_KEY = "gewu.authoring.drafts.v1";
+function readDrafts(): DraftRecord[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(DRAFTS_KEY) ?? "[]");
+    return Array.isArray(value) ? value.filter((item): item is DraftRecord => typeof item === "object" && item !== null && typeof (item as DraftRecord).id === "string") : [];
+  } catch { return []; }
+}
+function saveDrafts(drafts: DraftRecord[]): void { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); }
+function formatDate(value: string): string { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
+function renderDrafts(): void {
+  const drafts = readDrafts();
+  document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
+  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<button class="draft-row" type="button" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status === "queued" ? "Queued" : "Draft"} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-date">${formatDate(draft.createdAt)}</span></button>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+}
+function renderHistory(): void {
+  const drafts = readDrafts();
+  historyList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="history-row"><span class="review-mark pending-mark">&#8226;</span><span><strong>Awaiting review</strong><small>${draft.title} · ${draft.provider}/${draft.model}</small></span><span class="history-status">Pending</span></div>`).join("") : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
+}
 
 function showView(view: string): void {
+  renderDrafts();
+  renderHistory();
   document.querySelectorAll<HTMLElement>(".app-view").forEach((panel) => { panel.hidden = panel.id !== `${view}-view`; });
   document.querySelectorAll<HTMLButtonElement>(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-document.querySelectorAll<HTMLButtonElement>(".nav-item, [data-go]").forEach((button) => button.addEventListener("click", () => showView(button.dataset.view ?? button.dataset.go ?? "new")));
+document.addEventListener("click", (event) => {
+  const target = event.target as HTMLElement;
+  const navigation = target.closest<HTMLButtonElement>(".nav-item, [data-go]");
+  if (navigation) showView(navigation.dataset.view ?? navigation.dataset.go ?? "new");
+  const draftButton = target.closest<HTMLButtonElement>("[data-draft-id]");
+  if (draftButton) {
+    const draft = readDrafts().find((item) => item.id === draftButton.dataset.draftId);
+    if (draft) {
+      (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
+      (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
+      (document.querySelector<HTMLInputElement>("#variants")!).value = String(draft.variants);
+      (document.querySelector<HTMLSelectElement>("#provider")!).value = draft.provider;
+      document.querySelector<HTMLSelectElement>("#provider")!.dispatchEvent(new Event("change"));
+      (document.querySelector<HTMLSelectElement>("#model")!).value = draft.model;
+      document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((input) => { input.checked = draft.modes.includes(input.value as PracticeMode); });
+      document.querySelectorAll<HTMLInputElement>("input[name=assistance]").forEach((input) => { input.checked = draft.assistance.includes(input.value as Assistance); });
+      updateProfile();
+      showView("new");
+    }
+  }
+});
 
 function selectedValues<T extends string>(name: string): T[] {
   return [...document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)].map((input) => input.value as T);
@@ -136,8 +193,27 @@ form.addEventListener("submit", (event) => {
     message.className = "form-message error";
     return;
   }
-  message.textContent = "Draft request prepared. Connect the local authoring API to start generation.";
+  const problem = document.querySelector<HTMLTextAreaElement>("#problem")!.value.trim();
+  const record: DraftRecord = {
+    id: crypto.randomUUID(),
+    title: problem.split(/\s+/).slice(0, 3).join(" ").replace(/[^a-zA-Z0-9 -]/g, "") || "Untitled algorithm",
+    problem,
+    provider: document.querySelector<HTMLSelectElement>("#provider")!.value,
+    model: document.querySelector<HTMLSelectElement>("#model")!.value,
+    language: document.querySelector<HTMLInputElement>("#languages")!.value || "python",
+    variants: Number(document.querySelector<HTMLInputElement>("#variants")!.value),
+    modes: selectedModes,
+    assistance: selectedValues<Assistance>("assistance"),
+    status: "queued",
+    createdAt: new Date().toISOString(),
+  };
+  saveDrafts([record, ...readDrafts()]);
+  renderDrafts();
+  renderHistory();
+  message.textContent = "Draft request queued locally. Connect the authoring API to start generation.";
   message.className = "form-message success";
 });
 document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => { form.reset(); updateProfile(); message.textContent = ""; });
 updateProfile();
+renderDrafts();
+renderHistory();
