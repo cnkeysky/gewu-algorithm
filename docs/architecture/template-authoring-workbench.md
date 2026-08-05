@@ -44,6 +44,13 @@ authoring contract.
 The profile is part of the generation request and provenance. It must not be
 used to bypass the unit schema or to publish a mode-specific replacement unit.
 
+Task and rubric selection are authoring-service decisions, not required user
+inputs. The service resolves a registered task contract from the problem and
+may ask a reviewer model to identify applicable rubric rules. The model may
+only select from versioned rules already present in the registry; it cannot
+invent a rule or promote an artifact. The final review report exposes the
+selected rules and evidence for human inspection.
+
 ## Security and persistence
 
 Provider keys are read from the process environment or an OS credential

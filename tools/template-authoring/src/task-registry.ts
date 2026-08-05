@@ -86,6 +86,26 @@ const binarySearchDefinition: AuthoringTaskDefinition = {
   validateArtifact: assertBinaryArtifact,
 };
 
+const genericDefinition: AuthoringTaskDefinition = {
+  taskId: "algorithm-unit-v1",
+  label: "AlgorithmUnit · General authoring",
+  taskVersion: "1",
+  supports: () => true,
+  buildTask: (problem, profile) => ({
+    taskId: "algorithm-unit-v1",
+    taskVersion: "1",
+    selectedInputHash: inputHash(problem),
+    instruction: `Create a GEWU AlgorithmUnit for the following algorithm problem. Infer its domain, category, prerequisites, implementation strategy, complexity, assumptions, tests, patterns, relationships, and all selected practice projections from the problem. Preserve the exact contract fields and pending lifecycle claims. Return only the structured artifact requested by the schema; do not invent unknown fields.\n\nAlgorithm problem:\n${problem}`,
+    outputSchema: kahnTask.outputSchema,
+    profile,
+  }),
+  validateArtifact: (value) => {
+    if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("AlgorithmUnit artifact must contain manifest and sources");
+    if (value.manifest.schema_version !== "1" || value.manifest.status !== "draft") throw new Error("AlgorithmUnit lifecycle is invalid");
+    if (typeof value.manifest.id !== "string" || !Array.isArray(value.manifest.implementations) || value.manifest.implementations.length === 0) throw new Error("AlgorithmUnit identity or implementation is missing");
+  },
+};
+
 export class TaskRegistry {
   readonly #definitions: Map<string, AuthoringTaskDefinition>;
 
@@ -112,4 +132,4 @@ export class TaskRegistry {
   }
 }
 
-export const builtinTaskRegistry = new TaskRegistry([kahnDefinition, binarySearchDefinition]);
+export const builtinTaskRegistry = new TaskRegistry([kahnDefinition, binarySearchDefinition, genericDefinition]);

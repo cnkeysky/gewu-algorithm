@@ -20,8 +20,8 @@ test("registry resolves the independent binary-search contract", () => {
   assert.equal(task.taskVersion, "1");
 });
 
-test("registry rejects unsupported problems explicitly", () => {
-  assert.throws(() => builtinTaskRegistry.resolve(undefined, "Implement a red-black tree."), /no registered authoring task/);
+test("registry falls back to the general contract for a new category", () => {
+  assert.equal(builtinTaskRegistry.resolve(undefined, "Implement a red-black tree.").taskId, "algorithm-unit-v1");
   assert.throws(() => new TaskRegistry([{
     taskId: "duplicate", label: "one", taskVersion: "1", supports: () => true,
     buildTask: () => { throw new Error("unused"); },
