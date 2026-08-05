@@ -55,6 +55,13 @@ Drafts are mutable until accepted. Reviews are append-only records tied to the
 artifact hash. Acceptance is a human action after deterministic validation and
 role-specific review; a model pass cannot promote a draft.
 
+The local authoring service uses SQLite. Queryable lifecycle fields are normal
+columns in `drafts` and `reviews`; mode selections, assistance lists, and other
+evolving payloads are stored as validated JSON text columns. The service
+migrates the earlier ignored JSON state file once and then uses transactional
+SQLite writes. A repository boundary keeps a future PostgreSQL or hosted
+backend migration independent of the UI and HTTP contract.
+
 ## API boundary
 
 The workbench API should expose typed operations such as:

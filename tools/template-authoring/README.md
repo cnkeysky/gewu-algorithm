@@ -96,8 +96,9 @@ npm run workbench:dev
 Use `npm run workbench:api:local` when the API should load the ignored
 `.env.local` DeepSeek configuration for live generation.
 
-The API stores draft metadata and pending review records in the ignored
-`drafts/.workbench/state.json`. It never accepts provider credentials. The UI
+The API stores draft metadata and review records in the ignored SQLite database
+`drafts/.workbench/authoring.sqlite`; an earlier `state.json` is migrated once.
+It never accepts provider credentials. The UI
 falls back to browser local storage when the API is unavailable. The
 `POST /api/drafts/:id/validate` performs the deterministic profile check and
 moves a valid draft to `validated`. For the currently supported Kahn

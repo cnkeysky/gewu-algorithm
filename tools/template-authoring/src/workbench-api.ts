@@ -1,14 +1,33 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { PiGenerator, optionsFromEnvironment, type CodeRecallAssistanceSelection, type PracticeModeSelection } from "./pi-generator.js";
 import { reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 
 const PORT = Number(process.env.GEWU_WORKBENCH_PORT ?? 4174);
 const here = dirname(fileURLToPath(import.meta.url));
-const statePath = resolve(here, "../drafts/.workbench/state.json");
+const storageRoot = resolve(here, "../drafts/.workbench");
+const databasePath = join(storageRoot, "authoring.sqlite");
+mkdirSync(storageRoot, { recursive: true });
+const database = new DatabaseSync(databasePath);
+const modelCatalog = builtinModels();
+database.exec(`
+  CREATE TABLE IF NOT EXISTS drafts (
+    id TEXT PRIMARY KEY, task_id TEXT, title TEXT NOT NULL, problem TEXT NOT NULL,
+    provider TEXT NOT NULL, model TEXT NOT NULL, language TEXT NOT NULL, variants INTEGER NOT NULL,
+    modes_json TEXT NOT NULL, assistance_json TEXT NOT NULL, status TEXT NOT NULL,
+    created_at TEXT NOT NULL, artifact_path TEXT
+  );
+  CREATE TABLE IF NOT EXISTS reviews (
+    id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, role TEXT NOT NULL, verdict TEXT NOT NULL,
+    artifact_hash TEXT, created_at TEXT NOT NULL, FOREIGN KEY (draft_id) REFERENCES drafts(id)
+  );
+`);
 
 type DraftStatus = "draft" | "queued" | "generated" | "validated" | "accepted";
 type DraftRecord = {
@@ -45,22 +64,39 @@ function validateDraft(draft: DraftRecord): string[] {
   return errors;
 }
 
-async function loadState(): Promise<State> {
+function loadState(): State {
+  const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path FROM drafts ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
+  const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, created_at FROM reviews ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
+  return {
+    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), artifactPath: row.artifact_path ? String(row.artifact_path) : undefined })),
+    reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, createdAt: String(row.created_at) })),
+  };
+}
+
+function saveState(state: State): void {
+  database.exec("BEGIN");
   try {
-    const value = JSON.parse(await readFile(statePath, "utf8")) as Partial<State>;
-    return { drafts: Array.isArray(value.drafts) ? value.drafts : [], reviews: Array.isArray(value.reviews) ? value.reviews : [] };
+    database.exec("DELETE FROM reviews; DELETE FROM drafts;");
+    const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.artifactPath ?? null);
+    const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+    for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.createdAt);
+    database.exec("COMMIT");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    return { drafts: [], reviews: [] };
+    database.exec("ROLLBACK");
+    throw error;
   }
 }
 
-async function saveState(state: State): Promise<void> {
-  await mkdir(dirname(statePath), { recursive: true });
-  const temporary = `${statePath}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-  await rename(temporary, statePath);
+function migrateLegacyState(): void {
+  if (!existsSync(join(storageRoot, "state.json"))) return;
+  const count = Number((database.prepare("SELECT COUNT(*) AS count FROM drafts").get() as { count: number }).count);
+  if (count > 0) return;
+  const legacy = JSON.parse(readFileSync(join(storageRoot, "state.json"), "utf8")) as Partial<State>;
+  saveState({ drafts: Array.isArray(legacy.drafts) ? legacy.drafts : [], reviews: Array.isArray(legacy.reviews) ? legacy.reviews.filter((review) => review.role !== "all") : [] });
 }
+
+migrateLegacyState();
 
 async function generateDraft(draft: DraftRecord): Promise<{ provider: string; model: string; artifactPath: string }> {
   const definition = builtinTaskRegistry.resolve(draft.taskId, draft.problem);
@@ -82,7 +118,7 @@ async function generateDraft(draft: DraftRecord): Promise<{ provider: string; mo
   };
   definition.validateArtifact(artifact.manifest);
   if (!isRecord(artifact.manifest.sources)) throw new Error("generator sources are invalid");
-  const artifactAbsolutePath = join(dirname(statePath), "artifacts", draft.id);
+  const artifactAbsolutePath = join(storageRoot, "artifacts", draft.id);
   await mkdir(artifactAbsolutePath, { recursive: true });
   await writeFile(join(artifactAbsolutePath, "unit.json"), `${JSON.stringify(artifact.manifest.manifest, null, 2)}\n`, "utf8");
   for (const [path, content] of Object.entries(artifact.manifest.sources)) {
@@ -153,13 +189,18 @@ const server = createServer(async (request, response) => {
   try {
     if (request.method === "GET" && url.pathname === "/api/health") return send(response, 200, { status: "ok", storage: "local" });
     if (request.method === "GET" && url.pathname === "/api/tasks") return send(response, 200, { tasks: builtinTaskRegistry.list().map((definition) => ({ taskId: definition.taskId, label: definition.label, taskVersion: definition.taskVersion })) });
+    if (request.method === "GET" && url.pathname === "/api/providers") {
+      const providers = [
+        ["deepseek", "DeepSeek"], ["openai", "OpenAI"], ["moonshotai", "Moonshot"], ["xiaomi", "Xiaomi MiMo"],
+      ].map(([id, label]) => ({ id, label, models: modelCatalog.getModels(id).map((model) => model.id) }));
+      return send(response, 200, { providers });
+    }
     const state = await loadState();
     if (request.method === "GET" && url.pathname === "/api/drafts") return send(response, 200, { drafts: state.drafts });
     if (request.method === "GET" && url.pathname === "/api/reviews") return send(response, 200, { reviews: state.reviews });
     if (request.method === "POST" && url.pathname === "/api/drafts") {
       const draft = draftFrom(await body(request));
       state.drafts = [draft, ...state.drafts];
-      state.reviews = [{ id: crypto.randomUUID(), draftId: draft.id, role: "all", verdict: "pending", artifactHash: null, createdAt: draft.createdAt }, ...state.reviews];
       await saveState(state);
       return send(response, 201, { draft });
     }

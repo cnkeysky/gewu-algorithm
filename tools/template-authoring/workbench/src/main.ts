@@ -25,6 +25,12 @@ const problemPresets: Record<string, string> = {
   "algorithm-unit-topological-sort-kahn": "Implement Kahn's topological sorting algorithm for a directed graph represented as adjacency lists. Return a FIFO-deterministic ordering or an empty list when the graph contains a cycle.",
   "algorithm-unit-binary-search": "Implement iterative binary search over a sorted ascending list and return the target index or -1.",
 };
+let providerModels: Record<string, string[]> = {
+  deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
+  openai: ["gpt-4.1", "gpt-4.1-mini"],
+  moonshotai: ["kimi-k2-0711-preview", "kimi-k2-thinking"],
+  xiaomi: ["mimo-v2-flash", "mimo-v2-pro"],
+};
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (!root) throw new Error("workbench root is missing");
@@ -58,8 +64,8 @@ root.innerHTML = `
         <label class="field-label" for="problem">Algorithm problem</label>
         <textarea id="problem" rows="6" placeholder="Describe the problem, expected behavior, constraints, and boundaries.">Implement Kahn's topological sorting algorithm for a directed graph represented as adjacency lists. Return a FIFO-deterministic ordering or an empty list when the graph contains a cycle.</textarea>
         <div class="field-row">
-          <label class="field"><span>Provider</span><select id="provider"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="moonshot">Moonshot</option><option value="zhipu">Zhipu</option></select></label>
-          <label class="field"><span>Model</span><select id="model"><option>deepseek-v4-flash</option><option>deepseek-v4-pro</option></select></label>
+          <label class="field"><span>Provider</span><select id="provider"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="moonshotai">Moonshot</option><option value="xiaomi">Xiaomi MiMo</option></select></label>
+          <label class="field"><span>Model <small class="catalog-note">From provider catalog</small></span><select id="model"><option>deepseek-v4-flash</option><option>deepseek-v4-pro</option></select></label>
         </div>
         <div class="field-row">
           <label class="field"><span>Languages</span><input id="languages" value="python" /></label>
@@ -158,6 +164,20 @@ async function syncTasks(): Promise<void> {
     if (Array.isArray(payload.tasks) && payload.tasks.length) taskSelect.innerHTML = payload.tasks.map((task) => `<option value="${task.taskId}">${task.label} · v${task.taskVersion}</option>`).join("");
   } catch {
     // Built-in task options keep the form usable when the API is stopped.
+  }
+}
+async function syncProviders(): Promise<void> {
+  try {
+    const response = await fetch("/api/providers");
+    if (!response.ok) return;
+    const payload = await response.json() as { providers?: Array<{ id: string; label: string; models: string[] }> };
+    if (!Array.isArray(payload.providers)) return;
+    providerModels = Object.fromEntries(payload.providers.filter((provider) => provider.models.length).map((provider) => [provider.id, provider.models]));
+    const provider = document.querySelector<HTMLSelectElement>("#provider")!;
+    provider.innerHTML = payload.providers.filter((item) => item.models.length).map((item) => `<option value="${item.id}">${item.label}</option>`).join("");
+    provider.dispatchEvent(new Event("change"));
+  } catch {
+    // Static catalog fallback keeps the form usable without the API.
   }
 }
 function formatDate(value: string): string { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
@@ -279,13 +299,7 @@ selectAllModes.addEventListener("change", () => {
 document.querySelector<HTMLSelectElement>("#provider")!.addEventListener("change", (event) => {
   const provider = (event.target as HTMLSelectElement).value;
   const model = document.querySelector<HTMLSelectElement>("#model")!;
-  const models: Record<string, string[]> = {
-    deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
-    openai: ["gpt-5", "gpt-5-mini"],
-    moonshot: ["kimi-k2"],
-    zhipu: ["glm-4.5"],
-  };
-  model.innerHTML = (models[provider] ?? []).map((item) => `<option>${item}</option>`).join("");
+  model.innerHTML = (providerModels[provider] ?? []).map((item) => `<option>${item}</option>`).join("");
 });
 taskSelect.addEventListener("change", () => {
   const problem = document.querySelector<HTMLTextAreaElement>("#problem")!;
@@ -336,3 +350,4 @@ renderDrafts();
 renderHistory();
 void syncFromApi();
 void syncTasks();
+void syncProviders();
