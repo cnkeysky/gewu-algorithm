@@ -32,8 +32,9 @@ root.innerHTML = `
     <a class="brand" href="#home" data-go="home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>GEWU</a>
     <nav aria-label="Primary navigation">
       <button class="nav-item active" data-view="home">Home</button>
-      <button class="nav-item" data-view="new">Authoring</button>
       <button class="nav-item" data-view="practice">Practice</button>
+      <span class="nav-divider" aria-hidden="true"></span>
+      <button class="nav-item" data-view="new">Authoring</button>
       <button class="nav-item" data-view="drafts">Drafts <span class="nav-count">3</span></button>
       <button class="nav-item" data-view="history">Review history</button>
     </nav>
