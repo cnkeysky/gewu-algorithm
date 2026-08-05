@@ -108,3 +108,8 @@ different algorithm task is rejected until its output schema and validator are
 declared rather than being silently treated as Kahn. Finally,
 `POST /api/drafts/:id/accept` requires deterministic validation and a passing
 review before moving the draft to `accepted`.
+
+Generation tasks are resolved through the TypeScript task registry. Use
+`GET /api/tasks` to inspect registered task ids and versions. Each task owns
+its support predicate and output contract; adding a new algorithm task does not
+require another API generation branch.

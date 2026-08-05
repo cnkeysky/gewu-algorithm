@@ -2,9 +2,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertGeneratedTemplate, task } from "./generate-template.js";
+import { assertGeneratedTemplate } from "./generate-template.js";
 import { PiGenerator, optionsFromEnvironment, type CodeRecallAssistanceSelection, type PracticeModeSelection } from "./pi-generator.js";
 import { reviewTemplateDraft } from "./review-template.js";
+import { builtinTaskRegistry } from "./task-registry.js";
 
 const PORT = Number(process.env.GEWU_WORKBENCH_PORT ?? 4174);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,7 @@ const statePath = resolve(here, "../drafts/.workbench/state.json");
 type DraftStatus = "draft" | "queued" | "generated" | "validated" | "accepted";
 type DraftRecord = {
   id: string;
+  taskId?: string;
   title: string;
   problem: string;
   provider: string;
@@ -62,20 +64,13 @@ async function saveState(state: State): Promise<void> {
 }
 
 async function generateDraft(draft: DraftRecord): Promise<{ provider: string; model: string; artifactPath: string }> {
-  const normalized = draft.problem.toLowerCase();
-  if (!normalized.includes("kahn") || !normalized.includes("topological")) {
-    throw new Error("the live generator currently supports the Kahn topological-sort authoring task only");
-  }
-  const artifact = await new PiGenerator(optionsFromEnvironment()).generate({
-    ...task,
-    instruction: `${task.instruction}\n\nAuthor problem supplied by the workbench:\n${draft.problem}`,
-    profile: {
+  const definition = builtinTaskRegistry.resolve(draft.taskId, draft.problem);
+  const artifact = await new PiGenerator(optionsFromEnvironment()).generate(definition.buildTask(draft.problem, {
       practice_modes: draft.modes as PracticeModeSelection[],
       code_recall_assistance: draft.assistance as CodeRecallAssistanceSelection[],
       implementation_languages: [draft.language],
       implementation_variants: draft.variants,
-    },
-  });
+    }));
   if (!isRecord(artifact.manifest)) throw new Error("generator returned an invalid artifact");
   assertGeneratedTemplate(artifact.manifest);
   const artifactAbsolutePath = join(dirname(statePath), "artifacts", draft.id);
@@ -129,6 +124,7 @@ function draftFrom(value: unknown): DraftRecord {
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),
+    taskId: typeof value.taskId === "string" ? value.taskId : undefined,
     title: value.title,
     problem: value.problem,
     provider: typeof value.provider === "string" ? value.provider : "deepseek",
@@ -147,6 +143,7 @@ const server = createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
   try {
     if (request.method === "GET" && url.pathname === "/api/health") return send(response, 200, { status: "ok", storage: "local" });
+    if (request.method === "GET" && url.pathname === "/api/tasks") return send(response, 200, { tasks: builtinTaskRegistry.list().map((definition) => ({ taskId: definition.taskId, label: definition.label, taskVersion: definition.taskVersion })) });
     const state = await loadState();
     if (request.method === "GET" && url.pathname === "/api/drafts") return send(response, 200, { drafts: state.drafts });
     if (request.method === "GET" && url.pathname === "/api/reviews") return send(response, 200, { reviews: state.reviews });
