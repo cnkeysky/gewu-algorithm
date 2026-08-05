@@ -73,6 +73,10 @@ five practice modes without an editor, network connection, or LLM provider.
 
 ## Stage 5: Core Progressive Code Practice
 
+Status: in progress as of 2026-08-05. The first deterministic session slice is
+implemented in `gewu-practice`; client and protocol integration remain out of
+scope for this stage slice.
+
 - implement deterministic `code_recall` sessions over the shared code-practice
   foundation;
 - support reviewed skeleton, comment, keyword, cloze, and absent-code assistance;

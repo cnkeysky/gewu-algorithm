@@ -1,8 +1,14 @@
 #![forbid(unsafe_code)]
 //! Deterministic, editor-independent practice state machines.
 
+mod code_recall;
 mod flow;
 
+pub use code_recall::{
+    CodeRecallAttempt, CodeRecallConfig, CodeRecallEvent, CodeRecallGuidance, CodeRecallOutcome,
+    CodeRecallReplayError, CodeRecallSession, CodeRecallStartError, CodeRecallTimedEvent,
+    CodeRecallTransitionError,
+};
 pub use flow::{
     FlowRecallAttempt, FlowRecallConfig, FlowRecallEvent, FlowRecallOutcome, FlowRecallSession,
     FlowRecallStartError, FlowRecallTransitionError,
@@ -12,6 +18,8 @@ use std::time::Duration;
 
 use gewu_domain::{Normalization, PracticeMode, Revision, UnitId};
 use thiserror::Error;
+
+pub use gewu_domain::CodeRecallAssistance;
 
 /// Version of the practice transition and attempt-fact contract.
 pub const ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");

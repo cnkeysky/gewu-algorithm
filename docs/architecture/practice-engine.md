@@ -100,6 +100,20 @@ Stage 1 defines the count units as follows:
 
 The deterministic core never reads a clock. Timed events carry caller-observed cumulative durations, so the same configuration and timed event sequence reproduces the same state and attempt. Attempt access is idempotent: a terminal session owns one immutable record and repeated reads return that record.
 
+## Code Recall (`code_recall`)
+
+Code Recall uses the same deterministic text, Unicode, edit, timing, restart,
+and terminal-attempt invariants as Shadow Typing, but records its reduced-guidance
+policy separately. The core exposes the reviewed prompt and scaffold items; a
+client decides how to render them. The first slice supports `skeleton`,
+`comments`, `keywords`, `cloze`, and `none` assistance policies and exact
+canonical-target completion. Reduced guidance changes assistance facts, not the
+deterministic completion rule.
+
+Prompt and scaffold reveals are explicit events. Repeated reveals remain
+observable facts rather than being silently deduplicated. The first slice does
+not infer hidden regions from syntax or editor decorations.
+
 ## Flow Recall (`flow_recall`)
 
 The MVP Flow Recall mode uses reviewed ordered concepts with optional aliases. It accepts a reviewed stable step ID, an exact reviewed alias after case/punctuation normalization, or an answer containing every reviewed concept token. It checks steps in order and records prompt reveals separately from rejected answers. It must not require exact prose matching.
