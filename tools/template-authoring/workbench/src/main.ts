@@ -181,6 +181,8 @@ type PracticeListName = "checkpoints" | "recommendations" | "attempts";
 // Two rows leave enough room for long mode/status labels inside the fixed panels.
 const PRACTICE_PAGE_SIZE = 2;
 const practicePages: Record<PracticeListName, number> = { checkpoints: 0, recommendations: 0, attempts: 0 };
+const DRAFT_PAGE_SIZE = 6;
+let draftPage = 0;
 let checkpointItems: Checkpoint[] = [];
 let recommendationItems: Recommendation[] = [];
 let attemptItems: Attempt[] = [];
@@ -509,25 +511,32 @@ function progressPercent(accepted: number, target: number): number { return targ
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
 function variantLabel(value: { implementation?: string; practice_id?: string }): string { return value.implementation ? `implementation · ${value.implementation}` : value.practice_id ? `practice · ${value.practice_id}` : "default configuration"; }
 function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM pre-reviewed", needs_revision: "Needs revision", revision_requested: "Revision requested", accepted: "Human approved" })[status]; }
+function draftStage(status: DraftRecord["status"]): number {
+  return status === "queued" || status === "revision_requested" ? 1 : status === "generated" ? 2 : status === "validated" || status === "needs_revision" ? 3 : status === "llm_reviewed" ? 4 : status === "accepted" ? 5 : 0;
+}
 function renderDrafts(): void {
   const drafts = readDrafts();
   document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
-  draftList.innerHTML = drafts.length ? drafts.map((draft) => {
-    const canGenerate = ["queued", "needs_revision", "revision_requested"].includes(draft.status);
-    const canValidate = ["generated", "needs_revision"].includes(draft.status);
+  const totalPages = Math.max(1, Math.ceil(drafts.length / DRAFT_PAGE_SIZE));
+  draftPage = Math.min(draftPage, totalPages - 1);
+  const visibleDrafts = drafts.slice(draftPage * DRAFT_PAGE_SIZE, (draftPage + 1) * DRAFT_PAGE_SIZE);
+  draftList.innerHTML = drafts.length ? `${visibleDrafts.map((draft) => {
+    const canGenerate = ["queued", "revision_requested"].includes(draft.status);
+    const canValidate = draft.status === "generated";
     const canReview = draft.status === "validated";
     const canAccept = draft.status === "llm_reviewed";
-    const canRollback = ["generated", "validated", "llm_reviewed", "needs_revision", "accepted"].includes(draft.status);
+    const canRollback = ["generated", "validated", "llm_reviewed", "needs_revision"].includes(draft.status);
+    const stage = draftStage(draft.status);
     const actions = [
-      draft.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View artifact</button>` : "",
+      draft.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">${draft.status === "needs_revision" ? "Edit artifact" : "View artifact"}</button>` : "",
       canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">Generate template</button>` : "",
       canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}">LLM pre-review</button>` : "",
       canAccept ? `<button class="inline-action approval-action" type="button" data-accept-id="${draft.id}">Human approve</button>` : "",
       canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}">Request revision</button>` : "",
     ].filter(Boolean).join("");
-    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${statusLabel(draft.status)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
-  }).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow"><b class="${stage >= 1 ? "active" : ""}">01 Generate</b><b class="${stage >= 2 ? "active" : ""}">02 Validate</b><b class="${stage >= 4 ? "active" : ""}">03 Review</b><b class="${stage >= 5 ? "active" : ""}">04 Approve</b></small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${statusLabel(draft.status)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
+  }).join("")}<div class="draft-pagination"><span>${draftPage + 1} / ${totalPages}</span><span><button class="page-button" type="button" aria-label="Previous drafts page" data-draft-page="-1" ${draftPage === 0 ? "disabled" : ""}>&#8249;</button><button class="page-button" type="button" aria-label="Next drafts page" data-draft-page="1" ${draftPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
   renderWorkflow();
 }
 function renderWorkflow(): void {
@@ -546,8 +555,8 @@ function renderWorkflow(): void {
   const setStatus = (target: HTMLElement, value: string, kind: "pending" | "ready" | "passed" | "blocked") => { target.textContent = value; target.className = `workflow-status ${kind}`; };
   state.textContent = draftDirty ? "Unsaved changes" : draftPersistence === "local" ? "Local only / sync pending" : statusLabel(draft.status);
   const contractValid = ["validated", "llm_reviewed", "accepted"].includes(draft.status);
-  const readyToValidate = ["generated", "revision_requested", "needs_revision"].includes(draft.status);
-  setStatus(validation, contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : "Pending", contractValid ? "passed" : readyToValidate ? "ready" : "pending");
+  const readyToValidate = draft.status === "generated";
+  setStatus(validation, contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : draft.status === "needs_revision" ? "Blocked by revision" : "Pending", contractValid ? "passed" : readyToValidate ? "ready" : draft.status === "needs_revision" ? "blocked" : "pending");
   setStatus(review, report ? report.verdict.replaceAll("_", " ") : draft.status === "validated" ? "Ready to run" : "Pending", report?.verdict === "pass" ? "passed" : report ? "blocked" : draft.status === "validated" ? "ready" : "pending");
   setStatus(acceptance, draft.status === "accepted" ? "Human approved" : draft.status === "llm_reviewed" ? "Ready for you" : "Pending", draft.status === "accepted" ? "passed" : draft.status === "llm_reviewed" ? "ready" : "pending");
 }
@@ -604,6 +613,13 @@ function showView(view: string): void {
 
 document.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
+  const draftPageButton = target.closest<HTMLButtonElement>("[data-draft-page]");
+  if (draftPageButton) {
+    event.stopPropagation();
+    draftPage += Number(draftPageButton.dataset.draftPage ?? 0);
+    renderDrafts();
+    return;
+  }
   const navigation = target.closest<HTMLButtonElement>(".nav-item, [data-go]");
   if (navigation) {
     const view = navigation.dataset.view ?? navigation.dataset.go ?? "new";

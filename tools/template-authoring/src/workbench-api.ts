@@ -351,7 +351,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && generationMatch) {
       const draft = state.drafts.find((item) => item.id === generationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (!["queued", "revision_requested", "needs_revision"].includes(draft.status)) return send(response, 409, { error: "only a queued or revision-requested draft can be generated" });
+      if (!["queued", "revision_requested"].includes(draft.status)) return send(response, 409, { error: "only a queued or revision-requested draft can be generated" });
       const generated = await generateDraft(draft);
       draft.status = "generated";
       draft.artifactPath = generated.artifactPath;
@@ -363,7 +363,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && validationMatch) {
       const draft = state.drafts.find((item) => item.id === validationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (!draft.artifactPath || !["generated", "revision_requested", "needs_revision"].includes(draft.status)) return send(response, 409, { error: "generate the draft before deterministic validation" });
+      if (!draft.artifactPath || draft.status !== "generated") return send(response, 409, { error: "generate the draft before deterministic validation" });
       const errors = validateDraft(draft);
       if (errors.length > 0) return send(response, 422, { status: "failed", errors });
       try { await validateArtifactWithRust(artifactAbsolutePath(draft), false); } catch (error) { return send(response, 422, { status: "failed", errors: [error instanceof Error ? error.message : String(error)] }); }
@@ -443,6 +443,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && rollbackMatch) {
       const draft = state.drafts.find((item) => item.id === rollbackMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
+      if (draft.status === "accepted") return send(response, 409, { error: "an accepted draft is immutable; create a new revision instead" });
       if (draft.status === "queued" || draft.status === "draft") return send(response, 409, { error: "draft is already awaiting generation" });
       draft.status = "revision_requested";
       draft.artifactPath = undefined;

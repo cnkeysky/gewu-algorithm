@@ -54,7 +54,7 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
       ],
       properties: {
         schema_version: { const: "2" },
-        id: { type: "string" },
+        id: { type: "string", pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" },
         revision: { type: "integer", minimum: 1 },
         status: { const: "draft" },
         title: { type: "string" },
@@ -66,7 +66,7 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
           properties: {
             domain: { type: "string" },
             category: { type: "string" },
-            prerequisites: { type: "array", items: { type: "string" } },
+            prerequisites: { type: "array", items: { type: "string", pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" } },
           },
         },
         problem: {
@@ -98,20 +98,60 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
             required: ["key", "language", "source", "purpose", "strategy", "complexity", "assumptions", "test_references", "normalization"],
             properties: {
               key: { type: "string" }, language: { type: "string" }, source: { type: "string" },
-              purpose: { type: "string" }, strategy: { type: "string" },
+              purpose: { enum: ["teaching", "concise", "iterative", "recursive", "optimized"] }, strategy: { type: "string" },
               complexity: { type: "object", additionalProperties: false, required: ["time", "space"], properties: { time: { type: "string" }, space: { type: "string" } } },
               assumptions: { type: "array", items: { type: "string" } },
               test_references: { type: "array", items: { type: "string" } },
-              normalization: { type: "object" },
+              normalization: {
+                type: "object", additionalProperties: false,
+                required: ["line_endings", "trailing_newline", "whitespace"],
+                properties: {
+                  line_endings: { enum: ["lf", "crlf", "preserve"] },
+                  trailing_newline: { type: "boolean" },
+                  whitespace: { enum: ["strict", "trim_trailing"] },
+                },
+              },
             },
           },
         },
-        patterns: { type: "array", minItems: 1 },
-        relationships: { type: "array" },
-        practice: { type: "object" },
-        validation: { type: "object" },
-        provenance: { type: "object" },
-        supersedes: { type: "array" },
+        patterns: {
+          type: "array", minItems: 1,
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["id", "summary", "applicability", "boundaries"],
+            properties: {
+              id: { type: "string" }, summary: { type: "string" },
+              applicability: { type: "array", items: { type: "string" } },
+              boundaries: { type: "array", items: { type: "string" } },
+            },
+          },
+        },
+        relationships: {
+          type: "array",
+          items: {
+            type: "object", additionalProperties: false,
+            required: ["target", "type", "reason", "boundary"],
+            properties: {
+              target: { type: "string", pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" },
+              type: { enum: ["depends_on", "influences", "analogous_to", "contrasts_with", "composes_with", "generalizes", "specializes", "supersedes"] },
+              reason: { type: "string" }, boundary: { type: "string" },
+            },
+          },
+        },
+        practice: {
+          type: "object", additionalProperties: false,
+          required: ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"],
+          properties: {
+            shadow_typing: { type: "array", items: { type: "object", additionalProperties: false, required: ["implementation", "strict"], properties: { implementation: { type: "string" }, strict: { type: "boolean" } } } },
+            flow_recall: { type: "object", additionalProperties: false, required: ["steps"], properties: { steps: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "prompt", "concepts", "aliases"], properties: { id: { type: "string" }, prompt: { type: "string" }, concepts: { type: "array", items: { type: "string" } }, aliases: { type: "array", items: { type: "string" } } } } } } },
+            code_recall: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "implementation", "layout", "assistance", "prompt", "scaffold", "slots"], properties: { id: { type: "string" }, implementation: { type: "string" }, layout: { enum: ["full_recall", "comment_guided", "comment_to_code", "cloze"] }, assistance: { enum: ["skeleton", "comments", "keywords", "cloze", "none"] }, prompt: { type: "string" }, scaffold: { type: "array", items: { type: "string" } }, source_template: { type: "string" }, slots: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "expected"], properties: { id: { type: "string" }, cue: { type: "string" }, expected: { type: "string" } } } } } } },
+            reasoning_recall: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "aspect", "prompt", "concepts", "aliases"], properties: { id: { type: "string" }, aspect: { enum: ["mechanism", "invariant", "trade_off", "boundary", "failure_condition"] }, prompt: { type: "string" }, concepts: { type: "array", items: { type: "string" } }, aliases: { type: "array", items: { type: "string" } } } } },
+            transfer_practice: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "pattern", "new_case", "prompt", "concepts", "transfers", "differences", "boundaries"], properties: { id: { type: "string" }, pattern: { type: "string" }, new_case: { type: "string" }, prompt: { type: "string" }, concepts: { type: "array", items: { type: "string" } }, transfers: { type: "array", items: { type: "string" } }, differences: { type: "array", items: { type: "string" } }, boundaries: { type: "array", items: { type: "string" } } } } },
+          },
+        },
+        validation: { type: "object", additionalProperties: false, required: ["schema", "code", "content_review", "transfer_review", "last_validated_at"], properties: { schema: { const: "pending" }, code: { const: "pending" }, content_review: { const: "pending" }, transfer_review: { const: "pending" }, last_validated_at: { type: ["string", "null"] } } },
+        provenance: { type: "object", additionalProperties: false, required: ["authors", "generated_by", "reviewed_by", "sources", "license"], properties: { authors: { type: "array", items: { type: "string" } }, generated_by: { type: ["object", "null"], additionalProperties: false, required: ["provider", "model", "task_version", "generated_at"], properties: { provider: { type: "string" }, model: { type: "string" }, task_version: { type: "string" }, generated_at: { type: "string" } } }, reviewed_by: { type: "array", items: { type: "string" } }, sources: { type: "array", items: { type: "object", additionalProperties: false, required: ["title", "url", "role", "accessed_at"], properties: { title: { type: "string" }, url: { type: "string" }, role: { type: "string" }, accessed_at: { type: "string" } } } }, license: { type: "string" } } },
+        supersedes: { type: "array", items: { type: "object", additionalProperties: false, required: ["revision", "reason"], properties: { revision: { type: "integer", minimum: 1 }, reason: { type: "string" } } } },
       },
     },
     sources: {

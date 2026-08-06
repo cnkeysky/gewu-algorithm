@@ -31,7 +31,7 @@ function codeRecallLayoutInstruction(profile: GenerationProfile): string {
   const commentToCode = profile.code_recall_layouts.includes("comment_to_code")
     ? ` For each comment_to_code projection, use assistance "comments", omit source_template and slots, and provide an ordered scaffold of reviewed algorithm-operation comments from which the learner reconstructs the complete canonical implementation.`
     : "";
-  return `\n\nRequested Code Recall layouts: ${requested}.${cloze}${commentGuided}${commentToCode}`;
+  return `\n\nRequested Code Recall layouts: ${requested}.${cloze}${commentGuided}${commentToCode} The manifest id must be a dotted lowercase identifier with at least one dot, such as graph.course-schedule; never use a bare hyphenated id. Use exactly code/python.py as the implementation source and tests/python_test.py as its test_references path, and return both files in sources.`;
 }
 
 const kahnDefinition: AuthoringTaskDefinition = {
