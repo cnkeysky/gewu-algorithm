@@ -5,7 +5,7 @@ export type ShadowEdit = { start: number; end: number; text: string };
 export type ShadowEditResult = { acceptedText: string };
 
 export type ShadowEditorController = {
-  update: (acceptedText: string, targetText: string, language: string, readOnly: boolean, force?: boolean) => void;
+  update: (acceptedText: string, targetText: string, language: string, readOnly: boolean, force?: boolean, resetActivation?: boolean) => void;
   focus: () => void;
   dispose: () => void;
 };
@@ -48,7 +48,7 @@ export function mountShadowEditor(
   let syncing = false;
   let locked = readOnly;
   let flushTimer: number | undefined;
-  type PendingTransaction = { sequence: number; edit: ShadowEdit; afterText: string };
+  type PendingTransaction = { sequence: number; afterText: string };
   let nextSequence = 1;
   let localText = acceptedText;
   let confirmedText = acceptedText;
@@ -98,8 +98,13 @@ export function mountShadowEditor(
     if (syncing || locked || inFlight || pending.length === 0) return;
     const transaction = pending.shift();
     if (!transaction) return;
-    inFlight = transaction;
-    void onEdit(transaction.edit).then((result) => {
+    const edit = diff(confirmedText, transaction.afterText);
+    if (!edit) {
+      pump();
+      return;
+    }
+    inFlight = { ...transaction };
+    void onEdit(edit).then((result) => {
       const accepted = result.acceptedText;
       confirmedText = accepted;
       if (accepted !== transaction.afterText) {
@@ -125,9 +130,8 @@ export function mountShadowEditor(
   };
   const enqueue = () => {
     const value = model.getValue();
-    const edit = diff(localText, value);
-    if (!edit) return;
-    const transaction = { sequence: nextSequence++, edit, afterText: value };
+    if (value === localText) return;
+    const transaction = { sequence: nextSequence++, afterText: value };
     localText = value;
     pending.push(transaction);
     pump();
@@ -181,8 +185,8 @@ export function mountShadowEditor(
   });
   paintGhost(acceptedText);
   return {
-    update: (value, target, nextLanguage, readOnlyNext, force = false) => {
-      if (force) activated = false;
+    update: (value, target, nextLanguage, readOnlyNext, force = false, resetActivation = false) => {
+      if (resetActivation) activated = false;
       syncing = true;
       const responseMatchesInFlight = inFlight?.afterText === value;
       confirmedText = value;

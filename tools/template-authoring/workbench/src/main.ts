@@ -253,14 +253,14 @@ async function updateShadowEditor(container: HTMLElement, session: PracticeSessi
     }, { once: true });
   }
   if (shadowEditor) {
-    shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", sessionChanged);
+    shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", sessionChanged, sessionChanged);
     return;
   }
   if (!shadowEditorLoading) {
     shadowEditorLoading = import("./shadow-editor").then(({ mountShadowEditor }) => mountShadowEditor(container, shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", applyShadowEdit));
   }
   shadowEditor = await shadowEditorLoading;
-  shadowEditor.update(shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", sessionChanged);
+  shadowEditor.update(shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", sessionChanged, sessionChanged);
   if (shadowEditorPendingFocus) {
     shadowEditorPendingFocus = false;
     shadowEditor.focus();

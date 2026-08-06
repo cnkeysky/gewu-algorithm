@@ -6,6 +6,7 @@ export default defineConfig({
   testDir: "./tests",
   globalSetup: process.env.GEWU_E2E_EXISTING ? undefined : "./tests/global-setup.ts",
   workers: 1,
+  fullyParallel: false,
   timeout: 30_000,
   expect: { timeout: 8_000 },
   use: {
