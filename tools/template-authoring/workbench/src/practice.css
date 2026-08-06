@@ -25,8 +25,10 @@
 .practice-controls .form-message { grid-column: 1 / -1; margin: 0; text-align: left; }
 
 .practice-session { grid-column: 1; grid-row: auto; padding: 26px 0 0; border-top: 1px solid var(--line); }
-.session-heading { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.session-heading { display: flex; align-items: start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .session-heading h3 { margin: 0; font-size: 24px; line-height: 1.2; }
+.session-heading-meta { display: flex; min-width: 96px; flex-direction: column; align-items: flex-end; gap: 8px; }
+.session-language { display: inline-block; padding: 4px 7px; border: 1px solid var(--line); color: var(--muted); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: lowercase; }
 .session-prompt { min-height: 36px; margin: 21px 0 13px; color: var(--muted); font-size: 14px; line-height: 1.5; }
 .session-prompt.is-hidden { color: #93a29a; font-style: italic; }
 .session-progress { margin: 20px 0 8px; color: var(--green); font-size: 12px; font-weight: 700; }
@@ -38,12 +40,18 @@
 .practice-session textarea { min-height: 130px; border-color: #c7d7cc; background: #fff; font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .practice-session textarea[hidden] { display: none !important; }
 .practice-session .form-actions { justify-content: start; margin-top: 18px; }
-.shadow-editor { height: 420px; min-height: 0; overflow: hidden; border: 1px solid #c7d7cc; background: #fff; cursor: text; transition: border-color 120ms ease, box-shadow 120ms ease; }
+.practice-session .button.danger { border-color: #d39a79; background: #fff5ef; color: #a85126; }
+.practice-session .button.danger:hover { border-color: #a85126; background: #a85126; color: #fff; }
+.shadow-editor { position: relative; height: 420px; min-height: 0; overflow: hidden; border: 1px solid #c7d7cc; background: #fff; cursor: text; transition: border-color 120ms ease, box-shadow 120ms ease; }
 .shadow-editor:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(38, 105, 72, .12); }
-.gewu-shadow-guidance { color: #84978d; opacity: .78; pointer-events: none; white-space: pre; font: 13px/22px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.shadow-editor-toolbar { position: absolute; z-index: 20; top: 8px; right: 9px; display: inline-flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid #d6e1d9; background: rgba(255, 255, 255, .94); box-shadow: 0 2px 8px rgba(32, 42, 42, .08); }
+.shadow-editor-language { padding: 3px 6px; color: var(--muted); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: lowercase; }
+.shadow-editor-font-button { width: 27px; height: 24px; padding: 0; border: 1px solid transparent; background: transparent; color: var(--muted); font-size: 10px; font-weight: 700; }
+.shadow-editor-font-button:hover, .shadow-editor-font-button:focus-visible { border-color: #b7d2c3; background: var(--green-soft); color: var(--green); outline: none; }
+.gewu-shadow-guidance { color: #536c61; opacity: .95; pointer-events: none; white-space: pre; font: 13px/22px ui-monospace, SFMono-Regular, Menlo, monospace; text-shadow: 0 0 1px rgba(83, 108, 97, .18); }
 
 .practice-side { display: grid; grid-column: 1; grid-row: auto; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; align-items: stretch; padding: 8px 0 0; }
-.practice-side section { display: flex; min-width: 0; height: 264px; min-height: 264px; flex-direction: column; overflow: hidden; border-top: 1px solid var(--line); }
+.practice-side section { display: flex; min-width: 0; height: 336px; min-height: 336px; flex-direction: column; overflow: hidden; border-top: 1px solid var(--line); }
 .practice-side section + section { padding-left: 26px; border-left: 1px solid var(--line); }
 .practice-side .panel-heading { flex: 0 0 auto; margin: 0 0 5px; padding: 13px 0 8px; }
 .practice-side h3 { margin: 0; font-size: 14px; }
@@ -53,15 +61,15 @@
 .practice-side .compact-row { align-items: start; padding: 11px 0; }
 .practice-side .compact-row > span:first-child { display: -webkit-box; min-width: 0; overflow: hidden; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .practice-side .compact-row > span:first-child strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.practice-side .practice-record { display: grid; min-height: 64px; box-sizing: border-box; gap: 5px; padding: 8px 10px; border: 1px solid #e3ece6; border-radius: 4px; background: #f7faf8; }
+.practice-side .practice-record { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 64px; flex: 0 0 auto; box-sizing: border-box; gap: 5px; padding: 8px 10px; border: 1px solid #e3ece6; border-radius: 4px; background: #f7faf8; }
 .record-main { min-width: 0; }
 .record-main strong, .record-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .record-main strong { color: var(--ink); font-size: 12px; }
 .record-main span { margin-top: 2px; color: var(--muted); font-size: 11px; }
-.record-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-width: 0; }
+.record-footer { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) 124px; gap: 10px; align-items: center; min-width: 0; }
 .record-footer time { min-width: 0; overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.record-actions { display: inline-flex; gap: 7px; justify-content: end; white-space: nowrap; }
-.record-state { color: var(--green); font-size: 10px; font-weight: 700; text-transform: capitalize; white-space: nowrap; }
+.record-actions { display: inline-flex; width: 124px; gap: 7px; justify-content: end; white-space: nowrap; }
+.record-state { display: block; width: 124px; color: var(--green); font-size: 10px; font-weight: 700; text-align: right; text-transform: capitalize; white-space: nowrap; }
 
 @media (max-width: 850px) {
   #practice-view { padding: 23px 18px 28px; }
@@ -69,7 +77,7 @@
   .practice-controls { grid-template-columns: 1fr 1fr; }
   .practice-controls .button, .practice-controls .form-message { grid-column: 1 / -1; }
   .practice-side { grid-template-columns: 1fr; }
-  .practice-side section { height: 264px; min-height: 264px; }
+  .practice-side section { height: 336px; min-height: 336px; }
   .practice-side section + section { padding-top: 18px; padding-left: 0; border-top: 1px solid var(--line); border-left: 0; }
   .shadow-editor { height: 360px; }
 }

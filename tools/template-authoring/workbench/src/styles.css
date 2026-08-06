@@ -82,6 +82,11 @@ footer { display: flex; justify-content: space-between; margin-top: auto; paddin
 [data-text-layout] { transition: opacity .28s ease, transform .28s ease; }
 [data-text-layout].text-layout-ready { animation: text-settle .42s ease both; }
 @keyframes text-settle { from { opacity: .55; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.terminal-pulse { width: 6px; height: 6px; margin-left: auto; border-radius: 50%; background: #7ed0a8; box-shadow: 0 0 0 0 rgba(126, 208, 168, .45); animation: terminal-pulse 1.8s ease-out infinite; }
+.terminal-cursor { color: #7ed0a8; animation: terminal-cursor 1s step-end infinite; }
+@keyframes terminal-pulse { 0% { box-shadow: 0 0 0 0 rgba(126, 208, 168, .45); } 70% { box-shadow: 0 0 0 8px rgba(126, 208, 168, 0); } 100% { box-shadow: 0 0 0 0 rgba(126, 208, 168, 0); } }
+@keyframes terminal-cursor { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .terminal-pulse, .terminal-cursor { animation: none; } }
 .hero-copy h1[data-layout-lines] { min-height: min-content; }
 .vision-strip h2[data-layout-lines] { min-height: min-content; }
 

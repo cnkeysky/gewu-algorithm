@@ -6,6 +6,7 @@ export type ShadowEditResult = { acceptedText: string };
 
 export type ShadowEditorController = {
   update: (acceptedText: string, targetText: string, language: string, readOnly: boolean, force?: boolean, resetActivation?: boolean) => void;
+  flush: () => Promise<void>;
   focus: () => void;
   dispose: () => void;
 };
@@ -32,6 +33,12 @@ export function mountShadowEditor(
     wordWrap: "off",
     autoIndent: "none",
     formatOnType: false,
+    quickSuggestions: false,
+    suggestOnTriggerCharacters: false,
+    acceptSuggestionOnEnter: "off",
+    tabCompletion: "off",
+    parameterHints: { enabled: false },
+    wordBasedSuggestions: "off",
     autoClosingBrackets: "never",
     autoClosingQuotes: "never",
     scrollBeyondLastLine: false,
@@ -45,11 +52,38 @@ export function mountShadowEditor(
     readOnly: true,
     theme: "vs-light",
   });
+  let fontSize = 13;
+  const toolbar = document.createElement("div");
+  toolbar.className = "shadow-editor-toolbar";
+  const languageBadge = document.createElement("span");
+  languageBadge.className = "shadow-editor-language";
+  languageBadge.textContent = language;
+  const decreaseFont = document.createElement("button");
+  decreaseFont.type = "button";
+  decreaseFont.className = "shadow-editor-font-button";
+  decreaseFont.textContent = "A-";
+  decreaseFont.setAttribute("aria-label", "Decrease editor font size");
+  decreaseFont.title = "Decrease editor font size";
+  const increaseFont = document.createElement("button");
+  increaseFont.type = "button";
+  increaseFont.className = "shadow-editor-font-button";
+  increaseFont.textContent = "A+";
+  increaseFont.setAttribute("aria-label", "Increase editor font size");
+  increaseFont.title = "Increase editor font size";
+  const setFontSize = (next: number) => {
+    fontSize = Math.max(11, Math.min(20, next));
+    editor.updateOptions({ fontSize, lineHeight: Math.round(fontSize * 1.7) });
+  };
+  decreaseFont.addEventListener("click", () => setFontSize(fontSize - 1));
+  increaseFont.addEventListener("click", () => setFontSize(fontSize + 1));
+  toolbar.append(languageBadge, decreaseFont, increaseFont);
+  container.appendChild(toolbar);
   let syncing = false;
   let locked = readOnly;
   let flushTimer: number | undefined;
-  type PendingTransaction = { sequence: number; afterText: string };
+  type PendingTransaction = { sequence: number; generation: number; afterText: string };
   let nextSequence = 1;
+  let generation = 0;
   let localText = acceptedText;
   let confirmedText = acceptedText;
   let activated = false;
@@ -105,6 +139,7 @@ export function mountShadowEditor(
     }
     inFlight = { ...transaction };
     void onEdit(edit).then((result) => {
+      if (transaction.generation !== generation) return;
       const accepted = result.acceptedText;
       confirmedText = accepted;
       if (accepted !== transaction.afterText) {
@@ -131,18 +166,25 @@ export function mountShadowEditor(
   const enqueue = () => {
     const value = model.getValue();
     if (value === localText) return;
-    const transaction = { sequence: nextSequence++, afterText: value };
+    const transaction = { sequence: nextSequence++, generation, afterText: value };
     localText = value;
     pending.push(transaction);
     pump();
   };
+  const waitForIdle = async (): Promise<void> => {
+    if (!inFlight && pending.length === 0) return;
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+    return waitForIdle();
+  };
   const subscription = editor.onDidChangeModelContent(() => {
     if (syncing || locked) return;
-    if (flushTimer !== undefined) window.clearTimeout(flushTimer);
+    if (flushTimer !== undefined) return;
+    // Monaco updates locally immediately. A short batching window keeps
+    // sustained typing from turning every character into a disk checkpoint.
     flushTimer = window.setTimeout(() => {
       flushTimer = undefined;
       enqueue();
-    }, 20);
+    }, 120);
   });
   const insertNewline = () => {
     if (syncing || locked || !activated) return;
@@ -171,7 +213,17 @@ export function mountShadowEditor(
     event.stopImmediatePropagation();
     insertNewline();
   };
+  const blockHistoryShortcuts = (event: KeyboardEvent) => {
+    // Undo/redo would let Monaco's local history bypass Core's accepted
+    // prefix state machine. Copy, paste, selection and deletion remain
+    // native edits and are still validated by Core.
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    if (event.key.toLowerCase() !== "z" && event.key.toLowerCase() !== "y") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
   container.addEventListener("keydown", captureEnter, true);
+  container.addEventListener("keydown", blockHistoryShortcuts, true);
   const activate = () => {
     if (locked || activated) return;
     activated = true;
@@ -186,13 +238,23 @@ export function mountShadowEditor(
   paintGhost(acceptedText);
   return {
     update: (value, target, nextLanguage, readOnlyNext, force = false, resetActivation = false) => {
-      if (resetActivation) activated = false;
+      if (resetActivation) {
+        activated = false;
+        generation += 1;
+        pending.length = 0;
+        inFlight = undefined;
+        if (flushTimer !== undefined) {
+          window.clearTimeout(flushTimer);
+          flushTimer = undefined;
+        }
+      }
       syncing = true;
       const responseMatchesInFlight = inFlight?.afterText === value;
       confirmedText = value;
       const replaceModel = force || readOnlyNext || (!responseMatchesInFlight && !inFlight && pending.length === 0);
       if (replaceModel) model.setValue(value);
       monaco.editor.setModelLanguage(model, nextLanguage.toLowerCase() === "python" ? "python" : "plaintext");
+      languageBadge.textContent = nextLanguage;
       locked = readOnlyNext;
       editor.updateOptions({ readOnly: locked || !activated });
       targetText = target;
@@ -205,6 +267,14 @@ export function mountShadowEditor(
       syncing = false;
       if (!readOnlyNext && model.getValue() !== value && !responseMatchesInFlight) enqueue();
     },
+    flush: async () => {
+      if (flushTimer !== undefined) {
+        window.clearTimeout(flushTimer);
+        flushTimer = undefined;
+      }
+      enqueue();
+      await waitForIdle();
+    },
     focus: () => {
       if (!locked) {
         activated = true;
@@ -212,6 +282,6 @@ export function mountShadowEditor(
       }
       editor.focus();
     },
-    dispose: () => { subscription.dispose(); activateSubscription.dispose(); focusSubscription.dispose(); container.removeEventListener("mousedown", activate, true); container.removeEventListener("keydown", captureEnter, true); if (flushTimer !== undefined) window.clearTimeout(flushTimer); editor.removeContentWidget(guidanceWidget); editor.dispose(); model.dispose(); },
+    dispose: () => { subscription.dispose(); activateSubscription.dispose(); focusSubscription.dispose(); container.removeEventListener("mousedown", activate, true); container.removeEventListener("keydown", captureEnter, true); container.removeEventListener("keydown", blockHistoryShortcuts, true); if (flushTimer !== undefined) window.clearTimeout(flushTimer); decreaseFont.remove(); increaseFont.remove(); toolbar.remove(); editor.removeContentWidget(guidanceWidget); editor.dispose(); model.dispose(); },
   };
 }

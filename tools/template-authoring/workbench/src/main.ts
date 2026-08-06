@@ -51,9 +51,9 @@ root.innerHTML = `
           <h1 data-text-layout>Make the invisible structure of an algorithm visible.</h1>
           <p class="hero-lede" data-text-layout>GEWU turns reviewed algorithms into deliberate practice. Reconstruct code, recover reasoning, and transfer patterns while one deterministic core keeps every transition and attempt trustworthy.</p>
           <div class="hero-actions"><button class="button primary" type="button" data-go="practice">Start practicing <span aria-hidden="true">&#8594;</span></button><button class="button secondary" type="button" data-go="new">Author a unit</button></div>
-          <div class="hero-meta"><span><b>01</b> canonical AlgorithmUnit</span><span><b>05</b> practice projections</span><span><b>00</b> hidden scoring shortcuts</span></div>
+          <div class="hero-meta"><span><b>01</b> canonical AlgorithmUnit</span><span><b>02</b> practice projections</span><span><b>03</b> core-owned state</span></div>
         </div>
-        <div class="terminal-visual" aria-label="GEWU core status visualization"><div class="terminal-bar"><span></span><span></span><span></span><b>gewu-core</b></div><div class="terminal-body"><p><em>core</em>.start(<strong>graph.bfs</strong>, <strong>code_recall</strong>)</p><p class="dim">&gt; loading reviewed revision <strong>r1</strong></p><p class="green">&gt; state machine ready</p><p class="amber">&gt; next move: reconstruct frontier</p><div class="terminal-grid"><span>accepted</span><strong>000</strong><span>stability</span><strong>0.00</strong><span>mode</span><strong>RECALL</strong></div></div></div>
+        <div class="terminal-visual" aria-label="GEWU core status visualization"><div class="terminal-bar"><span></span><span></span><span></span><b>gewu-core</b><i class="terminal-pulse" aria-hidden="true"></i></div><div class="terminal-body"><p><em>core</em>.start(<strong>graph.bfs</strong>, <strong>code_recall</strong>)</p><p class="dim">&gt; loading reviewed revision <strong>r1</strong></p><p class="green">&gt; state machine ready</p><p class="amber" data-text-layout><span id="home-live-text">&gt; next move: reconstruct frontier</span><span class="terminal-cursor" aria-hidden="true">_</span></p><div class="terminal-grid"><span>accepted</span><strong id="home-accepted">000</strong><span>stability</span><strong id="home-stability">0.00</strong><span>mode</span><strong>RECALL</strong></div></div></div>
       </div>
       <section class="vision-strip"><div><p class="eyebrow">The GEWU model</p><h2 data-text-layout>One canonical unit. Many ways to remember it.</h2></div><p data-text-layout>Content, practice, review, and persistence share a typed boundary. The interface can change; the learning facts do not.</p></section>
       <section class="home-cards"><article><span class="card-index">01</span><h3>Reconstruct</h3><p>Shadow typing and code recall make the implementation a sequence of decisions, not a snippet to copy.</p><button class="text-link" type="button" data-go="practice">Open Practice <span aria-hidden="true">&#8594;</span></button></article><article><span class="card-index">02</span><h3>Understand</h3><p>Flow, reasoning, and transfer recall keep state, invariants, trade-offs, and boundaries in view.</p><button class="text-link" type="button" data-go="practice">Explore modes <span aria-hidden="true">&#8594;</span></button></article><article><span class="card-index">03</span><h3>Author</h3><p>Describe an algorithm once. GEWU generates one reviewed learning unit with explicit practice projections.</p><button class="text-link" type="button" data-go="new">Build a unit <span aria-hidden="true">&#8594;</span></button></article></section>
@@ -110,10 +110,10 @@ root.innerHTML = `
           <p class="form-message" id="practice-message" role="status"></p>
         </form>
         <section class="practice-session" id="practice-session" hidden>
-          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3></div><span class="valid-badge" id="session-status">Active</span></div>
+          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3></div><div class="session-heading-meta"><span class="session-language" id="session-language">Template language</span><span class="valid-badge" id="session-status">Active</span></div></div>
           <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><pre id="session-target" class="session-target" data-text-layout></pre>
           <div id="session-editor" class="shadow-editor" aria-label="Shadow Typing code editor" hidden></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
-          <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button secondary" type="button" id="session-stop">Stop practice</button></div>
+          <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button danger" type="button" id="session-stop">Stop practice</button></div>
           <div class="session-meta" id="session-meta"></div>
         </section>
         <aside class="practice-side">
@@ -201,6 +201,7 @@ function renderPracticeSession(session: PracticeSession): void {
   const prompt = document.querySelector<HTMLElement>("#session-prompt")!;
   const reveal = document.querySelector<HTMLButtonElement>("#session-reveal")!;
   const restart = document.querySelector<HTMLButtonElement>("#session-restart")!;
+  document.querySelector<HTMLElement>("#session-language")!.textContent = session.language;
   const isShadow = session.mode === "shadow_typing";
   const isFlow = session.mode === "flow_recall";
   progress.hidden = !isFlow;
@@ -268,13 +269,15 @@ async function updateShadowEditor(container: HTMLElement, session: PracticeSessi
 }
 async function applyShadowEdit(edit: { start: number; end: number; text: string }): Promise<{ acceptedText: string }> {
   if (!activePracticeSession) throw new Error("No active practice session");
+  const requestSessionId = activePracticeSession.session_id;
   const event = edit.start === edit.end ? { type: "insert_text", text: edit.text } : edit.text ? { type: "replace_range", start: edit.start, end: edit.end, text: edit.text } : { type: "delete_range", start: edit.start, end: edit.end };
   try {
-    const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: activePracticeSession.session_id, event, elapsed: { active_ms: 1000, wall_ms: 1000 } });
-    renderPracticeSession(result.session);
+    const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: requestSessionId, event, elapsed: { active_ms: 1000, wall_ms: 1000 } });
+    if (activePracticeSession?.session_id === requestSessionId) renderPracticeSession(result.session);
     if (result.session.status !== "active") await refreshPracticeData();
     return { acceptedText: result.session.accepted_text };
   } catch (error) {
+    if (activePracticeSession?.session_id !== requestSessionId) throw error;
     practiceMessage(error instanceof Error ? error.message : "Input rejected", true);
     shadowEditor?.update(shadowAcceptedText, shadowTargetText, shadowLanguage, false, true);
     throw error;
@@ -322,7 +325,7 @@ function renderPagedPracticeList<T>(name: PracticeListName, targetId: string, it
 }
 function renderPracticeLists(): void {
   renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
-  renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `After ${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : dueDate; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><time title="${dueDate}">${dueLabel}</time><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
+  renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : `Due ${dueDate}`; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><time title="${dueLabel}">${dueLabel}</time><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
   renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span></div><div class="record-footer"><time title="${created}">${created}</time><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
 }
 function renderPracticeOptions(): void {
@@ -641,6 +644,7 @@ document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", (
 document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
+    if (activePracticeSession?.mode === "shadow_typing") await shadowEditor?.flush();
     flowPromptRevealed = false;
     const practiceOption = document.querySelector<HTMLSelectElement>("#practice-id")!;
     const selectedOption = practiceOption.value || undefined;
@@ -709,6 +713,7 @@ document.querySelector<HTMLButtonElement>("#session-submit")!.addEventListener("
 document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("click", async () => {
   if (!activePracticeSession) return;
   try {
+    if (activePracticeSession.mode === "shadow_typing") await shadowEditor?.flush();
     const result = await practiceRpc<{ session: PracticeSession }>("gewu/stopSession", { session_id: activePracticeSession.session_id, elapsed: { active_ms: 1000, wall_ms: 1000 } });
     renderPracticeSession(result.session);
     activePracticeSession = undefined;
@@ -739,6 +744,7 @@ document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click",
   const discard = target.closest<HTMLButtonElement>("[data-discard-checkpoint]");
   try {
     if (resume) {
+      if (activePracticeSession?.mode === "shadow_typing") await shadowEditor?.flush();
       const result = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: resume.dataset.resumeCheckpoint });
       if (result.session) { flowPromptRevealed = false; activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
     }
@@ -753,3 +759,53 @@ void syncFromApi();
 void syncProviders();
 
 document.querySelectorAll<HTMLElement>("[data-text-layout]").forEach(observeTextElement);
+
+const telemetryFrames = [
+  { accepted: "000", stability: "0.00" },
+  { accepted: "018", stability: "0.72" },
+  { accepted: "042", stability: "0.84" },
+  { accepted: "067", stability: "0.91" },
+  { accepted: "089", stability: "0.96" },
+];
+let telemetryFrame = 0;
+window.setInterval(() => {
+  if (document.querySelector<HTMLElement>("#home-view")?.hidden) return;
+  const frame = telemetryFrames[telemetryFrame++ % telemetryFrames.length];
+  document.querySelector<HTMLElement>("#home-accepted")!.textContent = frame.accepted;
+  document.querySelector<HTMLElement>("#home-stability")!.textContent = frame.stability;
+}, 3000);
+const liveLines = [
+  "> next move: reconstruct frontier",
+  "> next move: verify invariant",
+  "> next move: transfer pattern",
+];
+let liveLine = 0;
+let liveCharacter = 0;
+let liveDeleting = false;
+let livePause = 0;
+window.setInterval(() => {
+  if (document.querySelector<HTMLElement>("#home-view")?.hidden) return;
+  const element = document.querySelector<HTMLElement>("#home-live-text");
+  if (!element) return;
+  const phrase = liveLines[liveLine];
+  if (livePause > 0) {
+    livePause -= 1;
+    return;
+  }
+  if (!liveDeleting) {
+    liveCharacter = Math.min(phrase.length, liveCharacter + 1);
+    element.textContent = phrase.slice(0, liveCharacter);
+    if (liveCharacter === phrase.length) {
+      liveDeleting = true;
+      livePause = 24;
+    }
+  } else {
+    liveCharacter = Math.max(0, liveCharacter - 1);
+    element.textContent = phrase.slice(0, liveCharacter);
+    if (liveCharacter === 0) {
+      liveDeleting = false;
+      liveLine = (liveLine + 1) % liveLines.length;
+      livePause = 8;
+    }
+  }
+}, 135);

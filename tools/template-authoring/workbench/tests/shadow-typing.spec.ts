@@ -83,6 +83,61 @@ test("shadow typing advances multiline guidance through Enter and indentation", 
   await expect(guidance).toHaveText("node = queue.popleft()");
 });
 
+test("active session shows template language and keeps the editor scrollbar available", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator("#session-language")).toHaveText("python");
+  await expect(page.locator("#session-stop")).toHaveClass(/danger/);
+  await expect(page.locator(".monaco-scrollable-element[role='presentation']")).toBeVisible();
+  await expect(page.locator(".shadow-editor-language")).toHaveText("python");
+  const fontSizeBefore = await page.locator("#session-editor .view-lines").evaluate((node) => getComputedStyle(node).fontSize);
+  await page.getByRole("button", { name: "Increase editor font size" }).click();
+  await expect.poll(() => page.locator("#session-editor .view-lines").evaluate((node) => getComputedStyle(node).fontSize)).not.toBe(fontSizeBefore);
+});
+
+test("practice list cards keep natural height inside equal sections", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await page.locator("#session-editor .monaco-editor").click({ position: { x: 220, y: 30 } });
+  await page.keyboard.type("f");
+  await page.locator("#refresh-checkpoints").click();
+  const card = page.locator("#practice-checkpoints .practice-record").first();
+  await expect(card).toBeVisible();
+  const cardBox = await card.boundingBox();
+  expect(cardBox?.height ?? 999).toBeLessThan(120);
+  const sectionHeights = await page.locator(".practice-side section").evaluateAll((sections) => sections.map((section) => Math.round(section.getBoundingClientRect().height)));
+  expect(new Set(sectionHeights).size).toBe(1);
+});
+
+test("resume replaces the old session boundary before accepting Enter", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  const editor = page.locator("#session-editor .monaco-editor");
+  const meta = page.locator("#session-meta");
+  await editor.click({ position: { x: 220, y: 30 } });
+  await page.keyboard.type("from collections import deque");
+  await page.keyboard.press("Enter");
+  await expect(meta).toContainText("progress 30/403");
+  await page.locator("#refresh-checkpoints").click();
+  await page.locator("#practice-checkpoints [data-resume-checkpoint]").first().click();
+  await expect(meta).toContainText("progress 30/403");
+  await editor.click({ position: { x: 220, y: 30 } });
+  await page.keyboard.press("Enter");
+  await expect(meta).toContainText("progress 31/403");
+});
+
 test("mouse wheel leaves Monaco when the editor cannot scroll further", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
@@ -173,6 +228,23 @@ test("rapid typing drains transactions in order without rejecting the prefix", a
   await page.keyboard.type("from collections import deque", { delay: 0 });
   await expect(meta).toContainText("progress 29/403");
   await expect(meta).toContainText("rejected inputs 0");
+});
+
+test("history shortcuts cannot bypass the accepted prefix", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+
+  const editor = page.locator("#session-editor .monaco-editor");
+  const meta = page.locator("#session-meta");
+  await editor.click({ position: { x: 220, y: 30 } });
+  await page.keyboard.type("from");
+  await expect(meta).toContainText("progress 4/403");
+  await page.keyboard.press("Control+z");
+  await expect(meta).toContainText("progress 4/403");
 });
 
 test("Unicode paste and deletion use scalar character progress", async ({ page }) => {
