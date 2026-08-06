@@ -109,6 +109,7 @@ export function mountShadowEditor(
         syncing = true;
         model.setValue(accepted);
         editor.setPosition(model.getPositionAt(accepted.length));
+        paintGhost(accepted);
         syncing = false;
         localText = accepted;
       } else {
