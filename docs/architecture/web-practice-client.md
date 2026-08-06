@@ -19,6 +19,13 @@ It does not score text, decide completion, write checkpoints, or persist
 attempt facts. The HTTP adapter is a transport host around the existing CLI
 dispatch and does not introduce a second application API.
 
+The browser never selects a Core port directly. It calls the same-origin
+`/core/rpc` path, and the Vite host binds that path to exactly one configured
+Core target. Startup uses strict ports, and the UI reports a connection only
+after the GEWU protocol handshake returns compatible Core and protocol
+versions. This prevents a silently shifted Vite port or an unrelated service
+on the configured Core port from appearing healthy.
+
 ## Editor Transaction Boundary
 
 Monaco owns the transient text buffer, selection, cursor, undo stack, and

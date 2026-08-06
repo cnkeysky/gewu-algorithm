@@ -154,6 +154,7 @@ const practiceApi = "/core/rpc";
 const textLayoutHandles = new WeakMap<HTMLElement, TextLayoutHandle>();
 let practiceRequestId = 1;
 let practiceHandshaken = false;
+let practiceHandshake: { core_version: string; protocol_version: number } | undefined;
 let practiceUnits: PracticeUnit[] = [];
 let activePracticeSession: { session_id: string; mode: PracticeMode } | undefined;
 let activePracticeSnapshot: PracticeSession | undefined;
@@ -179,7 +180,7 @@ let recommendationItems: Recommendation[] = [];
 let attemptItems: Attempt[] = [];
 async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> {
   if (!practiceHandshaken && method !== "gewu/handshake") {
-    await practiceRpc("gewu/handshake", { protocol_min: 1, protocol_max: 1, client_name: "gewu-web", client_version: "0.1.0" });
+    practiceHandshake = await practiceRpc<{ core_version: string; protocol_version: number }>("gewu/handshake", { protocol_min: 1, protocol_max: 1, client_name: "gewu-web", client_version: "0.1.0" });
     practiceHandshaken = true;
   }
   const response = await fetch(practiceApi, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: practiceRequestId++, method, params }) });
@@ -296,7 +297,9 @@ async function refreshPracticeData(): Promise<void> {
     unitSelect.innerHTML = units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("");
     renderPracticeOptions();
     const connection = document.querySelector<HTMLElement>("#practice-connection")!;
-    connection.textContent = "Core connected";
+    connection.textContent = practiceHandshake
+      ? `Core connected · v${practiceHandshake.core_version} / protocol ${practiceHandshake.protocol_version}`
+      : "Core connected";
     connection.classList.add("is-connected");
     const uniqueCheckpoints = new Map<string, Checkpoint>();
     for (const checkpoint of checkpoints.checkpoints) {

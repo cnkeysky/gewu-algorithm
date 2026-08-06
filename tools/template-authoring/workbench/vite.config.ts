@@ -5,6 +5,7 @@ const coreTarget = process.env.GEWU_CORE_TARGET ?? `http://127.0.0.1:${process.e
 
 export default defineConfig({
   server: {
+    strictPort: true,
     proxy: {
       "/api": authoringTarget,
       "/core": { target: coreTarget, rewrite: (path) => path.replace(/^\/core/, "") },

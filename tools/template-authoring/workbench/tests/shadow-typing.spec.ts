@@ -3,7 +3,7 @@ import { expect, test } from "playwright/test";
 test("shadow typing advances multiline guidance through Enter and indentation", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
-  await expect(page.locator("#practice-connection")).toHaveText("Core connected");
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
   await page.locator("#practice-unit").selectOption("graph.bfs");
   await page.locator("#practice-mode").selectOption("shadow_typing");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
@@ -76,7 +76,7 @@ test("shadow typing advances multiline guidance through Enter and indentation", 
 test("mouse wheel leaves Monaco when the editor cannot scroll further", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
-  await expect(page.locator("#practice-connection")).toHaveText("Core connected");
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
   await page.locator("#practice-unit").selectOption("graph.bfs");
   await page.locator("#practice-mode").selectOption("shadow_typing");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
@@ -96,7 +96,7 @@ test("mouse wheel leaves Monaco when the editor cannot scroll further", async ({
 test("copy, paste, and deletion preserve the strict accepted prefix", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
-  await expect(page.locator("#practice-connection")).toHaveText("Core connected");
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
   await page.locator("#practice-unit").selectOption("search.binary-search");
   await page.locator("#practice-mode").selectOption("shadow_typing");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
@@ -144,7 +144,7 @@ test("copy, paste, and deletion preserve the strict accepted prefix", async ({ p
 test("Unicode paste and deletion use scalar character progress", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
-  await expect(page.locator("#practice-connection")).toHaveText("Core connected");
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
   await page.locator("#practice-unit").selectOption("validation.unicode");
   await page.locator("#practice-mode").selectOption("shadow_typing");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();

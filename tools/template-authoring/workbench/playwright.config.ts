@@ -4,7 +4,7 @@ const webPort = process.env.GEWU_E2E_WEB_PORT ?? "5183";
 
 export default defineConfig({
   testDir: "./tests",
-  globalSetup: "./tests/global-setup.ts",
+  globalSetup: process.env.GEWU_E2E_EXISTING ? undefined : "./tests/global-setup.ts",
   workers: 1,
   timeout: 30_000,
   expect: { timeout: 8_000 },

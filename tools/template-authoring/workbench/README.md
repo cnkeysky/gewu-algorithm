@@ -31,3 +31,14 @@ The E2E runner starts Core and Vite on `4185` and `5183` by default with a
 temporary data directory. Override them with `GEWU_E2E_CORE_PORT` and
 `GEWU_E2E_WEB_PORT`. The suite verifies Shadow Typing Enter/cursor behavior and
 wheel propagation at the Monaco boundary.
+
+To diagnose an already-running development server without starting another
+one, explicitly select the existing-server mode and its Web port:
+
+```sh
+GEWU_E2E_EXISTING=1 GEWU_E2E_WEB_PORT=5173 \
+  npx playwright test tests/live-checkpoint.spec.ts
+```
+
+The live checkpoint test advances persisted practice state and is skipped by
+the default isolated suite. Use it only when that mutation is intentional.
