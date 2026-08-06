@@ -5,7 +5,7 @@ import {
   applyTrustedProvenance,
   GENERIC_INSTRUCTION,
 } from "./generate-template.js";
-import { validateGenerationProfile } from "./pi-generator.js";
+import { redactSecretLikeText, validateGenerationProfile } from "./pi-generator.js";
 
 function validDraft(): Record<string, unknown> {
   return {
@@ -64,6 +64,14 @@ test("generation profile rejects assistance without code recall", () => {
     implementation_languages: ["python"],
     implementation_variants: 1,
   }), /code recall assistance/);
+});
+
+test("credential-like provider text is redacted from surfaced errors", () => {
+  assert.equal(
+    redactSecretLikeText("Pi-ai error with sk-abcdef1234567890 and key-0987654321fedcba"),
+    "Pi-ai error with [REDACTED] and [REDACTED]",
+  );
+  assert.equal(redactSecretLikeText("no secret here"), "no secret here");
 });
 
 test("adapter overwrites model supplied provenance", () => {

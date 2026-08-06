@@ -181,6 +181,6 @@ function parsePositiveInteger(value: string | undefined): number | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function redactSecretLikeText(value: string): string {
+export function redactSecretLikeText(value: string): string {
   return value.replace(/\b(?:sk-|key-)[A-Za-z0-9_-]{8,}\b/gi, "[REDACTED]");
 }
