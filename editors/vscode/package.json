@@ -6,8 +6,12 @@
   "displayName": "GEWU Algorithm",
   "description": "Offline deliberate algorithm practice through the GEWU Rust core",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cnkeysky/gewu-algorithm.git"
+  },
   "engines": {
-    "vscode": "^1.96.0"
+    "vscode": "^1.125.0"
   },
   "main": "./dist/src/extension.js",
   "extensionKind": ["workspace"],

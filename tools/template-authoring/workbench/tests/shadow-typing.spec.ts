@@ -267,8 +267,10 @@ test("practice list cards keep natural height inside equal sections", async ({ p
   await expect(card).toBeVisible();
   const cardBox = await card.boundingBox();
   expect(cardBox?.height ?? 999).toBeLessThan(120);
-  const sectionHeights = await page.locator(".practice-side section").evaluateAll((sections) => sections.map((section) => Math.round(section.getBoundingClientRect().height)));
-  expect(new Set(sectionHeights).size).toBe(1);
+  await expect.poll(async () => {
+    const heights = await page.locator(".practice-side section").evaluateAll((sections) => sections.map((section) => Math.round(section.getBoundingClientRect().height)));
+    return new Set(heights).size === 1;
+  }).toBe(true);
 });
 
 test("resume replaces the old session boundary before accepting Enter", async ({ page }) => {

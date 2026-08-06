@@ -22,12 +22,64 @@ Validation, Revision, and Review
 
 ## Status
 
-The project is currently **pre-alpha**. The local MVP and VS Code interaction
-spikes are complete. Current work prioritizes platform-independent learning
-contracts, additional core practice modes, template authoring, and review policy
-before further editor expansion.
+The project is at an **internal v0.1.0** level. The Rust Core, the Web
+workbench (authoring and practice), and the VS Code adapter are implemented and
+covered by automated tests. Template authoring uses staged LLM generation with
+deterministic contract validation and a reviewed publication gate.
 
 No claim is currently made that this practice method improves long-term learning outcomes. The project will treat that as a question to be tested through real usage and measurable review results.
+
+## Getting Started
+
+### Prerequisites
+
+- Rust stable (see [`rust-toolchain.toml`](rust-toolchain.toml))
+- Node.js 22+ and npm
+- Python 3 (used by generated-source compile checks)
+
+### Run the test suites
+
+```sh
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cd tools/template-authoring && npm ci && npm test
+cd tools/template-authoring/workbench && npm ci && npm run build
+cd editors/vscode && npm ci && npm test
+```
+
+### Run the web workbench
+
+Start three processes (each in its own terminal):
+
+```sh
+# 1. Rust Core on http://127.0.0.1:4175
+cd tools/template-authoring && npm run workbench:core
+
+# 2. Authoring API on http://127.0.0.1:4174
+cd tools/template-authoring
+cp .env.example .env.local   # then set DEEPSEEK_API_KEY (selection keys stay in .env.example)
+npm run workbench:api:local
+
+# 3. Vite client at http://127.0.0.1:5173
+cd tools/template-authoring/workbench && npm run dev
+```
+
+Ports can be overridden with `GEWU_WORKBENCH_PORT` (authoring API),
+`GEWU_CORE_PORT` (Core), and the Vite proxy targets `GEWU_AUTHORING_TARGET` /
+`GEWU_CORE_TARGET`.
+
+### Run the VS Code extension
+
+Open `editors/vscode` in VS Code and press `F5`. The extension spawns the Rust
+Core through `cargo`, so `cargo` must be on `PATH`.
+
+### Run the end-to-end tests
+
+```sh
+cd tools/template-authoring/workbench
+npx playwright install chromium   # once per machine
+npm run test:e2e                  # auto-starts a fresh Core and Vite
+```
 
 ## Project Boundaries
 
@@ -42,19 +94,13 @@ No claim is currently made that this practice method improves long-term learning
 
 The local MVP provides:
 
-- local, versioned `AlgorithmUnit` content;
-- exact-match shadow typing for one supported editor;
-- deterministic progress and error feedback;
-- serialized `shadow_typing`, `flow_recall`, and progressive `code_recall` practice modes;
-- local practice history;
-- a Rust core with a versioned client protocol;
-- a VS Code extension as the first complete editor integration.
+- a Rust Core with all five practice modes and versioned local persistence;
+- a Vite Web workbench with authoring (staged template generation, review,
+  publishing) and practice surfaces;
+- a VS Code adapter as the first complete editor integration;
+- deterministic scoring, checkpoints, attempts, and review recommendations.
 
 Zed integration remains a later compatibility target because its extension surface does not yet provide all interaction capabilities needed by the planned practice experience.
-
-Reasoning Recall, Transfer Practice, typed template generation, and
-retention-oriented review remain platform-independent. Their state machines and
-scoring rules remain usable without VS Code, Zed, or a network connection.
 
 ## Repository Layout
 

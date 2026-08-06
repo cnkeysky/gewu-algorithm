@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    name: Rust gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  clients:
+    name: TypeScript, Web, and VS Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            tools/template-authoring/package-lock.json
+            tools/template-authoring/workbench/package-lock.json
+            editors/vscode/package-lock.json
+      - name: Template authoring
+        working-directory: tools/template-authoring
+        run: |
+          npm ci
+          npm test
+      - name: Web workbench build
+        working-directory: tools/template-authoring/workbench
+        run: |
+          npm ci
+          npm run build
+      - name: VS Code adapter
+        working-directory: editors/vscode
+        run: |
+          npm ci
+          npm test
+
+  e2e:
+    name: Playwright e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/template-authoring/workbench/package-lock.json
+      - name: Install workbench dependencies
+        working-directory: tools/template-authoring/workbench
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Build core
+        run: cargo build -p gewu-cli
+      - name: Run e2e
+        working-directory: tools/template-authoring/workbench
+        run: npm run test:e2e
