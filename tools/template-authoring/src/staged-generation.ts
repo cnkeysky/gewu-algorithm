@@ -1,5 +1,6 @@
 import { OUTPUT_SCHEMA, materializeSourceTemplates, practicePropertySchema, validateGeneratedShape } from "./generate-template.js";
 import type { DraftTask, GenerationProfile, PracticeModeSelection } from "./pi-generator.js";
+import { createHash } from "node:crypto";
 
 export const EXTRA_PRACTICE_MODES = ["code_recall", "reasoning_recall", "transfer_practice"] as const;
 export type ExtraPracticeMode = (typeof EXTRA_PRACTICE_MODES)[number];
@@ -100,7 +101,7 @@ export function buildStageTask(
   return {
     taskId: `algorithm-unit-stage-${mode}`,
     taskVersion: "1",
-    selectedInputHash: `sha256:${mode}:${context.problem}`,
+    selectedInputHash: `sha256:${createHash("sha256").update(`${mode}:${context.problem}`).digest("hex")}`,
     instruction: `${fullInstruction}\n\nAlgorithm problem:\n${context.problem}`,
     outputSchema: modePropertySchema(mode),
     profile,

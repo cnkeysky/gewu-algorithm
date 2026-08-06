@@ -138,9 +138,15 @@ authority. Generation profiles now select multiple practice projections and
 implementation variants without duplicating the canonical unit. The authoring
 workbench boundary and local TypeScript/HTML/CSS direction are recorded in
 [the workbench architecture](architecture/template-authoring-workbench.md) and
-[ADR 0016](decisions/0016-template-authoring-workbench.md); its interactive
-surface remains a follow-up slice and is not yet claimed as complete. These
-authoring capabilities remain independent of editor clients.
+[ADR 0016](decisions/0016-template-authoring-workbench.md). The interactive
+surface is implemented: drafts, staged generation (core, per code recall
+layout, reasoning, transfer), deterministic validation, role review with a
+documented human-override accept, immutable accepted revisions with a fork/new
+revision flow, and a dev Core serving fixtures plus published units through
+multiple content roots. Generation uses one algorithm-agnostic contract prompt;
+problem-class prompt templates are intentionally not used (see
+[template-system](architecture/template-system.md)). These authoring
+capabilities remain independent of editor clients.
 
 ## Stage 8: Review, Progression, and Retention
 

@@ -49,7 +49,9 @@ fn main() {
             }
         }
         "recent-attempts" => {
-            match Core::open_roots(content_roots, data_root).and_then(|core| core.recent_attempts(20)) {
+            match Core::open_roots(content_roots, data_root)
+                .and_then(|core| core.recent_attempts(20))
+            {
                 Ok(attempts) => print_json(&attempts),
                 Err(error) => fail(&error.to_string()),
             }
@@ -64,7 +66,8 @@ fn main() {
             }
         }
         "delete-history" => {
-            match Core::open_roots(content_roots, data_root).and_then(|core| core.delete_history()) {
+            match Core::open_roots(content_roots, data_root).and_then(|core| core.delete_history())
+            {
                 Ok(deleted_attempts) => print_json(&DeleteHistoryResult { deleted_attempts }),
                 Err(error) => fail(&error.to_string()),
             }
@@ -216,12 +219,12 @@ fn content_roots_from(arguments: &[String]) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     let mut index = 0;
     while index < arguments.len() {
-        if arguments[index] == "--content-root" {
-            if let Some(value) = arguments.get(index + 1) {
-                roots.push(PathBuf::from(value));
-                index += 2;
-                continue;
-            }
+        if arguments[index] == "--content-root"
+            && let Some(value) = arguments.get(index + 1)
+        {
+            roots.push(PathBuf::from(value));
+            index += 2;
+            continue;
         }
         index += 1;
     }

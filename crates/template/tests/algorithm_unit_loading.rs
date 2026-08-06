@@ -206,7 +206,9 @@ fn rejects_duplicate_reasoning_recall_ids() {
 
 #[test]
 fn rejects_reasoning_recall_with_an_unknown_implementation() {
-    let result = load_algorithm_unit(fixture("invalid/reasoning-unknown-implementation/unit.json"));
+    let result = load_algorithm_unit(fixture(
+        "invalid/reasoning-unknown-implementation/unit.json",
+    ));
 
     match result {
         Err(LoadError::Validation { path, .. }) => {
