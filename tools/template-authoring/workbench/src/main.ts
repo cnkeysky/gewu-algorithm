@@ -84,7 +84,7 @@ root.innerHTML = `
         </div>
         <fieldset>
           <legend>Practice projections <label class="select-all"><input type="checkbox" id="select-all-modes" /><span>All modes</span></label></legend>
-          <div class="mode-list">${modes.map((mode) => `<label class="mode-option"><input type="checkbox" name="mode" value="${mode.id}" /><span class="checkmark"></span><span><strong>${mode.label}</strong><small>${mode.hint}</small></span></label>`).join("")}</div>
+          <div class="mode-list">${modes.map((mode) => { const locked = mode.id === "shadow_typing" || mode.id === "flow_recall"; return `<label class="mode-option" title="${locked ? "Required by the unit contract" : ""}"><input type="checkbox" name="mode" value="${mode.id}" ${locked ? "checked disabled" : ""} /><span class="checkmark"></span><span><strong>${mode.label}</strong><small>${mode.hint}${locked ? " · core" : ""}</small></span></label>`; }).join("")}</div>
         </fieldset>
         <fieldset id="assistance-fieldset" class="assistance-fieldset">
           <legend>Code recall assistance</legend>
@@ -511,6 +511,21 @@ function progressPercent(accepted: number, target: number): number { return targ
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
 function variantLabel(value: { implementation?: string; practice_id?: string }): string { return value.implementation ? `implementation · ${value.implementation}` : value.practice_id ? `practice · ${value.practice_id}` : "default configuration"; }
 function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM pre-reviewed", needs_revision: "Needs revision", revision_requested: "Revision requested", accepted: "Human approved" })[status]; }
+function loadDraftIntoForm(draft: DraftRecord): void {
+  (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
+  (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
+  (document.querySelector<HTMLSelectElement>("#provider")!).value = draft.provider;
+  document.querySelector<HTMLSelectElement>("#provider")!.dispatchEvent(new Event("change"));
+  (document.querySelector<HTMLSelectElement>("#model")!).value = draft.model;
+  document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((input) => { input.checked = draft.modes.includes(input.value as PracticeMode); });
+  document.querySelectorAll<HTMLInputElement>("input[name=assistance]").forEach((input) => { input.checked = draft.assistance.includes(input.value as Assistance); });
+  updateProfile();
+  editingDraftId = draft.id;
+  draftDirty = false;
+  draftPersistence = "saved";
+  submitDraft.innerHTML = `Update draft <span aria-hidden="true">&#8594;</span>`;
+  renderWorkflow();
+}
 function draftStage(status: DraftRecord["status"]): number {
   return status === "queued" || status === "revision_requested" ? 1 : status === "generated" ? 2 : status === "validated" || status === "needs_revision" ? 3 : status === "llm_reviewed" ? 4 : status === "accepted" ? 5 : 0;
 }
@@ -524,8 +539,9 @@ function renderDrafts(): void {
     const canGenerate = ["queued", "revision_requested"].includes(draft.status);
     const canValidate = draft.status === "generated";
     const canReview = draft.status === "validated";
-    const canAccept = draft.status === "llm_reviewed";
+    const canAccept = draft.status === "llm_reviewed" || draft.status === "needs_revision";
     const canRollback = ["generated", "validated", "llm_reviewed", "needs_revision"].includes(draft.status);
+    const canFork = draft.status === "accepted";
     const stage = draftStage(draft.status);
     const actions = [
       draft.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">${draft.status === "needs_revision" ? "Edit artifact" : "View artifact"}</button>` : "",
@@ -534,6 +550,7 @@ function renderDrafts(): void {
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}">LLM pre-review</button>` : "",
       canAccept ? `<button class="inline-action approval-action" type="button" data-accept-id="${draft.id}">Human approve</button>` : "",
       canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}">Request revision</button>` : "",
+      canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}">New revision</button>` : "",
     ].filter(Boolean).join("");
     return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow"><b class="${stage >= 1 ? "active" : ""}">01 Generate</b><b class="${stage >= 2 ? "active" : ""}">02 Validate</b><b class="${stage >= 4 ? "active" : ""}">03 Review</b><b class="${stage >= 5 ? "active" : ""}">04 Approve</b></small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${statusLabel(draft.status)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
   }).join("")}<div class="draft-pagination"><span>${draftPage + 1} / ${totalPages}</span><span><button class="page-button" type="button" aria-label="Previous drafts page" data-draft-page="-1" ${draftPage === 0 ? "disabled" : ""}>&#8249;</button><button class="page-button" type="button" aria-label="Next drafts page" data-draft-page="1" ${draftPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
@@ -686,7 +703,12 @@ document.addEventListener("click", (event) => {
   if (acceptButton) {
     event.stopPropagation();
     const id = acceptButton.dataset.acceptId;
-    void fetch(`/api/drafts/${id}/accept`, { method: "POST" }).then(async (response) => {
+    const draft = readDrafts().find((item) => item.id === id);
+    const needsOverride = draft?.status === "needs_revision";
+    const rationale = needsOverride ? window.prompt("This draft still has LLM review findings. Confirm you reviewed them and enter the reason for approving:") : null;
+    if (needsOverride && rationale === null) return;
+    const body = needsOverride ? JSON.stringify({ override: true, rationale: rationale ?? "human review" }) : undefined;
+    void fetch(`/api/drafts/${id}/accept`, { method: "POST", headers: body ? { "content-type": "application/json" } : undefined, body }).then(async (response) => {
       const payload = await response.json() as { error?: string };
       message.textContent = response.ok ? "Human approval recorded; draft is accepted." : `Human approval failed: ${payload.error ?? "unknown error"}`;
       message.className = response.ok ? "form-message success" : "form-message error";
@@ -706,23 +728,26 @@ document.addEventListener("click", (event) => {
     }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
     return;
   }
+  const forkButton = target.closest<HTMLButtonElement>("[data-fork-id]");
+  if (forkButton) {
+    event.stopPropagation();
+    const id = forkButton.dataset.forkId;
+    void fetch(`/api/drafts/${id}/fork`, { method: "POST" }).then(async (response) => {
+      const payload = await response.json() as { draft?: DraftRecord; error?: string };
+      if (!response.ok || !payload.draft) throw new Error(payload.error ?? "fork failed");
+      await syncFromApi();
+      loadDraftIntoForm(payload.draft);
+      message.textContent = "New revision created. Adjust the modes, then Generate template.";
+      message.className = "form-message success";
+      showView("new");
+    }).catch((error) => { message.textContent = error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
+    return;
+  }
   const draftButton = target.closest<HTMLButtonElement>("[data-edit-id]") ?? target.closest<HTMLButtonElement>("[data-draft-id]");
   if (draftButton) {
     const draft = readDrafts().find((item) => item.id === (draftButton.dataset.editId ?? draftButton.dataset.draftId));
     if (draft) {
-      (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
-      (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
-      (document.querySelector<HTMLSelectElement>("#provider")!).value = draft.provider;
-      document.querySelector<HTMLSelectElement>("#provider")!.dispatchEvent(new Event("change"));
-      (document.querySelector<HTMLSelectElement>("#model")!).value = draft.model;
-      document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((input) => { input.checked = draft.modes.includes(input.value as PracticeMode); });
-      document.querySelectorAll<HTMLInputElement>("input[name=assistance]").forEach((input) => { input.checked = draft.assistance.includes(input.value as Assistance); });
-      updateProfile();
-      editingDraftId = draft.id;
-      draftDirty = false;
-      draftPersistence = "saved";
-      submitDraft.innerHTML = `Update draft <span aria-hidden="true">&#8594;</span>`;
-      renderWorkflow();
+      loadDraftIntoForm(draft);
       showView("new");
     }
   }

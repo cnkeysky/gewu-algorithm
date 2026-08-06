@@ -129,6 +129,10 @@ after deterministic case and punctuation normalization. Prompt reveals,
 rejections, restarts, elapsed time, and terminal reason are recorded separately.
 The engine does not claim to judge open-ended explanation quality; that remains a
 human-review or optional feedback concern.
+Each item may bind a declared implementation variant through the optional
+`implementation` field; when absent, the item targets the unit's first
+implementation. Authoring must ensure every declared variant is covered by at
+least one reasoning item when the unit declares multiple variants.
 
 ## Transfer Practice (`transfer_practice`)
 
@@ -137,6 +141,10 @@ Deterministic completion requires coverage of the reviewed concepts, transferred
 structure, differences, and boundaries. These facet facts are intentionally
 separate from correctness and can be supplemented by human review without
 rewriting the immutable attempt.
+Each item may bind a declared implementation variant through the optional
+`implementation` field; when absent, the item targets the unit's first
+implementation. Authoring must ensure every declared variant is covered by at
+least one transfer item when the unit declares multiple variants.
 
 ## Invariants
 

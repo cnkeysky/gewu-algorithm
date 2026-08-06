@@ -39,7 +39,7 @@ const REQUIRED_MANIFEST_FIELDS = `Every object must contain only the named field
 
 const STATEMENT_REQUIREMENT = `problem.statement is required and contains the complete learner-facing problem statement in Markdown, not a summary. Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters. Do not use raw HTML, scripts, answer keys, or implementation details that reveal the solution.`;
 
-const OUTPUT_SCHEMA: Record<string, unknown> = {
+export const OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   additionalProperties: false,
   required: ["manifest", "sources"],
@@ -145,8 +145,8 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
             shadow_typing: { type: "array", items: { type: "object", additionalProperties: false, required: ["implementation", "strict"], properties: { implementation: { type: "string" }, strict: { type: "boolean" } } } },
             flow_recall: { type: "object", additionalProperties: false, required: ["steps"], properties: { steps: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "prompt", "concepts", "aliases"], properties: { id: { type: "string" }, prompt: { type: "string" }, concepts: { type: "array", items: { type: "string" } }, aliases: { type: "array", items: { type: "string" } } } } } } },
             code_recall: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "implementation", "layout", "assistance", "prompt", "scaffold", "slots"], properties: { id: { type: "string" }, implementation: { type: "string" }, layout: { enum: ["full_recall", "comment_guided", "comment_to_code", "cloze"] }, assistance: { enum: ["skeleton", "comments", "keywords", "cloze", "none"] }, prompt: { type: "string" }, scaffold: { type: "array", items: { type: "string" } }, source_template: { type: "string" }, slots: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "expected"], properties: { id: { type: "string" }, cue: { type: "string" }, expected: { type: "string" } } } } } } },
-            reasoning_recall: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "aspect", "prompt", "concepts", "aliases"], properties: { id: { type: "string" }, aspect: { enum: ["mechanism", "invariant", "trade_off", "boundary", "failure_condition"] }, prompt: { type: "string" }, concepts: { type: "array", items: { type: "string" } }, aliases: { type: "array", items: { type: "string" } } } } },
-            transfer_practice: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "pattern", "new_case", "prompt", "concepts", "transfers", "differences", "boundaries"], properties: { id: { type: "string" }, pattern: { type: "string" }, new_case: { type: "string" }, prompt: { type: "string" }, concepts: { type: "array", items: { type: "string" } }, transfers: { type: "array", items: { type: "string" } }, differences: { type: "array", items: { type: "string" } }, boundaries: { type: "array", items: { type: "string" } } } } },
+            reasoning_recall: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "aspect", "prompt", "concepts", "aliases"], properties: { id: { type: "string" }, implementation: { type: "string" }, aspect: { enum: ["mechanism", "invariant", "trade_off", "boundary", "failure_condition"] }, prompt: { type: "string" }, concepts: { type: "array", items: { type: "string" } }, aliases: { type: "array", items: { type: "string" } } } } },
+            transfer_practice: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "pattern", "new_case", "prompt", "concepts", "transfers", "differences", "boundaries"], properties: { id: { type: "string" }, implementation: { type: "string" }, pattern: { type: "string" }, new_case: { type: "string" }, prompt: { type: "string" }, concepts: { type: "array", items: { type: "string" } }, transfers: { type: "array", items: { type: "string" } }, differences: { type: "array", items: { type: "string" } }, boundaries: { type: "array", items: { type: "string" } } } } },
           },
         },
         validation: { type: "object", additionalProperties: false, required: ["schema", "code", "content_review", "transfer_review", "last_validated_at"], properties: { schema: { const: "pending" }, code: { const: "pending" }, content_review: { const: "pending" }, transfer_review: { const: "pending" }, last_validated_at: { type: ["string", "null"] } } },
@@ -161,6 +161,15 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
     },
   },
 };
+
+export function practicePropertySchema(): Record<string, unknown> {
+  const root = OUTPUT_SCHEMA as Record<string, unknown>;
+  const rootProperties = isRecord(root.properties) ? root.properties : {};
+  const manifest = isRecord(rootProperties.manifest) ? rootProperties.manifest : {};
+  const manifestProperties = isRecord(manifest.properties) ? manifest.properties : {};
+  const practice = isRecord(manifestProperties.practice) ? manifestProperties.practice : {};
+  return practice;
+}
 
 type GeneratedTemplate = {
   readonly manifest: Record<string, unknown>;

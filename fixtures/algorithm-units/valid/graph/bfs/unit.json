@@ -167,6 +167,7 @@
     "reasoning_recall": [
       {
         "id": "fifo-shortest-distance",
+        "implementation": "python-teaching",
         "aspect": "invariant",
         "prompt": "Why does this frontier order preserve nondecreasing edge distance?",
         "concepts": ["fifo", "distance", "frontier"],
@@ -176,6 +177,7 @@
     "transfer_practice": [
       {
         "id": "rotting-oranges",
+        "implementation": "python-teaching",
         "pattern": "frontier-expansion",
         "new_case": "A grid where rotten cells spread to adjacent fresh cells once per minute.",
         "prompt": "Explain how frontier expansion applies to simultaneous rotting in a grid.",

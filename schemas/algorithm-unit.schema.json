@@ -467,10 +467,16 @@
     "reasoningRecall": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "prompt", "concepts", "aliases"],
+      "required": ["id", "aspect", "prompt", "concepts", "aliases"],
       "properties": {
         "id": {
           "$ref": "#/$defs/slug"
+        },
+        "implementation": {
+          "$ref": "#/$defs/slug"
+        },
+        "aspect": {
+          "enum": ["mechanism", "invariant", "trade_off", "boundary", "failure_condition"]
         },
         "prompt": {
           "$ref": "#/$defs/nonEmptyString"
@@ -497,6 +503,9 @@
       "required": ["id", "pattern", "new_case", "prompt", "concepts", "transfers", "differences", "boundaries"],
       "properties": {
         "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "implementation": {
           "$ref": "#/$defs/slug"
         },
         "pattern": {

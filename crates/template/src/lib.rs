@@ -460,8 +460,8 @@ fn validate_practice(
 
     let code_recall =
         validate_code_recall(practice.code_recall, &implementation_keys, implementations)?;
-    let reasoning_recall = validate_reasoning_recall(practice.reasoning_recall)?;
-    let transfer_practice = validate_transfer_practice(practice.transfer_practice, patterns)?;
+    let reasoning_recall = validate_reasoning_recall(practice.reasoning_recall, &implementation_keys)?;
+    let transfer_practice = validate_transfer_practice(practice.transfer_practice, patterns, &implementation_keys)?;
 
     Ok(PracticeDefinition {
         shadow_typing,
@@ -632,6 +632,7 @@ fn validate_code_recall(
 
 fn validate_reasoning_recall(
     definitions: Vec<RawReasoningRecallDefinition>,
+    implementation_keys: &HashSet<&str>,
 ) -> Result<Vec<ReasoningRecallDefinition>, LoadError> {
     let mut ids = HashSet::new();
     let mut validated = Vec::with_capacity(definitions.len());
@@ -645,10 +646,20 @@ fn validate_reasoning_recall(
             ));
         }
         validate_text(&definition.prompt, &format!("{base}.prompt"))?;
+        if let Some(implementation) = &definition.implementation {
+            validate_slug(implementation, &format!("{base}.implementation"))?;
+            if !implementation_keys.contains(implementation.as_str()) {
+                return Err(validation(
+                    format!("{base}.implementation"),
+                    "does not reference a declared implementation",
+                ));
+            }
+        }
         validate_concepts(&definition.concepts, &format!("{base}.concepts"))?;
         validate_optional_texts(&definition.aliases, &format!("{base}.aliases"))?;
         validated.push(ReasoningRecallDefinition {
             id: definition.id,
+            implementation: definition.implementation,
             aspect: definition.aspect,
             prompt: definition.prompt,
             concepts: definition.concepts,
@@ -661,6 +672,7 @@ fn validate_reasoning_recall(
 fn validate_transfer_practice(
     definitions: Vec<RawTransferPracticeDefinition>,
     patterns: &[Pattern],
+    implementation_keys: &HashSet<&str>,
 ) -> Result<Vec<TransferPracticeDefinition>, LoadError> {
     let pattern_ids: HashSet<&str> = patterns.iter().map(|pattern| pattern.id.as_str()).collect();
     let mut ids = HashSet::new();
@@ -681,6 +693,15 @@ fn validate_transfer_practice(
                 "does not reference a declared pattern",
             ));
         }
+        if let Some(implementation) = &definition.implementation {
+            validate_slug(implementation, &format!("{base}.implementation"))?;
+            if !implementation_keys.contains(implementation.as_str()) {
+                return Err(validation(
+                    format!("{base}.implementation"),
+                    "does not reference a declared implementation",
+                ));
+            }
+        }
         validate_text(&definition.new_case, &format!("{base}.new_case"))?;
         validate_text(&definition.prompt, &format!("{base}.prompt"))?;
         validate_concepts(&definition.concepts, &format!("{base}.concepts"))?;
@@ -692,6 +713,7 @@ fn validate_transfer_practice(
         validate_optional_texts(&definition.boundaries, &format!("{base}.boundaries"))?;
         validated.push(TransferPracticeDefinition {
             id: definition.id,
+            implementation: definition.implementation,
             pattern: definition.pattern,
             new_case: definition.new_case,
             prompt: definition.prompt,
@@ -1041,6 +1063,8 @@ struct RawCodeRecallSlot {
 #[serde(deny_unknown_fields)]
 struct RawReasoningRecallDefinition {
     id: String,
+    #[serde(default)]
+    implementation: Option<String>,
     aspect: ReasoningAspect,
     prompt: String,
     concepts: Vec<String>,
@@ -1051,6 +1075,8 @@ struct RawReasoningRecallDefinition {
 #[serde(deny_unknown_fields)]
 struct RawTransferPracticeDefinition {
     id: String,
+    #[serde(default)]
+    implementation: Option<String>,
     pattern: String,
     new_case: String,
     prompt: String,

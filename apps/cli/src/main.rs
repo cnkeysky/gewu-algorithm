@@ -21,9 +21,7 @@ use serde_json::{Value, json};
 fn main() {
     let arguments: Vec<String> = env::args().skip(1).collect();
     let command = arguments.first().map(String::as_str).unwrap_or("help");
-    let content_root = option_value(&arguments, "--content-root")
-        .map(PathBuf::from)
-        .unwrap_or_else(default_content_root);
+    let content_roots = content_roots_from(&arguments);
     let data_root = option_value(&arguments, "--data-root")
         .map(PathBuf::from)
         .unwrap_or_else(default_data_root);
@@ -33,32 +31,32 @@ fn main() {
         .unwrap_or_else(|| "4175".to_owned());
     match command {
         "stdio" => {
-            if let Err(error) = run_stdio(content_root, data_root) {
+            if let Err(error) = run_stdio(content_roots, data_root) {
                 eprintln!("GEWU core host failed: {error}");
                 std::process::exit(1);
             }
         }
         "serve" => {
-            if let Err(error) = http::run(content_root, data_root, http_port) {
+            if let Err(error) = http::run(content_roots, data_root, http_port) {
                 eprintln!("GEWU HTTP core host failed: {error}");
                 std::process::exit(1);
             }
         }
         "list-units" => {
-            match Core::open(content_root, data_root).and_then(|core| core.list_units()) {
+            match Core::open_roots(content_roots, data_root).and_then(|core| core.list_units()) {
                 Ok(units) => print_json(&units),
                 Err(error) => fail(&error.to_string()),
             }
         }
         "recent-attempts" => {
-            match Core::open(content_root, data_root).and_then(|core| core.recent_attempts(20)) {
+            match Core::open_roots(content_roots, data_root).and_then(|core| core.recent_attempts(20)) {
                 Ok(attempts) => print_json(&attempts),
                 Err(error) => fail(&error.to_string()),
             }
         }
         // Projects deterministic review recommendations without starting an editor.
         "review" => {
-            match Core::open(content_root, data_root)
+            match Core::open_roots(content_roots, data_root)
                 .and_then(|core| core.review_recommendations(100))
             {
                 Ok(recommendations) => print_json(&recommendations),
@@ -66,7 +64,7 @@ fn main() {
             }
         }
         "delete-history" => {
-            match Core::open(content_root, data_root).and_then(|core| core.delete_history()) {
+            match Core::open_roots(content_roots, data_root).and_then(|core| core.delete_history()) {
                 Ok(deleted_attempts) => print_json(&DeleteHistoryResult { deleted_attempts }),
                 Err(error) => fail(&error.to_string()),
             }
@@ -75,8 +73,8 @@ fn main() {
     }
 }
 
-fn run_stdio(content_root: PathBuf, data_root: PathBuf) -> Result<(), String> {
-    let mut core = Core::open(content_root, data_root).map_err(|error| error.to_string())?;
+fn run_stdio(content_roots: Vec<PathBuf>, data_root: PathBuf) -> Result<(), String> {
+    let mut core = Core::open_roots(content_roots, data_root).map_err(|error| error.to_string())?;
     let stdin = io::stdin();
     let mut handshaken = false;
     for line in stdin.lock().lines() {
@@ -213,6 +211,24 @@ fn option_value<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
     args.windows(2)
         .find(|window| window[0] == name)
         .map(|window| window[1].as_str())
+}
+fn content_roots_from(arguments: &[String]) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    let mut index = 0;
+    while index < arguments.len() {
+        if arguments[index] == "--content-root" {
+            if let Some(value) = arguments.get(index + 1) {
+                roots.push(PathBuf::from(value));
+                index += 2;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    if roots.is_empty() {
+        roots.push(default_content_root());
+    }
+    roots
 }
 fn default_content_root() -> PathBuf {
     env::current_dir()

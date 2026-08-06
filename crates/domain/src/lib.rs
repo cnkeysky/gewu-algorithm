@@ -382,6 +382,7 @@ pub enum ReasoningAspect {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReasoningRecallDefinition {
     pub id: String,
+    pub implementation: Option<String>,
     pub aspect: ReasoningAspect,
     pub prompt: String,
     pub concepts: Vec<String>,
@@ -392,6 +393,7 @@ pub struct ReasoningRecallDefinition {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TransferPracticeDefinition {
     pub id: String,
+    pub implementation: Option<String>,
     pub pattern: String,
     pub new_case: String,
     pub prompt: String,

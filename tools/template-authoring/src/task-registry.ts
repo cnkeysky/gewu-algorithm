@@ -21,13 +21,16 @@ function inputHash(problem: string): string {
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const IMPLEMENTATION_PURPOSES = new Set(["teaching", "concise", "iterative", "recursive", "optimized"]);
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
 
 function assertSlug(value: unknown, path: string): asserts value is string {
   if (typeof value !== "string" || !SLUG.test(value)) throw new Error(`${path} must be a lowercase slug`);
 }
 
 /** Pre-flights the Rust contract rules that LLM output most often violates, so the generator can repair before writing. */
-function validateGeneratedShape(value: unknown): void {
+export function validateGeneratedShape(value: unknown): void {
   if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("artifact must contain manifest and sources objects");
   const manifest = value.manifest;
   if (manifest.schema_version !== "2" || manifest.status !== "draft") throw new Error("manifest must declare schema_version 2 and draft status");
@@ -62,6 +65,30 @@ function validateGeneratedShape(value: unknown): void {
       if (!isRecord(item)) throw new Error(`practice.${field}[${index}] must be an object`);
       assertSlug(item.implementation, `practice.${field}[${index}].implementation`);
       if (!keys.has(item.implementation)) throw new Error(`practice.${field}[${index}].implementation must exactly match an implementations[].key`);
+    }
+  }
+  if (isRecord(practice.flow_recall) && Array.isArray(practice.flow_recall.steps)) {
+    const flowIds = new Set<string>();
+    for (const [index, step] of practice.flow_recall.steps.entries()) {
+      if (!isRecord(step) || typeof step.id !== "string" || !SLUG.test(step.id)) throw new Error(`practice.flow_recall.steps[${index}].id must be a lowercase slug`);
+      if (flowIds.has(step.id)) throw new Error(`practice.flow_recall.steps[${index}].id duplicates ${step.id}`);
+      flowIds.add(step.id);
+      if (typeof step.prompt !== "string" || step.prompt.trim() === "") throw new Error(`practice.flow_recall.steps[${index}].prompt must be nonempty`);
+      step.concepts = Array.isArray(step.concepts)
+        ? step.concepts.map((concept) => typeof concept === "string" ? slugify(concept) : "").filter((concept) => concept !== "")
+        : [];
+      if (step.concepts.length === 0) throw new Error(`practice.flow_recall.steps[${index}].concepts must be nonempty lowercase slugs`);
+    }
+  }
+  for (const [index, item] of (Array.isArray(practice.reasoning_recall) ? practice.reasoning_recall : []).entries()) {
+    if (!isRecord(item)) throw new Error(`practice.reasoning_recall[${index}] must be an object`);
+    assertSlug(item.id, `practice.reasoning_recall[${index}].id`);
+    if (typeof item.aspect !== "string" || !["mechanism", "invariant", "trade_off", "boundary", "failure_condition"].includes(item.aspect)) {
+      throw new Error(`practice.reasoning_recall[${index}].aspect is not supported`);
+    }
+    if (typeof item.prompt !== "string" || item.prompt.trim() === "") throw new Error(`practice.reasoning_recall[${index}].prompt must be nonempty`);
+    if (!Array.isArray(item.concepts) || item.concepts.length === 0 || item.concepts.some((concept) => typeof concept !== "string" || !SLUG.test(concept))) {
+      throw new Error(`practice.reasoning_recall[${index}].concepts must be nonempty lowercase slugs`);
     }
   }
   for (const required of ["code/python.py", "tests/python_test.py"]) {

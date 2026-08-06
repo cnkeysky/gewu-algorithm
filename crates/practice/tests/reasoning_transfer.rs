@@ -25,6 +25,7 @@ fn reasoning() -> ReasoningRecallSession {
         "1",
         vec![ReasoningRecallDefinition {
             id: "queue-invariant".to_owned(),
+            implementation: None,
             aspect: ReasoningAspect::Invariant,
             prompt: "Why does the queue preserve breadth-first order?".to_owned(),
             concepts: vec!["queue".to_owned(), "invariant".to_owned()],
@@ -41,6 +42,7 @@ fn transfer() -> TransferPracticeSession {
         "1",
         vec![TransferPracticeDefinition {
             id: "grid-frontier".to_owned(),
+            implementation: None,
             pattern: "frontier-expansion".to_owned(),
             new_case: "Expand a grid frontier with obstacles.".to_owned(),
             prompt: "Describe the transferred pattern and its limits.".to_owned(),

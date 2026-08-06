@@ -35,7 +35,7 @@ pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Offline application service configured with a content root and local data root.
 pub struct Core {
-    content_root: PathBuf,
+    content_roots: Vec<PathBuf>,
     store: LocalStore,
     sessions: BTreeMap<String, ActiveSession>,
     next_session: u64,
@@ -80,8 +80,22 @@ impl Core {
         content_root: impl Into<PathBuf>,
         data_root: impl Into<PathBuf>,
     ) -> Result<Self, CoreError> {
+        Self::open_roots(vec![content_root.into()], data_root)
+    }
+
+    /// Opens a portable local core over one or more content roots. Callers choose paths; no editor API leaks here.
+    pub fn open_roots(
+        content_roots: Vec<PathBuf>,
+        data_root: impl Into<PathBuf>,
+    ) -> Result<Self, CoreError> {
+        if content_roots.is_empty() {
+            return Err(CoreError::ContentRoot {
+                path: PathBuf::from("<empty>"),
+                source: std::io::Error::new(std::io::ErrorKind::InvalidInput, "no content roots"),
+            });
+        }
         Ok(Self {
-            content_root: content_root.into(),
+            content_roots,
             store: LocalStore::open(data_root)?,
             sessions: BTreeMap::new(),
             next_session: 1,
@@ -690,12 +704,25 @@ impl Core {
     }
     fn load_units(&self) -> Result<Vec<AlgorithmUnit>, CoreError> {
         let mut paths = Vec::new();
-        collect_unit_paths(&self.content_root, &mut paths)?;
-        paths
+        for root in &self.content_roots {
+            collect_unit_paths(root, &mut paths)?;
+        }
+        let mut units = paths
             .into_iter()
             .map(load_algorithm_unit)
             .collect::<Result<Vec<_>, LoadError>>()
-            .map_err(CoreError::Template)
+            .map_err(CoreError::Template)?;
+        // Keep only the newest revision per unit id so merged roots cannot expose stale content.
+        units.sort_by(|left, right| {
+            right
+                .revision
+                .get()
+                .cmp(&left.revision.get())
+                .then_with(|| left.id.as_str().cmp(right.id.as_str()))
+        });
+        let mut seen = HashSet::new();
+        units.retain(|unit| seen.insert(unit.id.clone()));
+        Ok(units)
     }
 }
 
@@ -1380,13 +1407,19 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         });
     }
     for definition in &unit.practice.reasoning_recall {
+        let implementation = definition
+            .implementation
+            .as_deref()
+            .and_then(|key| unit.implementations.iter().find(|item| item.key == key));
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
-            label: definition.id.replace('-', " "),
-            language: unit
-                .implementations
-                .first()
+            label: match implementation {
+                Some(item) => format!("{} · {}", definition.id.replace('-', " "), item.key),
+                None => definition.id.replace('-', " "),
+            },
+            language: implementation
                 .map(|item| item.language.clone())
+                .or_else(|| unit.implementations.first().map(|item| item.language.clone()))
                 .unwrap_or_else(|| "plaintext".to_owned()),
             code_layout: None,
             mode: PracticeModeDto::ReasoningRecall,
@@ -1394,13 +1427,19 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         });
     }
     for definition in &unit.practice.transfer_practice {
+        let implementation = definition
+            .implementation
+            .as_deref()
+            .and_then(|key| unit.implementations.iter().find(|item| item.key == key));
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
-            label: definition.id.replace('-', " "),
-            language: unit
-                .implementations
-                .first()
+            label: match implementation {
+                Some(item) => format!("{} · {}", definition.id.replace('-', " "), item.key),
+                None => definition.id.replace('-', " "),
+            },
+            language: implementation
                 .map(|item| item.language.clone())
+                .or_else(|| unit.implementations.first().map(|item| item.language.clone()))
                 .unwrap_or_else(|| "plaintext".to_owned()),
             code_layout: None,
             mode: PracticeModeDto::TransferPractice,

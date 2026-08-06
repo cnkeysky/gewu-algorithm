@@ -52,13 +52,13 @@
       "scaffold": ["left", "right", "middle", "comparison"]
     }],
     "reasoning_recall": [{
-      "id": "preserve-candidate-interval", "aspect": "invariant",
+      "id": "preserve-candidate-interval", "implementation": "python-iterative", "aspect": "invariant",
       "prompt": "What invariant keeps a target from being discarded when it is present?",
       "concepts": ["interval", "ordered", "target"],
       "aliases": ["the remaining sorted interval still contains the target when it exists"]
     }],
     "transfer_practice": [{
-      "id": "first-true", "pattern": "interval-halving",
+      "id": "first-true", "implementation": "python-iterative", "pattern": "interval-halving",
       "new_case": "A sorted boolean predicate whose first true position must be found.",
       "prompt": "Adapt the ordered-interval pattern to find the first true predicate value.",
       "concepts": ["monotonic", "interval", "predicate"],

@@ -203,3 +203,15 @@ fn rejects_duplicate_reasoning_recall_ids() {
         other => panic!("expected a reasoning recall ID error, got {other:?}"),
     }
 }
+
+#[test]
+fn rejects_reasoning_recall_with_an_unknown_implementation() {
+    let result = load_algorithm_unit(fixture("invalid/reasoning-unknown-implementation/unit.json"));
+
+    match result {
+        Err(LoadError::Validation { path, .. }) => {
+            assert_eq!(path, "practice.reasoning_recall[0].implementation");
+        }
+        other => panic!("expected a reasoning recall implementation error, got {other:?}"),
+    }
+}

@@ -16,6 +16,11 @@ boundaries. Both modes record prompt reveals, rejected answers, restarts,
 elapsed time, and one immutable terminal attempt. `practice_id` selects the
 reviewed definition and is persisted in checkpoints. Human or model feedback may
 be added later, but cannot rewrite completion state or historical facts.
+Both item types may bind a declared implementation variant through the optional
+`implementation` field (absent means the unit's first implementation). The core
+exposes the binding in practice options so multi-variant units surface distinct
+facets; session identity remains the `practice_id`, so the field does not change
+checkpoint or attempt semantics.
 
 ## Consequences
 
