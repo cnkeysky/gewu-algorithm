@@ -26,6 +26,10 @@ pub struct StoredAttempt {
     pub revision: u64,
     pub schema_version: String,
     pub mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implementation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub practice_id: Option<String>,
     pub terminal_reason: String,
     pub accepted_input_count: u64,
     pub rejected_input_count: u64,
@@ -63,6 +67,10 @@ pub struct StoredReviewState {
     pub unit_id: String,
     pub revision: u64,
     pub mode: String,
+    #[serde(default)]
+    pub implementation: Option<String>,
+    #[serde(default)]
+    pub practice_id: Option<String>,
     pub last_reviewed_at_ms: u64,
     pub next_due_at_ms: u64,
     pub stability_days: f64,
@@ -352,6 +360,8 @@ mod tests {
             revision: 1,
             schema_version: "1".to_owned(),
             mode: "shadow_typing".to_owned(),
+            implementation: None,
+            practice_id: None,
             terminal_reason: "completed".to_owned(),
             accepted_input_count: 1,
             rejected_input_count: 0,
@@ -410,6 +420,8 @@ mod tests {
             unit_id: "graph.bfs".to_owned(),
             revision: 1,
             mode: "shadow_typing".to_owned(),
+            implementation: None,
+            practice_id: None,
             last_reviewed_at_ms: 100,
             next_due_at_ms: 200,
             stability_days: 2.5,

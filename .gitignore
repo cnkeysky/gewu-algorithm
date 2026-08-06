@@ -39,6 +39,7 @@ credentials.json
 **/drafts/
 /.local/
 /data/local/
+/.gewu-data/
 
 # Logs, caches, and temporary files
 *.log

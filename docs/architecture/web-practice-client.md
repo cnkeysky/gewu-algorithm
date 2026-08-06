@@ -19,6 +19,20 @@ It does not score text, decide completion, write checkpoints, or persist
 attempt facts. The HTTP adapter is a transport host around the existing CLI
 dispatch and does not introduce a second application API.
 
+## Editor Transaction Boundary
+
+Monaco owns the transient text buffer, selection, cursor, undo stack, and
+scroll position. Each user action is normalized as one incremental
+`ShadowEdit` (`start`, `end`, `text`) and submitted to Core against the last
+confirmed text boundary. Core remains authoritative for acceptance and
+practice transitions; a confirmed response must not replace the editor model
+or reset its cursor when the submitted edit is still present locally.
+
+Full text snapshots are used only when starting, resuming, rejecting, or
+reconnecting a session. They are synchronization checkpoints, not the normal
+keystroke protocol. This keeps Enter, deletion, paste, and future selection
+editing as ordinary Monaco transactions without introducing a CRDT/OT layer.
+
 ## Local Run
 
 Start the core from the repository root:

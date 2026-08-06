@@ -230,6 +230,7 @@ const server = createServer(async (request, response) => {
       updated.artifactPath = undefined;
       validatePersistedDraft(updated);
       state.drafts = state.drafts.map((item) => item.id === draft.id ? updated : item);
+      state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
       await saveState(state);
       return send(response, 200, { draft: updated });
     }
@@ -270,7 +271,7 @@ const server = createServer(async (request, response) => {
       if (!isRecord(payload) || typeof payload.role !== "string") throw new Error("review role is required");
       const draft = state.drafts.find((item) => item.id === reviewMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (!draft.artifactPath) return send(response, 409, { error: "generate the draft before requesting review" });
+      if (draft.status !== "validated" || !draft.artifactPath) return send(response, 409, { error: "validate the generated draft before requesting review" });
       const repoRoot = resolve(here, "../..", "..");
       const artifactAbsolutePath = resolve(repoRoot, draft.artifactPath);
       await reviewTemplateDraft(relative(repoRoot, artifactAbsolutePath), payload.role);

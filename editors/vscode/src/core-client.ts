@@ -133,11 +133,13 @@ export class GewuCoreClient {
     unitId: string,
     mode: PracticeMode,
     implementation?: string,
+    practiceId?: string,
   ): Promise<CoreSession> {
     const result = await this.request("gewu/startSession", {
       unit_id: unitId,
       mode,
       ...(implementation === undefined ? {} : { implementation }),
+      ...(practiceId === undefined ? {} : { practice_id: practiceId }),
     });
     return sessionFromResult(result);
   }
@@ -302,6 +304,8 @@ export interface CheckpointSummary {
   readonly unit_title: string;
   readonly revision: number;
   readonly mode: PracticeMode;
+  readonly implementation?: string;
+  readonly practice_id?: string;
   readonly completed_steps: number;
   readonly total_steps: number;
   readonly accepted_characters: number;
@@ -355,6 +359,14 @@ export interface UnitSummary {
   readonly revision: number;
   readonly title: string;
   readonly modes: readonly PracticeMode[];
+  readonly practice_options: readonly PracticeOption[];
+}
+export interface PracticeOption {
+  readonly id: string;
+  readonly label: string;
+  readonly language: string;
+  readonly mode: PracticeMode;
+  readonly selector: "implementation" | "practice_id";
 }
 export interface AttemptSummary {
   readonly id: string;
@@ -362,6 +374,8 @@ export interface AttemptSummary {
   readonly unit_id: string;
   readonly revision: number;
   readonly mode: PracticeMode;
+  readonly implementation?: string;
+  readonly practice_id?: string;
   readonly terminal_reason: "completed" | "stopped";
   readonly accepted_input_count: number;
   readonly rejected_input_count: number;
@@ -417,10 +431,13 @@ function isUnitSummary(value: unknown): value is UnitSummary {
     typeof value.revision === "number" &&
     typeof value.title === "string" &&
     Array.isArray(value.modes) &&
-    value.modes.every(
-      (mode) => isPracticeMode(mode),
-    )
+    value.modes.every((mode) => isPracticeMode(mode)) &&
+    Array.isArray(value.practice_options) &&
+    value.practice_options.every(isPracticeOption)
   );
+}
+function isPracticeOption(value: unknown): value is PracticeOption {
+  return isObject(value) && typeof value.id === "string" && typeof value.label === "string" && typeof value.language === "string" && isPracticeMode(value.mode) && (value.selector === "implementation" || value.selector === "practice_id");
 }
 function isAttemptSummary(value: unknown): value is AttemptSummary {
   return (

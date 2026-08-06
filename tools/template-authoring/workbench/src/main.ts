@@ -1,4 +1,7 @@
 import "./styles.css";
+import "./practice.css";
+import { observeTextLayout, type TextLayoutHandle } from "./text-layout";
+import type { ShadowEditorController } from "./shadow-editor";
 
 type PracticeMode = "shadow_typing" | "flow_recall" | "code_recall" | "reasoning_recall" | "transfer_practice";
 type Assistance = "skeleton" | "comments" | "keywords" | "cloze" | "none";
@@ -45,14 +48,14 @@ root.innerHTML = `
       <div class="home-hero">
         <div class="hero-copy">
           <p class="eyebrow">GEWU / Algorithm practice system</p>
-          <h1>Make the invisible structure of an algorithm visible.</h1>
-          <p class="hero-lede">GEWU turns reviewed algorithms into deliberate practice. Reconstruct code, recover reasoning, and transfer patterns while one deterministic core keeps every transition and attempt trustworthy.</p>
+          <h1 data-text-layout>Make the invisible structure of an algorithm visible.</h1>
+          <p class="hero-lede" data-text-layout>GEWU turns reviewed algorithms into deliberate practice. Reconstruct code, recover reasoning, and transfer patterns while one deterministic core keeps every transition and attempt trustworthy.</p>
           <div class="hero-actions"><button class="button primary" type="button" data-go="practice">Start practicing <span aria-hidden="true">&#8594;</span></button><button class="button secondary" type="button" data-go="new">Author a unit</button></div>
           <div class="hero-meta"><span><b>01</b> canonical AlgorithmUnit</span><span><b>05</b> practice projections</span><span><b>00</b> hidden scoring shortcuts</span></div>
         </div>
         <div class="terminal-visual" aria-label="GEWU core status visualization"><div class="terminal-bar"><span></span><span></span><span></span><b>gewu-core</b></div><div class="terminal-body"><p><em>core</em>.start(<strong>graph.bfs</strong>, <strong>code_recall</strong>)</p><p class="dim">&gt; loading reviewed revision <strong>r1</strong></p><p class="green">&gt; state machine ready</p><p class="amber">&gt; next move: reconstruct frontier</p><div class="terminal-grid"><span>accepted</span><strong>000</strong><span>stability</span><strong>0.00</strong><span>mode</span><strong>RECALL</strong></div></div></div>
       </div>
-      <section class="vision-strip"><div><p class="eyebrow">The GEWU model</p><h2>One canonical unit. Many ways to remember it.</h2></div><p>Content, practice, review, and persistence share a typed boundary. The interface can change; the learning facts do not.</p></section>
+      <section class="vision-strip"><div><p class="eyebrow">The GEWU model</p><h2 data-text-layout>One canonical unit. Many ways to remember it.</h2></div><p data-text-layout>Content, practice, review, and persistence share a typed boundary. The interface can change; the learning facts do not.</p></section>
       <section class="home-cards"><article><span class="card-index">01</span><h3>Reconstruct</h3><p>Shadow typing and code recall make the implementation a sequence of decisions, not a snippet to copy.</p><button class="text-link" type="button" data-go="practice">Open Practice <span aria-hidden="true">&#8594;</span></button></article><article><span class="card-index">02</span><h3>Understand</h3><p>Flow, reasoning, and transfer recall keep state, invariants, trade-offs, and boundaries in view.</p><button class="text-link" type="button" data-go="practice">Explore modes <span aria-hidden="true">&#8594;</span></button></article><article><span class="card-index">03</span><h3>Author</h3><p>Describe an algorithm once. GEWU generates one reviewed learning unit with explicit practice projections.</p><button class="text-link" type="button" data-go="new">Build a unit <span aria-hidden="true">&#8594;</span></button></article></section>
       <section class="core-principles"><div><p class="eyebrow">Under the surface</p><h2>Trust lives in the core.</h2></div><div class="principle-list"><p><b>Rust Core</b><span>Owns scoring, transitions, checkpoints, and attempt facts.</span></p><p><b>Local first</b><span>Your content and practice history stay on the machine.</span></p><p><b>Provider neutral</b><span>LLM generation is optional and never owns completion state.</span></p></div></section>
     </section>
@@ -92,30 +95,30 @@ root.innerHTML = `
       </form>
       <aside class="right-column">
         <section class="panel summary-panel"><div class="panel-heading"><div><p class="eyebrow">02 / Contract</p><h2>Generation profile</h2></div><span class="valid-badge" id="profile-state">Ready</span></div><div id="profile-summary"></div><div class="contract-note"><span class="note-icon">i</span><p>Modes are projections of one AlgorithmUnit. They do not create separate canonical templates.</p></div></section>
-        <section class="panel review-panel"><div class="panel-heading"><div><p class="eyebrow">03 / Workflow</p><h2>Review gate</h2></div><span class="lock">Locked</span></div><div class="review-step"><span class="step-number">1</span><div><strong>Deterministic validation</strong><small>Schema, paths, source, and fixtures</small></div><span class="pending">Pending</span></div><div class="review-step"><span class="step-number">2</span><div><strong>Role review</strong><small>Correctness, learning design, provenance</small></div><span class="pending">Pending</span></div><div class="review-step"><span class="step-number">3</span><div><strong>Human acceptance</strong><small>Required before publication</small></div><span class="pending">Pending</span></div></section>
+        <section class="panel review-panel"><div class="panel-heading"><div><p class="eyebrow">03 / Workflow</p><h2>Review gate</h2></div><span class="workflow-state" id="workflow-state">No draft selected</span></div><div class="review-step" id="workflow-validation"><span class="step-number">1</span><div><strong>Deterministic validation</strong><small>Schema, paths, source, and fixtures</small></div><span class="workflow-status">Pending</span></div><div class="review-step" id="workflow-review"><span class="step-number">2</span><div><strong>Role review</strong><small>Correctness, learning design, provenance</small></div><span class="workflow-status">Pending</span></div><div class="review-step" id="workflow-acceptance"><span class="step-number">3</span><div><strong>Human acceptance</strong><small>Required before publication</small></div><span class="workflow-status">Pending</span></div></section>
       </aside>
     </section>
     </div>
     <section id="practice-view" class="app-view panel page-panel" hidden>
-      <div class="panel-heading"><div><p class="eyebrow">Core practice</p><h2>Practice workspace</h2></div><span class="lock" id="practice-connection">Core offline</span></div>
+      <div class="practice-heading panel-heading"><div><p class="eyebrow">Core practice / local first</p><h2>Practice workspace</h2><p class="page-subtitle">Choose a unit, start one projection, and keep the current state visible while you work.</p></div><span class="connection-badge" id="practice-connection">Core offline</span></div>
       <div class="practice-layout">
         <form id="practice-start" class="practice-controls">
           <label class="field"><span>Algorithm unit</span><select id="practice-unit"><option>Loading units...</option></select></label>
           <label class="field"><span>Practice mode</span><select id="practice-mode">${modes.map((mode) => `<option value="${mode.id}">${mode.label}</option>`).join("")}</select></label>
-          <label class="field"><span>Practice ID <small class="catalog-note">Optional for multi-variant units</small></span><input id="practice-id" placeholder="automatic" /></label>
+          <label class="field"><span id="practice-option-label">Practice variant <small class="catalog-note">Reviewed choices from this unit</small></span><select id="practice-id"><option value="">Default reviewed variant</option></select></label>
           <button class="button primary" type="submit">Start practice <span aria-hidden="true">&#8594;</span></button>
           <p class="form-message" id="practice-message" role="status"></p>
         </form>
         <section class="practice-session" id="practice-session" hidden>
           <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3></div><span class="valid-badge" id="session-status">Active</span></div>
-          <p id="session-prompt" class="session-prompt"></p><pre id="session-target" class="session-target"></pre>
-          <textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
-          <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit event</button><button class="button secondary" type="button" id="session-stop">Stop practice</button></div>
+          <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><pre id="session-target" class="session-target" data-text-layout></pre>
+          <div id="session-editor" class="shadow-editor" aria-label="Shadow Typing code editor" hidden></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
+          <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button secondary" type="button" id="session-stop">Stop practice</button></div>
           <div class="session-meta" id="session-meta"></div>
         </section>
         <aside class="practice-side">
           <section><div class="panel-heading"><h3>Interrupted</h3><button class="inline-action" type="button" id="refresh-checkpoints">Refresh</button></div><div id="practice-checkpoints" class="compact-list"></div></section>
-          <section><div class="panel-heading"><h3>Review queue</h3></div><div id="practice-recommendations" class="compact-list"></div></section>
+          <section><div class="panel-heading"><h3>Spaced review</h3></div><div id="practice-recommendations" class="compact-list"></div></section>
           <section><div class="panel-heading"><h3>Recent attempts</h3></div><div id="practice-attempts" class="compact-list"></div></section>
         </aside>
       </div>
@@ -145,15 +148,34 @@ const selectAllModes = document.querySelector<HTMLInputElement>("#select-all-mod
 const assistanceNote = document.querySelector<HTMLParagraphElement>("#assistance-note")!;
 const submitDraft = document.querySelector<HTMLButtonElement>("#submit-draft")!;
 let editingDraftId: string | undefined;
+let draftDirty = false;
+let draftPersistence: "saved" | "local" | "unknown" = "unknown";
 const practiceApi = "/core/rpc";
+const textLayoutHandles = new WeakMap<HTMLElement, TextLayoutHandle>();
 let practiceRequestId = 1;
 let practiceHandshaken = false;
+let practiceUnits: PracticeUnit[] = [];
 let activePracticeSession: { session_id: string; mode: PracticeMode } | undefined;
-type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[] };
-type PracticeSession = { session_id: string; unit_title: string; mode: PracticeMode; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number };
-type Checkpoint = { id: string; unit_title: string; unit_id: string; mode: PracticeMode; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
-type Recommendation = { unit_id: string; revision: number; mode: PracticeMode; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
-type Attempt = { id: string; unit_id: string; mode: PracticeMode; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
+let activePracticeSnapshot: PracticeSession | undefined;
+let shadowEditor: ShadowEditorController | undefined;
+let shadowEditorLoading: Promise<ShadowEditorController> | undefined;
+let shadowAcceptedText = "";
+let shadowTargetText = "";
+let shadowLanguage = "plaintext";
+let flowPromptRevealed = false;
+type PracticeOption = { id: string; label: string; language: string; mode: PracticeMode; selector: "implementation" | "practice_id" };
+type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[]; practice_options: PracticeOption[] };
+type PracticeSession = { session_id: string; unit_title: string; mode: PracticeMode; language: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number };
+type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
+type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
+type Attempt = { id: string; unit_id: string; mode: PracticeMode; implementation?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
+type PracticeListName = "checkpoints" | "recommendations" | "attempts";
+// Two rows leave enough room for long mode/status labels inside the fixed panels.
+const PRACTICE_PAGE_SIZE = 2;
+const practicePages: Record<PracticeListName, number> = { checkpoints: 0, recommendations: 0, attempts: 0 };
+let checkpointItems: Checkpoint[] = [];
+let recommendationItems: Recommendation[] = [];
+let attemptItems: Attempt[] = [];
 async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> {
   if (!practiceHandshaken && method !== "gewu/handshake") {
     await practiceRpc("gewu/handshake", { protocol_min: 1, protocol_max: 1, client_name: "gewu-web", client_version: "0.1.0" });
@@ -167,13 +189,88 @@ async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> 
 }
 function practiceMessage(text: string, error = false): void { const target = document.querySelector<HTMLParagraphElement>("#practice-message")!; target.textContent = text; target.className = `form-message ${error ? "error" : "success"}`; }
 function renderPracticeSession(session: PracticeSession): void {
+  const sessionChanged = activePracticeSnapshot?.session_id !== session.session_id;
+  activePracticeSnapshot = session;
   document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
   document.querySelector<HTMLElement>("#session-status")!.textContent = session.status;
-  document.querySelector<HTMLElement>("#session-prompt")!.textContent = session.current_prompt ?? "";
-  document.querySelector<HTMLElement>("#session-target")!.textContent = session.target_text || session.accepted_text || "Awaiting the next response.";
-  document.querySelector<HTMLElement>("#session-meta")!.textContent = `${session.mode.replaceAll("_", " ")} · ${session.accepted_input_count} accepted · ${session.rejected_input_count} rejected · ${session.prompt_count} prompts`;
-  if (session.status !== "active") document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = true;
+  const progress = document.querySelector<HTMLElement>("#session-progress")!;
+  const completed = document.querySelector<HTMLElement>("#session-completed")!;
+  const prompt = document.querySelector<HTMLElement>("#session-prompt")!;
+  const reveal = document.querySelector<HTMLButtonElement>("#session-reveal")!;
+  const restart = document.querySelector<HTMLButtonElement>("#session-restart")!;
+  const isShadow = session.mode === "shadow_typing";
+  const isFlow = session.mode === "flow_recall";
+  progress.hidden = !isFlow;
+  progress.textContent = isFlow ? `Step ${Math.min(session.completed_steps + 1, session.total_steps)} of ${session.total_steps}` : "";
+  completed.hidden = !isFlow;
+  completed.innerHTML = isFlow && session.completed_prompts.length > 0
+    ? `<strong>Completed flow</strong><ol>${session.completed_prompts.map((item) => `<li><span aria-hidden="true">&#10003;</span>${escapeHtml(item)}</li>`).join("")}</ol>`
+    : "";
+  prompt.textContent = isFlow ? (flowPromptRevealed ? session.current_prompt ?? "No reviewed prompt is available." : "Prompt hidden until Reveal") : session.current_prompt ?? "";
+  prompt.classList.toggle("is-hidden", isFlow && !flowPromptRevealed);
+  reveal.hidden = !isFlow || session.status !== "active";
+  reveal.textContent = flowPromptRevealed ? "Hide" : "Reveal";
+  restart.hidden = !isFlow;
+  const target = document.querySelector<HTMLElement>("#session-target")!;
+  const editorContainer = document.querySelector<HTMLElement>("#session-editor")!;
+  const answer = document.querySelector<HTMLTextAreaElement>("#session-answer")!;
+  const submit = document.querySelector<HTMLButtonElement>("#session-submit")!;
+  target.hidden = isShadow;
+  editorContainer.hidden = !isShadow;
+  answer.hidden = isShadow;
+  submit.hidden = isShadow;
+  submit.textContent = isFlow ? "Submit answer" : "Submit event";
+  if (isShadow) {
+    shadowAcceptedText = session.accepted_text;
+    shadowTargetText = session.target_text;
+    shadowLanguage = session.language;
+    void updateShadowEditor(editorContainer, session, sessionChanged);
+  }
+  target.textContent = session.target_text || session.accepted_text || "Awaiting the next response.";
+  observeTextElement(document.querySelector<HTMLElement>("#session-prompt")!);
+  observeTextElement(document.querySelector<HTMLElement>("#session-target")!);
+  document.querySelector<HTMLElement>("#session-meta")!.textContent = session.mode === "shadow_typing"
+    ? `shadow typing · progress ${Array.from(session.accepted_text).length}/${Array.from(session.target_text).length} · accepted inputs ${session.accepted_input_count} · rejected inputs ${session.rejected_input_count} · corrections ${session.correction_count}`
+    : `${session.mode.replaceAll("_", " ")} · completed ${session.accepted_input_count} steps · rejected ${session.rejected_input_count} answers · prompts ${session.prompt_count}`;
+  if (session.status !== "active") {
+    document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = true;
+    reveal.disabled = true;
+    restart.disabled = false;
+  } else {
+    document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = false;
+    reveal.disabled = false;
+    restart.disabled = false;
+  }
+}
+async function updateShadowEditor(container: HTMLElement, session: PracticeSession, sessionChanged = false): Promise<void> {
+  if (shadowEditor) {
+    shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", sessionChanged);
+    return;
+  }
+  if (!shadowEditorLoading) {
+    shadowEditorLoading = import("./shadow-editor").then(({ mountShadowEditor }) => mountShadowEditor(container, shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", applyShadowEdit));
+  }
+  shadowEditor = await shadowEditorLoading;
+  shadowEditor.update(shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", sessionChanged);
+}
+async function applyShadowEdit(edit: { start: number; end: number; text: string }): Promise<{ acceptedText: string }> {
+  if (!activePracticeSession) throw new Error("No active practice session");
+  const event = edit.start === edit.end ? { type: "insert_text", text: edit.text } : edit.text ? { type: "replace_range", start: edit.start, end: edit.end, text: edit.text } : { type: "delete_range", start: edit.start, end: edit.end };
+  try {
+    const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: activePracticeSession.session_id, event, elapsed: { active_ms: 1000, wall_ms: 1000 } });
+    renderPracticeSession(result.session);
+    if (result.session.status !== "active") await refreshPracticeData();
+    return { acceptedText: result.session.accepted_text };
+  } catch (error) {
+    practiceMessage(error instanceof Error ? error.message : "Input rejected", true);
+    shadowEditor?.update(shadowAcceptedText, shadowTargetText, shadowLanguage, false, true);
+    throw error;
+  }
+}
+function observeTextElement(element: HTMLElement): void {
+  textLayoutHandles.get(element)?.disconnect();
+  textLayoutHandles.set(element, observeTextLayout(element));
 }
 async function refreshPracticeData(): Promise<void> {
   try {
@@ -181,15 +278,51 @@ async function refreshPracticeData(): Promise<void> {
       practiceRpc<PracticeUnit[]>("gewu/listUnits"),
       practiceRpc<{ checkpoints: Checkpoint[] }>("gewu/listCheckpoints"),
       practiceRpc<Recommendation[]>("gewu/reviewRecommendations"),
-      practiceRpc<{ attempts: Attempt[] }>("gewu/recentAttempts", { limit: 10 }),
+      practiceRpc<{ attempts: Attempt[] }>("gewu/recentAttempts", { limit: 50 }),
     ]);
+    practiceUnits = units;
     const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit")!;
     unitSelect.innerHTML = units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("");
-    document.querySelector<HTMLElement>("#practice-connection")!.textContent = "Core connected";
-    document.querySelector<HTMLElement>("#practice-checkpoints")!.innerHTML = checkpoints.checkpoints.length ? checkpoints.checkpoints.map((checkpoint) => `<div class="compact-row"><span><strong>${checkpoint.unit_title}</strong>${checkpoint.mode.replaceAll("_", " ")} · ${checkpoint.accepted_characters}/${checkpoint.target_characters}</span><span><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div>`).join("") : `<div class="compact-empty">No interrupted practice.</div>`;
-    document.querySelector<HTMLElement>("#practice-recommendations")!.innerHTML = recommendations.length ? recommendations.map((item) => `<div class="compact-row"><span><strong>${item.unit_id} · ${item.mode.replaceAll("_", " ")}</strong>${item.reason}</span><span>${item.due_at_ms ? formatDate(new Date(item.due_at_ms).toISOString()) : `${item.due_after_days}d`}</span></div>`).join("") : `<div class="compact-empty">No recommendations yet.</div>`;
-    document.querySelector<HTMLElement>("#practice-attempts")!.innerHTML = attempts.attempts.length ? attempts.attempts.map((item) => `<div class="compact-row"><span><strong>${item.unit_id}</strong>${item.mode.replaceAll("_", " ")}</span><span>${item.terminal_reason}</span></div>`).join("") : `<div class="compact-empty">No attempts yet.</div>`;
-  } catch (error) { document.querySelector<HTMLElement>("#practice-connection")!.textContent = "Core offline"; practiceMessage("Rust Core 未启动。请先运行 `cargo run -p gewu-cli -- serve`。", true); }
+    renderPracticeOptions();
+    const connection = document.querySelector<HTMLElement>("#practice-connection")!;
+    connection.textContent = "Core connected";
+    connection.classList.add("is-connected");
+    const uniqueCheckpoints = new Map<string, Checkpoint>();
+    for (const checkpoint of checkpoints.checkpoints) {
+      const key = `${checkpoint.unit_id}:${checkpoint.revision}:${checkpoint.mode}:${checkpoint.implementation ?? ""}:${checkpoint.practice_id ?? ""}`;
+      if (!uniqueCheckpoints.has(key)) uniqueCheckpoints.set(key, checkpoint);
+    }
+    checkpointItems = [...uniqueCheckpoints.values()];
+    recommendationItems = recommendations;
+    attemptItems = attempts.attempts;
+    renderPracticeLists();
+  } catch (error) { const connection = document.querySelector<HTMLElement>("#practice-connection")!; connection.textContent = "Core offline"; connection.classList.remove("is-connected"); practiceMessage("Rust Core 未启动。请先运行 `cargo run -p gewu-cli -- serve`。", true); }
+}
+function renderPagedPracticeList<T>(name: PracticeListName, targetId: string, items: T[], renderItem: (item: T) => string, emptyText: string): void {
+  const target = document.querySelector<HTMLElement>(targetId)!;
+  const totalPages = Math.max(1, Math.ceil(items.length / PRACTICE_PAGE_SIZE));
+  practicePages[name] = Math.min(practicePages[name], totalPages - 1);
+  const page = practicePages[name];
+  const rows = items.slice(page * PRACTICE_PAGE_SIZE, (page + 1) * PRACTICE_PAGE_SIZE);
+  target.innerHTML = `<div class="paged-list-items">${rows.length ? rows.map(renderItem).join("") : `<div class="compact-empty">${emptyText}</div>`}</div><div class="list-pagination"><span>${items.length ? `${page + 1} / ${totalPages}` : "0 items"}</span><span><button class="page-button" type="button" title="Previous page" aria-label="Previous page" data-page-list="${name}" data-page-delta="-1" ${page === 0 ? "disabled" : ""}>&#8249;</button><button class="page-button" type="button" title="Next page" aria-label="Next page" data-page-list="${name}" data-page-delta="1" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>`;
+}
+function renderPracticeLists(): void {
+  renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
+  renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `After ${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : dueDate; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><time title="${dueDate}">${dueLabel}</time><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
+  renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span></div><div class="record-footer"><time title="${created}">${created}</time><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
+}
+function renderPracticeOptions(): void {
+  const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")?.value;
+  const mode = document.querySelector<HTMLSelectElement>("#practice-mode")?.value as PracticeMode | undefined;
+  const select = document.querySelector<HTMLSelectElement>("#practice-id");
+  const label = document.querySelector<HTMLElement>("#practice-option-label");
+  if (!select || !label) return;
+  const options = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.filter((option) => option.mode === mode) ?? [];
+  const selector = options[0]?.selector;
+  label.firstChild!.textContent = selector === "implementation" ? "Implementation variant " : "Practice variant ";
+  select.innerHTML = options.length ? options.map((option) => `<option value="${option.id}">${option.label}</option>`).join("") : "<option value=\"\">Default reviewed configuration</option>";
+  select.disabled = options.length === 0;
+  select.dataset.selector = selector ?? "practice_id";
 }
 
 interface DraftRecord {
@@ -218,6 +351,7 @@ function readDrafts(): DraftRecord[] {
 }
 function saveDrafts(drafts: DraftRecord[]): void { localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts)); }
 function readReviews(): ReviewRecord[] { try { const value: unknown = JSON.parse(localStorage.getItem(REVIEWS_KEY) ?? "[]"); return Array.isArray(value) ? value as ReviewRecord[] : []; } catch { return []; } }
+function saveReviews(reviews: ReviewRecord[]): void { localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews)); }
 async function syncFromApi(): Promise<void> {
   try {
     const response = await fetch("/api/drafts");
@@ -250,15 +384,49 @@ async function syncProviders(): Promise<void> {
   }
 }
 function formatDate(value: string): string { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
+function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(date); }
+function progressPercent(accepted: number, target: number): number { return target > 0 ? Math.min(100, Math.round((accepted / target) * 100)) : 0; }
+function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
+function variantLabel(value: { implementation?: string; practice_id?: string }): string { return value.implementation ? `implementation · ${value.implementation}` : value.practice_id ? `practice · ${value.practice_id}` : "default configuration"; }
 function renderDrafts(): void {
   const drafts = readDrafts();
   document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
-  draftList.innerHTML = drafts.length ? drafts.map((draft) => `<div class="draft-row" data-draft-id="${draft.id}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><button class="inline-action" type="button" data-edit-id="${draft.id}">Edit</button><button class="inline-action" type="button" data-generate-id="${draft.id}" ${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "Generated" : "Generate"}</button><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "validated" || draft.status === "accepted" ? "Validated" : "Validate"}</button><button class="inline-action" type="button" data-review-id="${draft.id}" ${draft.status === "queued" || draft.status === "accepted" ? "disabled" : ""}>Review</button><button class="inline-action" type="button" data-accept-id="${draft.id}" ${draft.status !== "validated" ? "disabled" : ""}>${draft.status === "accepted" ? "Accepted" : "Accept"}</button></span></div>`).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+  draftList.innerHTML = drafts.length ? drafts.map((draft) => {
+    const passingReview = readReviews().some((review) => review.draftId === draft.id && review.verdict === "pass");
+    const canReview = draft.status === "validated";
+    const canAccept = draft.status === "validated" && passingReview;
+    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><span class="draft-buttons"><button class="inline-action" type="button" data-generate-id="${draft.id}" ${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "Generated" : "Generate"}</button><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "validated" || draft.status === "accepted" ? "Validated" : "Validate"}</button><button class="inline-action" type="button" data-review-id="${draft.id}" ${canReview ? "" : "disabled"}>Review</button><button class="inline-action" type="button" data-accept-id="${draft.id}" ${canAccept ? "" : "disabled"}>${draft.status === "accepted" ? "Accepted" : "Accept"}</button></span></span></div>`;
+  }).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+  renderWorkflow();
+}
+function renderWorkflow(): void {
+  const draft = editingDraftId ? readDrafts().find((item) => item.id === editingDraftId) : undefined;
+  const state = document.querySelector<HTMLElement>("#workflow-state");
+  if (!state) return;
+  const validation = document.querySelector<HTMLElement>("#workflow-validation .workflow-status")!;
+  const review = document.querySelector<HTMLElement>("#workflow-review .workflow-status")!;
+  const acceptance = document.querySelector<HTMLElement>("#workflow-acceptance .workflow-status")!;
+  if (!draft) {
+    state.textContent = "No draft selected";
+    [validation, review, acceptance].forEach((item) => { item.textContent = "Pending"; item.className = "workflow-status"; });
+    return;
+  }
+  const report = draftPersistence === "local" ? undefined : readReviews().filter((item) => item.draftId === draft.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const setStatus = (target: HTMLElement, value: string, kind: "pending" | "ready" | "passed" | "blocked") => { target.textContent = value; target.className = `workflow-status ${kind}`; };
+  state.textContent = draftDirty ? "Unsaved changes" : draftPersistence === "local" ? "Local only / sync pending" : draft.status === "accepted" ? "Accepted" : draft.status;
+  setStatus(validation, draft.status === "validated" || draft.status === "accepted" ? "Passed" : draft.status === "generated" ? "Ready" : "Pending", draft.status === "validated" || draft.status === "accepted" ? "passed" : draft.status === "generated" ? "ready" : "pending");
+  setStatus(review, report ? report.verdict.replaceAll("_", " ") : "Pending", report?.verdict === "pass" ? "passed" : report ? "blocked" : "pending");
+  setStatus(acceptance, draft.status === "accepted" ? "Accepted" : report?.verdict === "pass" && draft.status === "validated" ? "Ready" : "Pending", draft.status === "accepted" ? "passed" : report?.verdict === "pass" && draft.status === "validated" ? "ready" : "pending");
+}
+function markDraftDirty(): void {
+  if (!editingDraftId) return;
+  draftDirty = true;
+  renderWorkflow();
 }
 function renderHistory(): void {
   const drafts = readDrafts();
   const reviews = readReviews();
-  historyList.innerHTML = reviews.length ? reviews.map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small></span><span class="history-status">${review.verdict}</span></div>`; }).join("") : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
+  historyList.innerHTML = reviews.length ? reviews.map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status">${review.verdict}</span></div>`; }).join("") : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
 }
 
 function showView(view: string): void {
@@ -338,10 +506,21 @@ document.addEventListener("click", (event) => {
       document.querySelectorAll<HTMLInputElement>("input[name=assistance]").forEach((input) => { input.checked = draft.assistance.includes(input.value as Assistance); });
       updateProfile();
       editingDraftId = draft.id;
+      draftDirty = false;
+      draftPersistence = "saved";
       submitDraft.innerHTML = `Update draft <span aria-hidden="true">&#8594;</span>`;
+      renderWorkflow();
       showView("new");
     }
   }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const row = (event.target as HTMLElement).closest<HTMLElement>(".draft-row");
+  if (!row || (event.target as HTMLElement).closest("button")) return;
+  event.preventDefault();
+  row.click();
 });
 
 function selectedValues<T extends string>(name: string): T[] {
@@ -369,6 +548,10 @@ function updateProfile(): void {
 }
 
 document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:not(#select-all-modes), select, textarea").forEach((input) => input.addEventListener("input", updateProfile));
+form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea").forEach((input) => {
+  input.addEventListener("input", markDraftDirty);
+  input.addEventListener("change", markDraftDirty);
+});
 document.querySelectorAll<HTMLInputElement>("input[name=mode]").forEach((input) => {
   input.addEventListener("change", updateProfile);
   input.addEventListener("click", () => setTimeout(updateProfile, 0));
@@ -383,8 +566,11 @@ document.querySelector<HTMLSelectElement>("#provider")!.addEventListener("change
   const model = document.querySelector<HTMLSelectElement>("#model")!;
   model.innerHTML = (providerModels[provider] ?? []).map((item) => `<option>${item}</option>`).join("");
 });
+document.querySelector<HTMLSelectElement>("#practice-unit")!.addEventListener("change", renderPracticeOptions);
+document.querySelector<HTMLSelectElement>("#practice-mode")!.addEventListener("change", renderPracticeOptions);
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const wasEditing = Boolean(editingDraftId);
   const selectedModes = selectedValues<PracticeMode>("mode");
   if (!selectedModes.length) {
     message.textContent = "Select at least one practice projection.";
@@ -416,29 +602,54 @@ form.addEventListener("submit", async (event) => {
     // Local storage is the offline fallback for the authoring shell.
   }
   if (!persisted) saveDrafts([record, ...readDrafts().filter((item) => item.id !== record.id)]);
+  if (wasEditing && persisted) saveReviews(readReviews().filter((review) => review.draftId !== record.id));
+  editingDraftId = record.id;
+  draftDirty = false;
+  draftPersistence = persisted ? "saved" : "local";
   renderDrafts();
   renderHistory();
-  message.textContent = persisted ? (editingDraftId ? "Draft revision saved to the local authoring API." : "Draft saved to the local authoring API.") : "Draft queued in this browser. Start the authoring API to share it locally.";
+  message.textContent = persisted ? (wasEditing ? "Draft revision saved to the local authoring API." : "Draft saved to the local authoring API.") : "Draft queued in this browser. Start the authoring API to share it locally.";
   message.className = "form-message success";
-  editingDraftId = undefined;
-  submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`;
+  submitDraft.innerHTML = `Update draft <span aria-hidden="true">&#8594;</span>`;
 });
 document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => {
   editingDraftId = undefined;
+  draftDirty = false;
+  draftPersistence = "unknown";
   submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`;
   form.reset();
   document.querySelector<HTMLTextAreaElement>("#problem")!.value = "";
   document.querySelectorAll<HTMLInputElement>("input[name=mode], input[name=assistance]").forEach((input) => { input.checked = false; });
   updateProfile();
   message.textContent = "";
+  renderWorkflow();
 });
 document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
+    flowPromptRevealed = false;
+    const practiceOption = document.querySelector<HTMLSelectElement>("#practice-id")!;
+    const selectedOption = practiceOption.value || undefined;
+    const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")!.value;
+    const mode = document.querySelector<HTMLSelectElement>("#practice-mode")!.value as PracticeMode;
+    const revision = practiceUnits.find((unit) => unit.id === unitId)?.revision;
+    const defaultOption = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.find((option) => option.mode === mode);
+    const expectedImplementation = mode === "shadow_typing" ? selectedOption ?? defaultOption?.id : undefined;
+    const expectedPracticeId = mode === "shadow_typing" ? undefined : selectedOption;
+    const matching = checkpointItems.find((checkpoint) => checkpoint.unit_id === unitId && checkpoint.revision === revision && checkpoint.mode === mode && checkpoint.implementation === expectedImplementation && checkpoint.practice_id === expectedPracticeId);
+    if (matching) {
+      const resumed = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: matching.id });
+      if (!resumed.session) throw new Error("The interrupted practice is no longer available");
+      activePracticeSession = { session_id: resumed.session.session_id, mode: resumed.session.mode };
+      renderPracticeSession(resumed.session);
+      practiceMessage("Interrupted practice resumed.");
+      await refreshPracticeData();
+      return;
+    }
     const session = await practiceRpc<{ session: PracticeSession }>("gewu/startSession", {
-      unit_id: document.querySelector<HTMLSelectElement>("#practice-unit")!.value,
-      mode: document.querySelector<HTMLSelectElement>("#practice-mode")!.value,
-      practice_id: document.querySelector<HTMLInputElement>("#practice-id")!.value.trim() || undefined,
+      unit_id: unitId,
+      mode,
+      ...(practiceOption.dataset.selector === "implementation" ? { implementation: selectedOption } : { practice_id: selectedOption }),
     });
     activePracticeSession = { session_id: session.session.session_id, mode: session.session.mode };
     document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = false;
@@ -446,6 +657,28 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
     practiceMessage("Practice started.");
     await refreshPracticeData();
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to start practice", true); }
+});
+document.querySelector<HTMLButtonElement>("#session-reveal")!.addEventListener("click", async () => {
+  if (!activePracticeSession || activePracticeSession.mode !== "flow_recall") return;
+  if (flowPromptRevealed) {
+    flowPromptRevealed = false;
+    if (activePracticeSnapshot) renderPracticeSession(activePracticeSnapshot);
+    return;
+  }
+  try {
+    const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: activePracticeSession.session_id, event: { type: "reveal_prompt" }, elapsed: { active_ms: 1000, wall_ms: 1000 } });
+    flowPromptRevealed = true;
+    renderPracticeSession(result.session);
+  } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to reveal prompt", true); }
+});
+document.querySelector<HTMLButtonElement>("#session-restart")!.addEventListener("click", async () => {
+  if (!activePracticeSession || activePracticeSession.mode !== "flow_recall") return;
+  try {
+    const result = await practiceRpc<PracticeSession>("gewu/restartSession", { session_id: activePracticeSession.session_id });
+    flowPromptRevealed = false;
+    renderPracticeSession(result);
+    await refreshPracticeData();
+  } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to restart practice", true); }
 });
 document.querySelector<HTMLButtonElement>("#session-submit")!.addEventListener("click", async () => {
   if (!activePracticeSession) return;
@@ -471,12 +704,29 @@ document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("cl
 document.querySelector<HTMLButtonElement>("#refresh-checkpoints")!.addEventListener("click", () => { void refreshPracticeData(); });
 document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click", async (event) => {
   const target = event.target as HTMLElement;
+  const recommendation = target.closest<HTMLButtonElement>("[data-start-recommendation]");
+  if (recommendation) {
+    const unit = document.querySelector<HTMLSelectElement>("#practice-unit")!;
+    const mode = document.querySelector<HTMLSelectElement>("#practice-mode")!;
+    unit.value = recommendation.dataset.startRecommendation ?? unit.value;
+    mode.value = recommendation.dataset.recommendationMode ?? mode.value;
+    renderPracticeOptions();
+    document.querySelector<HTMLFormElement>("#practice-start")!.requestSubmit();
+    return;
+  }
+  const pageButton = target.closest<HTMLButtonElement>("[data-page-list]");
+  if (pageButton) {
+    const name = pageButton.dataset.pageList as PracticeListName;
+    practicePages[name] += Number(pageButton.dataset.pageDelta ?? 0);
+    renderPracticeLists();
+    return;
+  }
   const resume = target.closest<HTMLButtonElement>("[data-resume-checkpoint]");
   const discard = target.closest<HTMLButtonElement>("[data-discard-checkpoint]");
   try {
     if (resume) {
       const result = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: resume.dataset.resumeCheckpoint });
-      if (result.session) { activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
+      if (result.session) { flowPromptRevealed = false; activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
     }
     if (discard) await practiceRpc("gewu/discardCheckpoint", { checkpoint_id: discard.dataset.discardCheckpoint });
     await refreshPracticeData();
@@ -487,3 +737,5 @@ renderDrafts();
 renderHistory();
 void syncFromApi();
 void syncProviders();
+
+document.querySelectorAll<HTMLElement>("[data-text-layout]").forEach(observeTextElement);

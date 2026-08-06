@@ -3,7 +3,7 @@
 //! deterministic practice transitions, and local persistence.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     fs,
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -19,8 +19,8 @@ use gewu_practice::{
 };
 use gewu_protocol::{
     ApplyEventParams, AttemptSummary, CheckpointSummary, ElapsedDto, PracticeEventDto,
-    PracticeModeDto, SessionStatusDto, SessionView, StartSessionParams, TerminalReasonDto,
-    UnitSummary,
+    PracticeModeDto, PracticeOptionDto, PracticeSelectorDto, SessionStatusDto, SessionView,
+    StartSessionParams, TerminalReasonDto, UnitSummary,
 };
 use gewu_review::{
     AttemptFact, ReviewRecommendation, ReviewState, TerminalReason as ReviewTerminalReason,
@@ -98,6 +98,7 @@ impl Core {
                 revision: unit.revision.get(),
                 title: unit.title.clone(),
                 modes: modes_for(&unit),
+                practice_options: practice_options_for(&unit),
             })
             .collect())
     }
@@ -110,6 +111,7 @@ impl Core {
             revision: unit.revision.get(),
             title: unit.title.clone(),
             modes: modes_for(&unit),
+            practice_options: practice_options_for(&unit),
         })
     }
 
@@ -307,24 +309,27 @@ impl Core {
 
     /// Lists recoverable active sessions without exposing replayable event contents.
     pub fn list_checkpoints(&self) -> Result<Vec<CheckpointSummary>, CoreError> {
-        self.store
-            .list_checkpoints()?
-            .into_iter()
-            .map(|checkpoint| {
-                Ok(CheckpointSummary {
+        let mut seen = HashSet::new();
+        let mut summaries = Vec::new();
+        for checkpoint in self.store.list_checkpoints()? {
+            let key = format!("{}:{}:{}:{:?}:{:?}", checkpoint.unit_id, checkpoint.revision, checkpoint.mode, checkpoint.implementation, checkpoint.practice_id);
+            if !seen.insert(key) { continue; }
+            summaries.push(CheckpointSummary {
                     id: checkpoint.id,
                     unit_id: checkpoint.unit_id,
                     unit_title: checkpoint.unit_title,
                     revision: checkpoint.revision,
                     mode: parse_mode(&checkpoint.mode)?,
+                    implementation: checkpoint.implementation,
+                    practice_id: checkpoint.practice_id,
                     completed_steps: checkpoint.completed_steps,
                     total_steps: checkpoint.total_steps,
                     accepted_characters: checkpoint.accepted_characters,
                     target_characters: checkpoint.target_characters,
                     saved_at: checkpoint.saved_at,
-                })
-            })
-            .collect()
+            });
+        }
+        Ok(summaries)
     }
 
     /// Resumes one selected local checkpoint. It is never a terminal practice attempt.
@@ -377,13 +382,30 @@ impl Core {
     }
 
     pub fn discard_checkpoint(&mut self, checkpoint_id: &str) -> Result<bool, CoreError> {
-        let session_id = self
+        let selected = self.store.load_checkpoint(checkpoint_id)?;
+        let Some(selected) = selected else {
+            return Ok(false);
+        };
+        // One recoverable state is kept per unit revision, mode, and selected
+        // implementation/practice variant.
+        // Older clients could leave duplicate records behind, so discarding a
+        // visible item also cleans its logical peers.
+        let peers = self
             .store
-            .load_checkpoint(checkpoint_id)?
-            .map(|checkpoint| checkpoint.session_id);
-        let removed = self.store.clear_checkpoint(checkpoint_id)?;
-        if removed && let Some(session_id) = session_id {
-            self.sessions.remove(&session_id);
+            .list_checkpoints()?
+            .into_iter()
+            .filter(|checkpoint| {
+                checkpoint.unit_id == selected.unit_id
+                    && checkpoint.revision == selected.revision
+                    && checkpoint.mode == selected.mode
+                    && checkpoint.implementation == selected.implementation
+                    && checkpoint.practice_id == selected.practice_id
+            })
+            .collect::<Vec<_>>();
+        let mut removed = false;
+        for checkpoint in peers {
+            removed |= self.store.clear_checkpoint(&checkpoint.id)?;
+            self.sessions.remove(&checkpoint.session_id);
         }
         Ok(removed)
     }
@@ -421,6 +443,8 @@ impl Core {
                         state.unit_id == recommendation.unit_id
                             && state.revision == recommendation.revision
                             && state.mode == recommendation.mode
+                            && state.implementation == recommendation.implementation
+                            && state.practice_id == recommendation.practice_id
                     })
                     .map(|state| state.next_due_at_ms);
                 recommendation
@@ -788,13 +812,19 @@ impl ActiveSession {
     }
     fn view(&self, session_id: &str) -> SessionView {
         match self {
-            Self::Shadow { unit, session, .. } => SessionView {
+            Self::Shadow {
+                unit,
+                implementation,
+                session,
+                ..
+            } => SessionView {
                 session_id: session_id.to_owned(),
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
                 problem_question: unit.problem.question.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ShadowTyping,
+                language: language_for(unit, Some(implementation)),
                 status: status(session.status()),
                 accepted_text: session.accepted_text().to_owned(),
                 target_text: session.target().to_owned(),
@@ -822,6 +852,7 @@ impl ActiveSession {
                 problem_question: unit.problem.question.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::FlowRecall,
+                language: language_for(unit, None),
                 status: status(session.status()),
                 accepted_text: String::new(),
                 target_text: String::new(),
@@ -846,13 +877,19 @@ impl ActiveSession {
                 visible_scaffold: Vec::new(),
                 revealed_scaffold_indices: Vec::new(),
             },
-            Self::Code { unit, session, .. } => SessionView {
+            Self::Code {
+                unit,
+                implementation,
+                session,
+                ..
+            } => SessionView {
                 session_id: session_id.to_owned(),
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
                 problem_question: unit.problem.question.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::CodeRecall,
+                language: language_for(unit, Some(implementation)),
                 status: status(session.status()),
                 accepted_text: session.accepted_text().to_owned(),
                 target_text: session.target().to_owned(),
@@ -885,6 +922,7 @@ impl ActiveSession {
                 problem_question: unit.problem.question.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ReasoningRecall,
+                language: language_for(unit, None),
                 status: status(session.status()),
                 accepted_text: String::new(),
                 target_text: String::new(),
@@ -914,6 +952,7 @@ impl ActiveSession {
                 problem_question: unit.problem.question.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::TransferPractice,
+                language: language_for(unit, None),
                 status: status(session.status()),
                 accepted_text: String::new(),
                 target_text: String::new(),
@@ -1070,15 +1109,21 @@ impl ActiveSession {
             Self::Flow { session, .. } => session
                 .attempt()
                 .map(|attempt| flow_attempt(attempt, session_id)),
-            Self::Code { session, .. } => session
-                .attempt()
-                .map(|attempt| code_attempt(attempt, session_id)),
-            Self::Reasoning { session, .. } => session
-                .attempt()
-                .map(|attempt| reasoning_attempt(attempt, session_id)),
-            Self::Transfer { session, .. } => session
-                .attempt()
-                .map(|attempt| transfer_attempt(attempt, session_id)),
+            Self::Code { session, practice_id, .. } => session.attempt().map(|attempt| {
+                let mut stored = code_attempt(attempt, session_id);
+                stored.practice_id = Some(practice_id.clone());
+                stored
+            }),
+            Self::Reasoning { session, practice_id, .. } => session.attempt().map(|attempt| {
+                let mut stored = reasoning_attempt(attempt, session_id);
+                stored.practice_id = Some(practice_id.clone());
+                stored
+            }),
+            Self::Transfer { session, practice_id, .. } => session.attempt().map(|attempt| {
+                let mut stored = transfer_attempt(attempt, session_id);
+                stored.practice_id = Some(practice_id.clone());
+                stored
+            }),
         }
     }
 }
@@ -1195,6 +1240,78 @@ fn modes_for(unit: &AlgorithmUnit) -> Vec<PracticeModeDto> {
         modes.push(PracticeModeDto::TransferPractice);
     }
     modes
+}
+fn language_for(unit: &AlgorithmUnit, implementation: Option<&str>) -> String {
+    implementation
+        .and_then(|key| unit.implementations.iter().find(|item| item.key == key))
+        .or_else(|| unit.implementations.first())
+        .map(|item| item.language.clone())
+        .unwrap_or_else(|| "plaintext".to_owned())
+}
+fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
+    let mut options = Vec::new();
+    for definition in &unit.practice.shadow_typing {
+        let implementation = unit
+            .implementations
+            .iter()
+            .find(|item| item.key == definition.implementation);
+        let label = implementation
+            .map(|item| format!("{} · {}", item.purpose, item.language))
+            .unwrap_or_else(|| definition.implementation.clone());
+        options.push(PracticeOptionDto {
+            id: definition.implementation.clone(),
+            label,
+            language: implementation
+                .map(|item| item.language.clone())
+                .unwrap_or_else(|| "plaintext".to_owned()),
+            mode: PracticeModeDto::ShadowTyping,
+            selector: PracticeSelectorDto::Implementation,
+        });
+    }
+    for definition in &unit.practice.code_recall {
+        options.push(PracticeOptionDto {
+            id: definition.id.clone(),
+            label: format!(
+                "{} · {}",
+                definition.id.replace('-', " "),
+                assistance_label(definition.assistance)
+            ),
+            language: unit
+                .implementations
+                .first()
+                .map(|item| item.language.clone())
+                .unwrap_or_else(|| "plaintext".to_owned()),
+            mode: PracticeModeDto::CodeRecall,
+            selector: PracticeSelectorDto::PracticeId,
+        });
+    }
+    for definition in &unit.practice.reasoning_recall {
+        options.push(PracticeOptionDto {
+            id: definition.id.clone(),
+            label: definition.id.replace('-', " "),
+            language: unit
+                .implementations
+                .first()
+                .map(|item| item.language.clone())
+                .unwrap_or_else(|| "plaintext".to_owned()),
+            mode: PracticeModeDto::ReasoningRecall,
+            selector: PracticeSelectorDto::PracticeId,
+        });
+    }
+    for definition in &unit.practice.transfer_practice {
+        options.push(PracticeOptionDto {
+            id: definition.id.clone(),
+            label: definition.id.replace('-', " "),
+            language: unit
+                .implementations
+                .first()
+                .map(|item| item.language.clone())
+                .unwrap_or_else(|| "plaintext".to_owned()),
+            mode: PracticeModeDto::TransferPractice,
+            selector: PracticeSelectorDto::PracticeId,
+        });
+    }
+    options
 }
 fn select_code_recall<'a>(
     unit: &'a AlgorithmUnit,
@@ -1331,6 +1448,8 @@ fn shadow_attempt(value: &gewu_practice::PracticeAttempt, session_id: &str) -> S
         revision: value.revision().get(),
         schema_version: value.schema_version().to_owned(),
         mode: "shadow_typing".to_owned(),
+        implementation: Some(value.implementation().to_owned()),
+        practice_id: None,
         terminal_reason: match value.terminal_reason() {
             TerminalReason::Completed => "completed".to_owned(),
             TerminalReason::Stopped => "stopped".to_owned(),
@@ -1352,6 +1471,8 @@ fn flow_attempt(value: &gewu_practice::FlowRecallAttempt, session_id: &str) -> S
         revision: value.revision().get(),
         schema_version: value.schema_version().to_owned(),
         mode: "flow_recall".to_owned(),
+        implementation: None,
+        practice_id: None,
         terminal_reason: match value.terminal_reason() {
             TerminalReason::Completed => "completed".to_owned(),
             TerminalReason::Stopped => "stopped".to_owned(),
@@ -1373,6 +1494,8 @@ fn code_attempt(value: &gewu_practice::CodeRecallAttempt, session_id: &str) -> S
         revision: value.revision().get(),
         schema_version: value.schema_version().to_owned(),
         mode: "code_recall".to_owned(),
+        implementation: Some(value.implementation().to_owned()),
+        practice_id: None,
         terminal_reason: match value.terminal_reason() {
             TerminalReason::Completed => "completed".to_owned(),
             TerminalReason::Stopped => "stopped".to_owned(),
@@ -1397,6 +1520,8 @@ fn reasoning_attempt(
         revision: value.revision().get(),
         schema_version: value.schema_version().to_owned(),
         mode: "reasoning_recall".to_owned(),
+        implementation: None,
+        practice_id: None,
         terminal_reason: match value.terminal_reason() {
             TerminalReason::Completed => "completed".to_owned(),
             TerminalReason::Stopped => "stopped".to_owned(),
@@ -1421,6 +1546,8 @@ fn transfer_attempt(
         revision: value.revision().get(),
         schema_version: value.schema_version().to_owned(),
         mode: "transfer_practice".to_owned(),
+        implementation: None,
+        practice_id: None,
         terminal_reason: match value.terminal_reason() {
             TerminalReason::Completed => "completed".to_owned(),
             TerminalReason::Stopped => "stopped".to_owned(),
@@ -1442,6 +1569,8 @@ fn stored_attempt_view(value: StoredAttempt) -> Result<AttemptSummary, CoreError
         revision: value.revision,
         schema_version: value.schema_version,
         mode: parse_stored_mode(&value.mode)?,
+        implementation: value.implementation,
+        practice_id: value.practice_id,
         terminal_reason: parse_stored_terminal_reason(&value.terminal_reason)?,
         accepted_input_count: value.accepted_input_count,
         rejected_input_count: value.rejected_input_count,
@@ -1485,6 +1614,8 @@ fn review_fact_from_stored(value: StoredAttempt) -> Result<AttemptFact, CoreErro
         revision: gewu_domain::Revision::new(value.revision)
             .map_err(|error| CoreError::InvalidReviewRevision(error.to_string()))?,
         mode: parse_stored_mode_for_review(&value.mode)?,
+        implementation: value.implementation,
+        practice_id: value.practice_id,
         terminal_reason,
         accepted: value.accepted_input_count,
         rejected: value.rejected_input_count,
@@ -1501,6 +1632,8 @@ fn review_state_from_stored(value: StoredReviewState) -> Result<ReviewState, Cor
         revision: gewu_domain::Revision::new(value.revision)
             .map_err(|error| CoreError::InvalidReviewRevision(error.to_string()))?,
         mode: parse_stored_mode_for_review(&value.mode)?,
+        implementation: value.implementation,
+        practice_id: value.practice_id,
         last_reviewed_at_ms: value.last_reviewed_at_ms,
         next_due_at_ms: value.next_due_at_ms,
         stability_days: value.stability_days,
@@ -1520,6 +1653,8 @@ fn stored_state_from_review(value: &ReviewState) -> StoredReviewState {
             .as_str()
             .expect("practice mode serializes to a string")
             .to_owned(),
+        implementation: value.implementation.clone(),
+        practice_id: value.practice_id.clone(),
         last_reviewed_at_ms: value.last_reviewed_at_ms,
         next_due_at_ms: value.next_due_at_ms,
         stability_days: value.stability_days,

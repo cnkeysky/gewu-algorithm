@@ -118,6 +118,25 @@ pub struct UnitSummary {
     pub revision: u64,
     pub title: String,
     pub modes: Vec<PracticeModeDto>,
+    pub practice_options: Vec<PracticeOptionDto>,
+}
+
+/// A reviewed, selectable practice definition exposed by one algorithm unit.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PracticeOptionDto {
+    pub id: String,
+    pub label: String,
+    pub language: String,
+    pub mode: PracticeModeDto,
+    pub selector: PracticeSelectorDto,
+}
+
+/// The start-session field populated by a selected practice option.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PracticeSelectorDto {
+    Implementation,
+    PracticeId,
 }
 
 /// Supported practice mode values.
@@ -209,6 +228,7 @@ pub struct SessionView {
     pub problem_question: String,
     pub revision: u64,
     pub mode: PracticeModeDto,
+    pub language: String,
     pub status: SessionStatusDto,
     pub accepted_text: String,
     pub target_text: String,
@@ -267,6 +287,10 @@ pub struct AttemptSummary {
     pub revision: u64,
     pub schema_version: String,
     pub mode: PracticeModeDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implementation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub practice_id: Option<String>,
     pub terminal_reason: TerminalReasonDto,
     pub accepted_input_count: u64,
     pub rejected_input_count: u64,
@@ -321,6 +345,10 @@ pub struct CheckpointSummary {
     pub unit_title: String,
     pub revision: u64,
     pub mode: PracticeModeDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implementation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub practice_id: Option<String>,
     pub completed_steps: usize,
     pub total_steps: usize,
     pub accepted_characters: usize,

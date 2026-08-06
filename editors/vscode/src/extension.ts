@@ -76,17 +76,17 @@ async function startPractice(mode: PracticeMode): Promise<void> {
   const units = await core.listUnits();
   const checkpoints = await core.listCheckpoints();
   const choices = units
-    .filter(
-      (unit) =>
-        unit.modes.includes(mode) &&
-        !checkpoints.some(
-          (checkpoint) =>
-            checkpoint.unit_id === unit.id &&
-            checkpoint.revision === unit.revision &&
-            checkpoint.mode === mode,
-        ),
-    )
-    .map((unit) => ({ label: unit.title, description: unit.id, unit }));
+    .filter((unit) => unit.modes.includes(mode))
+    .flatMap((unit) => {
+      const options = unit.practice_options.filter((option) => option.mode === mode);
+      const candidates = options.length > 0 ? options : [{ id: undefined, label: unit.title, selector: undefined }];
+      return candidates.flatMap((option) => {
+        const implementation = option.selector === "implementation" ? option.id : undefined;
+        const practiceId = option.selector === "practice_id" ? option.id : undefined;
+        const occupied = checkpoints.some((checkpoint) => checkpoint.unit_id === unit.id && checkpoint.revision === unit.revision && checkpoint.mode === mode && checkpoint.implementation === implementation && checkpoint.practice_id === practiceId);
+        return occupied ? [] : [{ label: options.length > 0 ? `${unit.title} · ${option.label}` : unit.title, description: unit.id, unit, implementation, practiceId }];
+      });
+    });
   if (choices.length === 0) {
     vscode.window.showInformationMessage(
       `GEWU: Every available ${displayMode(mode)} task already has an interrupted checkpoint.`,
@@ -98,7 +98,7 @@ async function startPractice(mode: PracticeMode): Promise<void> {
   });
   if (selected === undefined) return;
   await closeActivePracticeUi();
-  const session = await core.startSession(selected.unit.id, mode);
+  const session = await core.startSession(selected.unit.id, mode, selected.implementation, selected.practiceId);
   if (mode === "shadow_typing") {
     activeHost = await openPracticeDocument(
       session.session_id,
@@ -481,10 +481,15 @@ function formatLocalDate(value: string): string {
 function attemptDetail(
   attempt: import("./core-client.js").AttemptSummary,
 ): string {
+  const variant = attempt.implementation
+    ? ` | implementation ${attempt.implementation}`
+    : attempt.practice_id
+      ? ` | practice ${attempt.practice_id}`
+      : "";
   if (attempt.mode === "shadow_typing") {
-    return `${formatLocalDate(attempt.created_at)} | accepted ${attempt.accepted_input_count} characters | rejected ${attempt.rejected_input_count} characters`;
+    return `${formatLocalDate(attempt.created_at)}${variant} | accepted ${attempt.accepted_input_count} characters | rejected ${attempt.rejected_input_count} characters`;
   }
-  return `${formatLocalDate(attempt.created_at)} | completed ${attempt.accepted_input_count} steps | rejected ${attempt.rejected_input_count} answers | prompts ${attempt.prompt_count}`;
+  return `${formatLocalDate(attempt.created_at)}${variant} | completed ${attempt.accepted_input_count} steps | rejected ${attempt.rejected_input_count} answers | prompts ${attempt.prompt_count}`;
 }
 
 function displayMode(mode: PracticeMode): string {

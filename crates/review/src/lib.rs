@@ -16,6 +16,8 @@ pub struct AttemptFact {
     pub unit_id: UnitId,
     pub revision: Revision,
     pub mode: PracticeMode,
+    pub implementation: Option<String>,
+    pub practice_id: Option<String>,
     pub terminal_reason: TerminalReason,
     pub accepted: u64,
     pub rejected: u64,
@@ -54,6 +56,10 @@ pub struct ReviewRecommendation {
     pub unit_id: UnitId,
     pub revision: Revision,
     pub mode: PracticeMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implementation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub practice_id: Option<String>,
     pub kind: RecommendationKind,
     pub priority: RecommendationPriority,
     pub reason: String,
@@ -71,6 +77,8 @@ pub struct ReviewState {
     pub unit_id: UnitId,
     pub revision: Revision,
     pub mode: PracticeMode,
+    pub implementation: Option<String>,
+    pub practice_id: Option<String>,
     pub last_reviewed_at_ms: u64,
     pub next_due_at_ms: u64,
     pub stability_days: f64,
@@ -97,20 +105,20 @@ pub struct ReviewDecision {
 
 /// Derives one stable recommendation per unit/revision/mode from terminal attempts.
 pub fn recommend(attempts: &[AttemptFact]) -> Vec<ReviewRecommendation> {
-    let mut groups: BTreeMap<(UnitId, Revision, PracticeMode), Vec<&AttemptFact>> = BTreeMap::new();
+    let mut groups: BTreeMap<(UnitId, Revision, PracticeMode, Option<String>, Option<String>), Vec<&AttemptFact>> = BTreeMap::new();
     for attempt in attempts {
         groups
-            .entry((attempt.unit_id.clone(), attempt.revision, attempt.mode))
+            .entry((attempt.unit_id.clone(), attempt.revision, attempt.mode, attempt.implementation.clone(), attempt.practice_id.clone()))
             .or_default()
             .push(attempt);
     }
-    groups.into_iter().map(|((unit_id, revision, mode), mut values)| {
+    groups.into_iter().map(|((unit_id, revision, mode, implementation, practice_id), mut values)| {
         values.sort_by(|left, right| left.id.cmp(&right.id));
         let source_attempt_ids = values.iter().map(|value| value.id.clone()).collect();
         let completed = values.iter().filter(|value| value.terminal_reason == TerminalReason::Completed).count();
         let stopped = values.len() - completed;
         if completed == 0 {
-            return ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, kind: RecommendationKind::Inconclusive, priority: RecommendationPriority::Low, reason: "Only interrupted attempts are available; no progression decision is made.".to_owned(), due_after_days: 0, due_at_ms: None, source_attempt_ids };
+            return ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, implementation, practice_id, kind: RecommendationKind::Inconclusive, priority: RecommendationPriority::Low, reason: "Only interrupted attempts are available; no progression decision is made.".to_owned(), due_after_days: 0, due_at_ms: None, source_attempt_ids };
         }
         let rejected: u64 = values.iter().map(|value| value.rejected).sum();
         let dependence: u64 = values.iter().map(|value| value.prompts + value.scaffold_reveals).sum();
@@ -121,7 +129,7 @@ pub fn recommend(attempts: &[AttemptFact]) -> Vec<ReviewRecommendation> {
         } else {
             (RecommendationKind::Review, RecommendationPriority::Normal, 3, "Schedule a delayed independent review to test retention.".to_owned())
         };
-        ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, kind, priority, reason, due_after_days, due_at_ms: None, source_attempt_ids }
+        ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, implementation, practice_id, kind, priority, reason, due_after_days, due_at_ms: None, source_attempt_ids }
     }).collect()
 }
 
@@ -163,6 +171,8 @@ pub fn update_state(
         unit_id: attempt.unit_id.clone(),
         revision: attempt.revision,
         mode: attempt.mode,
+        implementation: attempt.implementation.clone(),
+        practice_id: attempt.practice_id.clone(),
         last_reviewed_at_ms: now_ms,
         next_due_at_ms: now_ms.saturating_add((stability_days * 86_400_000.0) as u64),
         stability_days,
@@ -199,6 +209,8 @@ mod tests {
             unit_id: UnitId::parse("graph.bfs").unwrap(),
             revision: Revision::new(1).unwrap(),
             mode,
+            implementation: None,
+            practice_id: None,
             terminal_reason,
             accepted: 10,
             rejected,
