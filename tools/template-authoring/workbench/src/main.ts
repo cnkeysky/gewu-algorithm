@@ -557,7 +557,12 @@ function renderWorkflow(): void {
   const contractValid = ["validated", "llm_reviewed", "accepted"].includes(draft.status);
   const readyToValidate = draft.status === "generated";
   setStatus(validation, contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : draft.status === "needs_revision" ? "Blocked by revision" : "Pending", contractValid ? "passed" : readyToValidate ? "ready" : draft.status === "needs_revision" ? "blocked" : "pending");
-  setStatus(review, report ? report.verdict.replaceAll("_", " ") : draft.status === "validated" ? "Ready to run" : "Pending", report?.verdict === "pass" ? "passed" : report ? "blocked" : draft.status === "validated" ? "ready" : "pending");
+  const roleReviews = draftPersistence === "local" ? [] : readReviews().filter((item) => item.draftId === draft.id);
+  const blockedReview = roleReviews.find((item) => item.verdict === "needs_revision" || item.verdict === "reject");
+  const allRolesPassed = roleReviews.length === 3 && roleReviews.every((item) => item.verdict === "pass");
+  const reviewValue = allRolesPassed ? "All roles passed" : blockedReview ? "Needs revision" : draft.status === "validated" ? "Ready to run" : "Pending";
+  const reviewKind = allRolesPassed ? "passed" : blockedReview ? "blocked" : draft.status === "validated" ? "ready" : "pending";
+  setStatus(review, reviewValue, reviewKind);
   setStatus(acceptance, draft.status === "accepted" ? "Human approved" : draft.status === "llm_reviewed" ? "Ready for you" : "Pending", draft.status === "accepted" ? "passed" : draft.status === "llm_reviewed" ? "ready" : "pending");
 }
 function markDraftDirty(): void {
@@ -660,6 +665,9 @@ document.addEventListener("click", (event) => {
   if (reviewButton) {
     event.stopPropagation();
     const id = reviewButton.dataset.reviewId;
+    reviewButton.disabled = true;
+    const originalLabel = reviewButton.textContent ?? "LLM pre-review";
+    reviewButton.textContent = "Running 3 role reviews…";
     void (async () => {
       const roles = ["algorithm_correctness", "learning_design", "provenance_safety"];
       for (const role of roles) {
@@ -670,6 +678,8 @@ document.addEventListener("click", (event) => {
       message.className = "form-message success";
       await syncFromApi(); await inspectArtifact(id!); showView("drafts");
     })().catch((error) => { message.textContent = error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
+    reviewButton.disabled = false;
+    reviewButton.textContent = originalLabel;
     return;
   }
   const acceptButton = target.closest<HTMLButtonElement>("[data-accept-id]");

@@ -44,7 +44,8 @@ test("requested cloze generation carries the executable slot contract", () => {
     implementation_variants: 1,
   });
   assert.match(task.instruction, /source_template/);
-  assert.match(task.instruction, /exactly reconstruct the canonical implementation/);
+  assert.match(task.instruction, /expected code that appears verbatim in code\/python\.py/);
+  assert.match(task.instruction, /server derives the source_template/);
 });
 
 test("requested comment layouts carry their distinct executable contracts", () => {
@@ -56,6 +57,7 @@ test("requested comment layouts carry their distinct executable contracts", () =
     implementation_languages: ["python"],
     implementation_variants: 1,
   });
-  assert.match(task.instruction, /every slot a concise reviewed cue/);
+  assert.match(task.instruction, /concise nonempty reviewed cue/);
+  assert.match(task.instruction, /expected code appears verbatim in code\/python\.py/);
   assert.match(task.instruction, /ordered scaffold of reviewed algorithm-operation comments/);
 });

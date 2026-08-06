@@ -106,9 +106,9 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
                 type: "object", additionalProperties: false,
                 required: ["line_endings", "trailing_newline", "whitespace"],
                 properties: {
-                  line_endings: { enum: ["lf", "crlf", "preserve"] },
+                  line_endings: { const: "lf" },
                   trailing_newline: { type: "boolean" },
-                  whitespace: { enum: ["strict", "trim_trailing"] },
+                  whitespace: { const: "strict" },
                 },
               },
             },

@@ -47,6 +47,7 @@ export interface DraftTask {
   readonly instruction: string;
   readonly outputSchema: Record<string, unknown>;
   readonly profile?: GenerationProfile;
+  readonly validate?: (artifact: unknown) => void;
 }
 
 export interface DraftArtifact {
@@ -75,10 +76,10 @@ export function optionsFromEnvironment(
   return {
     provider: environment.GEWU_LLM_PROVIDER ?? "deepseek",
     model: environment.GEWU_LLM_MODEL ?? "deepseek-v4-flash",
-    maxTokens: parsePositiveInteger(environment.GEWU_LLM_MAX_TOKENS) ?? 8192,
-    timeoutMs: parsePositiveInteger(environment.GEWU_LLM_TIMEOUT_MS) ?? 60_000,
+    maxTokens: parsePositiveInteger(environment.GEWU_LLM_MAX_TOKENS) ?? 16_384,
+    timeoutMs: parsePositiveInteger(environment.GEWU_LLM_TIMEOUT_MS) ?? 120_000,
     maxAttempts: parsePositiveInteger(environment.GEWU_LLM_MAX_ATTEMPTS) ?? 2,
-    maxStructuredAttempts: parsePositiveInteger(environment.GEWU_LLM_MAX_STRUCTURED_ATTEMPTS) ?? 2,
+    maxStructuredAttempts: parsePositiveInteger(environment.GEWU_LLM_MAX_STRUCTURED_ATTEMPTS) ?? 3,
   };
 }
 
@@ -139,6 +140,7 @@ export class PiGenerator {
       try {
         const manifest = validateToolCall([tool], toolCall) as unknown;
         if (!isRecord(manifest)) throw new Error("structured tool arguments must be an object");
+        await task.validate?.(manifest);
         return {
           taskId: task.taskId,
           taskVersion: task.taskVersion,

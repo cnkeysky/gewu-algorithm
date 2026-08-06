@@ -19,14 +19,66 @@ function inputHash(problem: string): string {
   return `sha256:${createHash("sha256").update(problem).digest("hex")}`;
 }
 
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const IMPLEMENTATION_PURPOSES = new Set(["teaching", "concise", "iterative", "recursive", "optimized"]);
+
+function assertSlug(value: unknown, path: string): asserts value is string {
+  if (typeof value !== "string" || !SLUG.test(value)) throw new Error(`${path} must be a lowercase slug`);
+}
+
+/** Pre-flights the Rust contract rules that LLM output most often violates, so the generator can repair before writing. */
+function validateGeneratedShape(value: unknown): void {
+  if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("artifact must contain manifest and sources objects");
+  const manifest = value.manifest;
+  if (manifest.schema_version !== "2" || manifest.status !== "draft") throw new Error("manifest must declare schema_version 2 and draft status");
+  if (typeof manifest.id !== "string" || !/^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(manifest.id)) throw new Error("manifest.id must be a dotted lowercase identifier");
+  if (!isRecord(manifest.problem) || typeof manifest.problem.statement !== "string" || manifest.problem.statement.trim().length < 20) {
+    throw new Error("problem.statement is required and must contain the complete learner-facing Markdown problem statement");
+  }
+  if (!Array.isArray(manifest.implementations) || manifest.implementations.length === 0) throw new Error("at least one implementation is required");
+  const keys = new Set<string>();
+  for (const [index, implementation] of manifest.implementations.entries()) {
+    if (!isRecord(implementation)) throw new Error(`implementations[${index}] must be an object`);
+    assertSlug(implementation.key, `implementations[${index}].key`);
+    assertSlug(implementation.language, `implementations[${index}].language`);
+    if (typeof implementation.purpose !== "string" || !IMPLEMENTATION_PURPOSES.has(implementation.purpose)) {
+      throw new Error(`implementations[${index}].purpose must be one of teaching, concise, iterative, recursive, optimized`);
+    }
+    if (implementation.source !== "code/python.py") throw new Error("implementation source must be code/python.py");
+    if (!Array.isArray(implementation.test_references) || !implementation.test_references.includes("tests/python_test.py")) {
+      throw new Error("implementation test_references must include tests/python_test.py");
+    }
+    if (!isRecord(implementation.normalization) || implementation.normalization.line_endings !== "lf" || implementation.normalization.whitespace !== "strict") {
+      throw new Error(`implementations[${index}].normalization must use line_endings "lf" and whitespace "strict"`);
+    }
+    if (keys.has(implementation.key)) throw new Error(`implementations[${index}].key duplicates ${implementation.key}`);
+    keys.add(implementation.key);
+  }
+  const practice = isRecord(manifest.practice) ? manifest.practice : {};
+  for (const field of ["shadow_typing", "code_recall"]) {
+    const items = practice[field];
+    if (!Array.isArray(items)) continue;
+    for (const [index, item] of items.entries()) {
+      if (!isRecord(item)) throw new Error(`practice.${field}[${index}] must be an object`);
+      assertSlug(item.implementation, `practice.${field}[${index}].implementation`);
+      if (!keys.has(item.implementation)) throw new Error(`practice.${field}[${index}].implementation must exactly match an implementations[].key`);
+    }
+  }
+  for (const required of ["code/python.py", "tests/python_test.py"]) {
+    if (typeof value.sources[required] !== "string" || (value.sources[required] as string).trim() === "") {
+      throw new Error(`source is missing or empty: ${required}`);
+    }
+  }
+}
+
 function codeRecallLayoutInstruction(profile: GenerationProfile): string {
   if (!profile.practice_modes.includes("code_recall")) return "";
   const requested = profile.code_recall_layouts.join(", ") || "full_recall";
   const cloze = profile.code_recall_layouts.includes("cloze")
-    ? ` For each cloze projection, declare layout "cloze", a source_template containing each {{slot-id}} marker exactly once, and nonempty slots with lowercase slug ids and expected code. Replacing every marker must exactly reconstruct the canonical implementation. Select algorithm decisions, not punctuation or arbitrary syntax.`
+    ? ` For each cloze projection, declare layout "cloze", nonempty slots with lowercase slug ids, and expected code that appears verbatim in code/python.py. The server derives the source_template from those slots, so never invent expected text that is not in the implementation. Select algorithm decisions, not punctuation or arbitrary syntax.`
     : "";
   const commentGuided = profile.code_recall_layouts.includes("comment_guided")
-    ? ` For each comment_guided projection, use assistance "comments", declare a source_template and nonempty slots, give every slot a concise reviewed cue describing the algorithm operation without revealing its code, and ensure marker replacement exactly reconstructs the canonical implementation.`
+    ? ` For each comment_guided projection, use assistance "comments", declare nonempty slots with lowercase slug ids, give every slot a concise nonempty reviewed cue describing the algorithm operation without revealing its code, and ensure every slot's expected code appears verbatim in code/python.py.`
     : "";
   const commentToCode = profile.code_recall_layouts.includes("comment_to_code")
     ? ` For each comment_to_code projection, use assistance "comments", omit source_template and slots, and provide an ordered scaffold of reviewed algorithm-operation comments from which the learner reconstructs the complete canonical implementation.`
@@ -44,6 +96,7 @@ const kahnDefinition: AuthoringTaskDefinition = {
     selectedInputHash: inputHash(problem),
     instruction: `${kahnTask.instruction}${codeRecallLayoutInstruction(profile)}\n\nAuthor problem supplied by the workbench:\n${problem}`,
     profile,
+    validate: validateGeneratedShape,
   }),
   validateArtifact: (value) => assertGeneratedTemplate(value),
 };
@@ -73,7 +126,11 @@ code recall with an explicit requested layout, reasoning recall, and transfer pr
 Use schema_version "2", status "draft", lowercase ids/tags, pending validation fields, and provenance.generated_by.
 The problem.statement field is required and must be the complete learner-facing problem statement in Markdown (not a summary). Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters; do not use raw HTML, scripts, answer keys, or implementation details that reveal the solution.
 The implementation key must be "python-teaching", source "code/python.py", and test_references must include
-"tests/python_test.py". Do not include markdown or unknown fields.`;
+"tests/python_test.py". Every implementation reference inside practice.shadow_typing and practice.code_recall must
+also be "python-teaching". Each implementation normalization must use line_endings "lf" and whitespace "strict".
+Every code recall item must declare a nonempty scaffold when assistance is not "none", and an empty scaffold
+when assistance is "none". Every provenance source must declare role one of "primary", "synthesis", or "lead".
+Do not include markdown or unknown fields.`;
 
 function assertBinaryArtifact(value: unknown): asserts value is { manifest: Record<string, unknown>; sources: Record<string, unknown> } {
   if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("binary-search artifact must contain manifest and sources");
@@ -99,6 +156,7 @@ const binarySearchDefinition: AuthoringTaskDefinition = {
     instruction: `${BINARY_SEARCH_INSTRUCTION}${codeRecallLayoutInstruction(profile)}\n\nAuthor problem supplied by the workbench:\n${problem}`,
     outputSchema: BINARY_SEARCH_SCHEMA,
     profile,
+    validate: validateGeneratedShape,
   }),
   validateArtifact: assertBinaryArtifact,
 };
@@ -112,9 +170,10 @@ const genericDefinition: AuthoringTaskDefinition = {
     taskId: "algorithm-unit-v2",
     taskVersion: "1",
     selectedInputHash: inputHash(problem),
-    instruction: `Create a GEWU AlgorithmUnit for the following algorithm problem. Infer its domain, category, prerequisites, implementation strategy, complexity, assumptions, tests, patterns, relationships, and all selected practice projections from the problem. The problem.statement field is required and must contain the complete learner-facing problem statement in Markdown, not a summary. Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters; do not use raw HTML, scripts, answer keys, or solution-leaking implementation details. Every code_recall item must declare one requested layout. full_recall reconstructs the complete canonical implementation. cloze and comment_guided use reviewed structured slots; comment_to_code presents ordered algorithm comments while the learner reconstructs the complete implementation. Keep layout separate from optional assistance. Preserve the exact contract fields and pending lifecycle claims. Return only the structured artifact requested by the schema; do not invent unknown fields.${codeRecallLayoutInstruction(profile)}\n\nAlgorithm problem:\n${problem}`,
+    instruction: `Create a GEWU AlgorithmUnit for the following algorithm problem. Infer its domain, category, prerequisites, implementation strategy, complexity, assumptions, tests, patterns, relationships, and all selected practice projections from the problem. The problem.statement field is required and must contain the complete learner-facing problem statement in Markdown, not a summary. Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters; do not use raw HTML, scripts, answer keys, or solution-leaking implementation details. Every code_recall item must declare one requested layout. full_recall reconstructs the complete canonical implementation. cloze and comment_guided use reviewed structured slots; comment_to_code presents ordered algorithm comments while the learner reconstructs the complete implementation. Keep layout separate from optional assistance. Every code recall item must declare a nonempty scaffold when assistance is not "none", and an empty scaffold when assistance is "none". Every provenance source must declare role one of "primary", "synthesis", or "lead". Preserve the exact contract fields and pending lifecycle claims. Return only the structured artifact requested by the schema; do not invent unknown fields. Implementation keys and language identifiers must be lowercase slugs: lowercase ASCII letters and digits separated by single hyphens, with no leading, trailing, or repeated hyphens, for example python-teaching and python. Every implementation reference inside practice.shadow_typing and practice.code_recall must exactly equal one implementations[].key. Use exactly code/python.py as the implementation source and tests/python_test.py in test_references, and return both files in sources. Each implementation normalization must use line_endings "lf" and whitespace "strict".${codeRecallLayoutInstruction(profile)}\n\nAlgorithm problem:\n${problem}`,
     outputSchema: kahnTask.outputSchema,
     profile,
+    validate: validateGeneratedShape,
   }),
   validateArtifact: (value) => {
     if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("AlgorithmUnit artifact must contain manifest and sources");

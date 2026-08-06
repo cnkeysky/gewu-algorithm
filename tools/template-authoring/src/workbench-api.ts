@@ -10,6 +10,7 @@ import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { PiGenerator, optionsFromEnvironment, type CodeRecallAssistanceSelection, type PracticeModeSelection } from "./pi-generator.js";
 import { reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
+import { applyTrustedDraftState, applyTrustedProvenance } from "./generate-template.js";
 
 const PORT = Number(process.env.GEWU_WORKBENCH_PORT ?? 4174);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -53,6 +54,62 @@ type DraftRecord = {
   artifactPath?: string;
   publishedPath?: string;
 };
+
+const SLOT_MARKER = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Derives code_recall source templates from the canonical implementation instead of trusting the
+ * model's copy. Markers replace exactly the declared slot expectations, which makes the Rust
+ * reconstructability check deterministic and keeps the repair loop focused on slot selection.
+ */
+function materializeSourceTemplates(manifest: Record<string, unknown>, sources: Record<string, unknown>): void {
+  const code = sources["code/python.py"];
+  if (typeof code !== "string") return;
+  const practice = isRecord(manifest.practice) ? manifest.practice : undefined;
+  const items = practice?.code_recall;
+  if (!Array.isArray(items)) return;
+  for (const [index, item] of items.entries()) {
+    if (!isRecord(item)) continue;
+    if ((item.layout === "comment_guided" || item.layout === "comment_to_code") && item.assistance !== "comments") {
+      throw new Error(`practice.code_recall[${index}] must use assistance "comments" for layout ${String(item.layout)}`);
+    }
+    if (item.assistance === "none") {
+      item.scaffold = [];
+    } else if (!Array.isArray(item.scaffold) || item.scaffold.length === 0 || item.scaffold.some((entry) => typeof entry !== "string" || entry.trim() === "")) {
+      throw new Error(`practice.code_recall[${index}] scaffold must contain at least one nonempty item when assistance is enabled`);
+    }
+    if (item.layout !== "cloze" && item.layout !== "comment_guided") {
+      delete item.source_template;
+      item.slots = [];
+      continue;
+    }
+    if (!Array.isArray(item.slots) || item.slots.length === 0) {
+      throw new Error(`practice.code_recall[${index}].slots must be nonempty for layout ${String(item.layout)}`);
+    }
+    let template = code;
+    const seenSlotIds = new Set<string>();
+    for (const slot of item.slots) {
+      if (!isRecord(slot) || typeof slot.id !== "string" || !SLOT_MARKER.test(slot.id)) {
+        throw new Error(`practice.code_recall[${index}] slot id must be a lowercase slug`);
+      }
+      if (seenSlotIds.has(slot.id)) throw new Error(`practice.code_recall[${index}] slot id ${slot.id} is duplicated`);
+      seenSlotIds.add(slot.id);
+      const expected = slot.expected;
+      if (typeof expected !== "string" || expected.length === 0) {
+        throw new Error(`practice.code_recall[${index}] slot ${slot.id} must declare expected code`);
+      }
+      if (item.layout === "comment_guided" && (typeof slot.cue !== "string" || slot.cue.trim() === "")) {
+        throw new Error(`practice.code_recall[${index}] slot ${slot.id} must declare a nonempty cue for comment_guided`);
+      }
+      if (typeof slot.cue === "string" && slot.cue.trim() === "") delete slot.cue;
+      if (!template.includes(expected)) {
+        throw new Error(`practice.code_recall[${index}] slot ${slot.id} expected code does not appear verbatim in code/python.py`);
+      }
+      template = template.replace(expected, `{{${slot.id}}}`);
+    }
+    item.source_template = template;
+  }
+}
 type ReviewRecord = {
   id: string;
   draftId: string;
@@ -121,47 +178,90 @@ function migrateLegacyState(): void {
 
 migrateLegacyState();
 
-async function generateDraft(draft: DraftRecord): Promise<{ provider: string; model: string; artifactPath: string }> {
-  const definition = builtinTaskRegistry.resolve(draft.taskId, draft.problem);
-  const artifact = await new PiGenerator(optionsFromEnvironment()).generate(definition.buildTask(draft.problem, {
-      practice_modes: draft.modes as PracticeModeSelection[],
-      code_recall_assistance: draft.assistance as CodeRecallAssistanceSelection[],
-      code_recall_layouts: draft.modes.includes("code_recall")
-        ? [
-            "full_recall",
-            ...(draft.assistance.includes("comments")
-              ? ["comment_guided" as const, "comment_to_code" as const]
-              : []),
-            ...(draft.assistance.includes("cloze") ? ["cloze" as const] : []),
-          ]
-        : [],
-      implementation_languages: [draft.language],
-      implementation_variants: draft.variants,
-    }));
-  if (!isRecord(artifact.manifest)) throw new Error("generator returned an invalid artifact");
-  if (!isRecord(artifact.manifest.manifest)) throw new Error("generator manifest is invalid");
-  artifact.manifest.manifest.status = "draft";
-  artifact.manifest.manifest.validation = {
-    schema: "pending", code: "pending", content_review: "pending", transfer_review: "pending", last_validated_at: null,
-  };
-  artifact.manifest.manifest.provenance = {
-    ...(isRecord(artifact.manifest.manifest.provenance) ? artifact.manifest.manifest.provenance : {}),
-    generated_by: { provider: artifact.provider, model: artifact.model, task_version: artifact.taskVersion, generated_at: new Date().toISOString() },
-  };
-  definition.validateArtifact(artifact.manifest);
-  if (!isRecord(artifact.manifest.sources)) throw new Error("generator sources are invalid");
-  const artifactAbsolutePath = join(storageRoot, "artifacts", `${draft.id}-${Date.now()}`);
-  await mkdir(artifactAbsolutePath, { recursive: true });
-  await writeFile(join(artifactAbsolutePath, "unit.json"), `${JSON.stringify(artifact.manifest.manifest, null, 2)}\n`, "utf8");
-  for (const [path, content] of Object.entries(artifact.manifest.sources)) {
-    if (typeof content !== "string" || path.includes("..") || path.startsWith("/")) throw new Error(`invalid generated source path: ${path}`);
-    const destination = join(artifactAbsolutePath, path);
-    await mkdir(dirname(destination), { recursive: true });
-    await writeFile(destination, content, "utf8");
+async function revisionFeedbackFor(draft: DraftRecord, reviews: ReviewRecord[]): Promise<string> {
+  const relevant = reviews.filter((review) => review.draftId === draft.id && (review.verdict === "needs_revision" || review.verdict === "reject") && review.reportPath);
+  const chunks: string[] = [];
+  for (const review of relevant) {
+    const reportPath = resolve(here, "../..", "..", review.reportPath!);
+    try {
+      const report = JSON.parse(await readFile(reportPath, "utf8")) as { findings?: Array<{ rule_id?: string; severity?: string; path?: string; problem?: string; suggested_change?: string }> };
+      if (!Array.isArray(report.findings)) continue;
+      for (const finding of report.findings) {
+        chunks.push(`- [${finding.rule_id ?? "rule"}][${finding.severity ?? "info"}] ${finding.path ?? ""}: ${finding.problem ?? ""} Suggested: ${finding.suggested_change ?? "see report"}`);
+      }
+    } catch {
+      // A report that cannot be read must not block regeneration; the reviewer verdict still gates approval.
+    }
   }
-  await writeFile(join(artifactAbsolutePath, "generation.json"), `${JSON.stringify({ provider: artifact.provider, model: artifact.model, task_id: artifact.taskId, task_version: artifact.taskVersion, review: artifact.review }, null, 2)}\n`, "utf8");
-  await validateArtifactWithRust(artifactAbsolutePath);
-  return { provider: artifact.provider, model: artifact.model, artifactPath: relative(resolve(here, "../..", ".."), artifactAbsolutePath) };
+  return chunks.join("\n");
+}
+
+async function generateDraft(draft: DraftRecord, reviews: ReviewRecord[]): Promise<{ provider: string; model: string; artifactPath: string }> {
+  const definition = builtinTaskRegistry.resolve(draft.taskId, draft.problem);
+  const options = optionsFromEnvironment();
+  const generatedAt = new Date().toISOString();
+  const baseTask = definition.buildTask(draft.problem, {
+    practice_modes: draft.modes as PracticeModeSelection[],
+    code_recall_assistance: draft.assistance as CodeRecallAssistanceSelection[],
+    code_recall_layouts: draft.modes.includes("code_recall")
+      ? [
+          "full_recall",
+          ...(draft.assistance.includes("comments")
+            ? ["comment_guided" as const, "comment_to_code" as const]
+            : []),
+          ...(draft.assistance.includes("cloze") ? ["cloze" as const] : []),
+        ]
+      : [],
+    implementation_languages: [draft.language],
+    implementation_variants: draft.variants,
+  });
+  const revisionFeedback = draft.status === "revision_requested" ? await revisionFeedbackFor(draft, reviews) : "";
+  const task = revisionFeedback
+    ? { ...baseTask, instruction: `${baseTask.instruction}\n\nRevision feedback from the last LLM pre-review. Address every finding in the regenerated artifact, including the statement, implementation, and tests where relevant:\n${revisionFeedback}` }
+    : baseTask;
+  let stagedPath: string | undefined;
+  const stageArtifact = async (parsed: unknown): Promise<void> => {
+    if (!isRecord(parsed) || !isRecord(parsed.manifest) || !isRecord(parsed.sources)) throw new Error("generator returned an invalid artifact");
+    const manifest = applyTrustedProvenance(
+      applyTrustedDraftState(parsed.manifest),
+      options.provider,
+      options.model,
+      task.taskVersion,
+      generatedAt,
+    );
+    const provenance = isRecord(manifest.provenance) ? manifest.provenance : undefined;
+    if (Array.isArray(provenance?.sources)) {
+      for (const [sourceIndex, source] of provenance.sources.entries()) {
+        if (!isRecord(source) || typeof source.role !== "string" || !["primary", "synthesis", "lead"].includes(source.role)) {
+          throw new Error(`provenance.sources[${sourceIndex}].role must be one of primary, synthesis, lead`);
+        }
+      }
+    }
+    materializeSourceTemplates(manifest, parsed.sources);
+    definition.validateArtifact({ manifest, sources: parsed.sources });
+    const path = join(storageRoot, "artifacts", `.staging-${draft.id}-${Date.now()}`);
+    await mkdir(path, { recursive: true });
+    await writeFile(join(path, "unit.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    for (const [sourcePath, content] of Object.entries(parsed.sources)) {
+      if (typeof content !== "string" || sourcePath.includes("..") || sourcePath.startsWith("/")) throw new Error(`invalid generated source path: ${sourcePath}`);
+      const destination = join(path, sourcePath);
+      await mkdir(dirname(destination), { recursive: true });
+      await writeFile(destination, content, "utf8");
+    }
+    await writeFile(join(path, "generation.json"), `${JSON.stringify({ provider: options.provider, model: options.model, task_id: task.taskId, task_version: task.taskVersion, review: "pending" }, null, 2)}\n`, "utf8");
+    try {
+      await validateArtifactWithRust(path, false);
+    } catch (error) {
+      await rm(path, { recursive: true, force: true });
+      throw error;
+    }
+    stagedPath = path;
+  };
+  await new PiGenerator(options).generate({ ...task, validate: stageArtifact });
+  if (!stagedPath) throw new Error("generator completed without a validated artifact");
+  const artifactAbsolutePath = join(storageRoot, "artifacts", `${draft.id}-${Date.now()}`);
+  await rename(stagedPath, artifactAbsolutePath);
+  return { provider: options.provider, model: options.model, artifactPath: relative(resolve(here, "../..", ".."), artifactAbsolutePath) };
 }
 
 const execFileAsync = promisify(execFile);
@@ -355,7 +455,7 @@ const server = createServer(async (request, response) => {
       const draft = state.drafts.find((item) => item.id === generationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
       if (!["queued", "revision_requested"].includes(draft.status)) return send(response, 409, { error: "only a queued or revision-requested draft can be generated" });
-      const generated = await generateDraft(draft);
+      const generated = await generateDraft(draft, state.reviews);
       draft.status = "generated";
       draft.artifactPath = generated.artifactPath;
       await pruneUnreferencedArtifacts(draft, state.reviews);
@@ -433,6 +533,15 @@ const server = createServer(async (request, response) => {
         if (!destination.startsWith(`${staging}/`)) { await rm(staging, { recursive: true, force: true }); return send(response, 422, { error: "artifact path escaped its root" }); }
         await mkdir(dirname(destination), { recursive: true });
         await writeFile(destination, content, "utf8");
+      }
+      const unitPath = join(staging, "unit.json");
+      try {
+        const editedManifest = JSON.parse(await readFile(unitPath, "utf8")) as Record<string, unknown>;
+        materializeSourceTemplates(editedManifest, payload.files);
+        await writeFile(unitPath, `${JSON.stringify(editedManifest, null, 2)}\n`, "utf8");
+      } catch (error) {
+        await rm(staging, { recursive: true, force: true });
+        return send(response, 422, { status: "failed", errors: [error instanceof Error ? error.message : "edited artifact is invalid"] });
       }
       try { await validateArtifactWithRust(staging, false); } catch (error) { await rm(staging, { recursive: true, force: true }); return send(response, 422, { status: "failed", errors: [error instanceof Error ? error.message : String(error)] }); }
       await rm(join(staging, "reviews"), { recursive: true, force: true });
