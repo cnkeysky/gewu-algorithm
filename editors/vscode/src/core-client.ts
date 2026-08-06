@@ -27,6 +27,7 @@ export interface CoreSession {
   readonly rejected_input_count: number;
   readonly correction_count: number;
   readonly prompt_count: number;
+  readonly visible_scaffold?: readonly string[];
   readonly active_ms: number;
   readonly wall_ms: number;
   readonly terminal_reason: "completed" | "stopped" | null;
@@ -437,7 +438,14 @@ function isUnitSummary(value: unknown): value is UnitSummary {
   );
 }
 function isPracticeOption(value: unknown): value is PracticeOption {
-  return isObject(value) && typeof value.id === "string" && typeof value.label === "string" && typeof value.language === "string" && isPracticeMode(value.mode) && (value.selector === "implementation" || value.selector === "practice_id");
+  return (
+    isObject(value) &&
+    typeof value.id === "string" &&
+    typeof value.label === "string" &&
+    typeof value.language === "string" &&
+    isPracticeMode(value.mode) &&
+    (value.selector === "implementation" || value.selector === "practice_id")
+  );
 }
 function isAttemptSummary(value: unknown): value is AttemptSummary {
   return (

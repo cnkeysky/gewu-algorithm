@@ -34,6 +34,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("gewuAlgorithm.startCodeRecall", () =>
       startPractice("code_recall"),
     ),
+    vscode.commands.registerCommand(
+      "gewuAlgorithm.revealCodeRecallPrompt",
+      () => revealCodeRecallPrompt(),
+    ),
     vscode.commands.registerCommand("gewuAlgorithm.startFlowRecall", () =>
       startPractice("flow_recall"),
     ),
@@ -181,6 +185,17 @@ async function stopShadowTyping(): Promise<void> {
   } catch {
     vscode.window.showErrorMessage("GEWU: Could not stop practice.");
   }
+}
+
+async function revealCodeRecallPrompt(): Promise<void> {
+  if (activeController?.mode !== "code_recall") return;
+  const session = await activeController.revealPrompt();
+  const scaffold = activeController.visibleScaffold;
+  const details = [
+    session.current_prompt ?? "Code Recall prompt revealed.",
+    ...scaffold,
+  ].join("\n");
+  vscode.window.showInformationMessage(details);
 }
 
 async function stopPractice(): Promise<void> {

@@ -72,6 +72,25 @@ export class CorePracticeDocumentController implements Disposable {
     return this.#session.mode;
   }
 
+  public get currentPrompt(): string | null {
+    return this.#session.current_prompt;
+  }
+
+  public get visibleScaffold(): readonly string[] {
+    return this.#session.visible_scaffold ?? [];
+  }
+
+  public async revealPrompt(): Promise<CoreSession> {
+    if (this.#closed || this.#session.mode !== "code_recall")
+      return this.#session;
+    this.#session = await this.#client.applyEvent(
+      this.#session.session_id,
+      { type: "reveal_prompt" },
+      this.#elapsed(),
+    );
+    return this.#session;
+  }
+
   public async stop(): Promise<void> {
     if (this.#closed || this.#commandPending) return;
     this.#commandPending = true;
