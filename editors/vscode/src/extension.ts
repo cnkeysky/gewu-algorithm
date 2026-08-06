@@ -31,6 +31,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("gewuAlgorithm.startShadowTyping", () =>
       startPractice("shadow_typing"),
     ),
+    vscode.commands.registerCommand("gewuAlgorithm.startCodeRecall", () =>
+      startPractice("code_recall"),
+    ),
     vscode.commands.registerCommand("gewuAlgorithm.startFlowRecall", () =>
       startPractice("flow_recall"),
     ),
@@ -78,13 +81,40 @@ async function startPractice(mode: PracticeMode): Promise<void> {
   const choices = units
     .filter((unit) => unit.modes.includes(mode))
     .flatMap((unit) => {
-      const options = unit.practice_options.filter((option) => option.mode === mode);
-      const candidates = options.length > 0 ? options : [{ id: undefined, label: unit.title, selector: undefined }];
+      const options = unit.practice_options.filter(
+        (option) => option.mode === mode,
+      );
+      const candidates =
+        options.length > 0
+          ? options
+          : [{ id: undefined, label: unit.title, selector: undefined }];
       return candidates.flatMap((option) => {
-        const implementation = option.selector === "implementation" ? option.id : undefined;
-        const practiceId = option.selector === "practice_id" ? option.id : undefined;
-        const occupied = checkpoints.some((checkpoint) => checkpoint.unit_id === unit.id && checkpoint.revision === unit.revision && checkpoint.mode === mode && checkpoint.implementation === implementation && checkpoint.practice_id === practiceId);
-        return occupied ? [] : [{ label: options.length > 0 ? `${unit.title} · ${option.label}` : unit.title, description: unit.id, unit, implementation, practiceId }];
+        const implementation =
+          option.selector === "implementation" ? option.id : undefined;
+        const practiceId =
+          option.selector === "practice_id" ? option.id : undefined;
+        const occupied = checkpoints.some(
+          (checkpoint) =>
+            checkpoint.unit_id === unit.id &&
+            checkpoint.revision === unit.revision &&
+            checkpoint.mode === mode &&
+            checkpoint.implementation === implementation &&
+            checkpoint.practice_id === practiceId,
+        );
+        return occupied
+          ? []
+          : [
+              {
+                label:
+                  options.length > 0
+                    ? `${unit.title} · ${option.label}`
+                    : unit.title,
+                description: unit.id,
+                unit,
+                implementation,
+                practiceId,
+              },
+            ];
       });
     });
   if (choices.length === 0) {
@@ -98,8 +128,13 @@ async function startPractice(mode: PracticeMode): Promise<void> {
   });
   if (selected === undefined) return;
   await closeActivePracticeUi();
-  const session = await core.startSession(selected.unit.id, mode, selected.implementation, selected.practiceId);
-  if (mode === "shadow_typing") {
+  const session = await core.startSession(
+    selected.unit.id,
+    mode,
+    selected.implementation,
+    selected.practiceId,
+  );
+  if (mode === "shadow_typing" || mode === "code_recall") {
     activeHost = await openPracticeDocument(
       session.session_id,
       vscode.ViewColumn.Active,
@@ -111,7 +146,7 @@ async function startPractice(mode: PracticeMode): Promise<void> {
       session,
     );
     vscode.window.showInformationMessage(
-      `GEWU: Shadow Typing started for ${selected.unit.title}.`,
+      `GEWU: ${displayMode(mode)} started for ${selected.unit.title}.`,
     );
     return;
   }
@@ -132,7 +167,7 @@ async function submitFlowRecallFromCommand(): Promise<void> {
 async function stopShadowTyping(): Promise<void> {
   if (activeController === undefined) return;
   const answer = await vscode.window.showWarningMessage(
-    `Stop Shadow Typing for ${activeController.unitTitle}?`,
+    `Stop ${displayMode(activeController.mode)} for ${activeController.unitTitle}?`,
     { modal: true },
     CONFIRM_ACTION,
   );
@@ -374,7 +409,11 @@ async function activateResumedSession(
   session: CoreSession,
 ): Promise<void> {
   await closeActivePracticeUi();
-  if (session.mode === "flow_recall") {
+  if (
+    session.mode === "flow_recall" ||
+    session.mode === "reasoning_recall" ||
+    session.mode === "transfer_practice"
+  ) {
     activeFlow = session;
     setFlowClock(session);
     openFlowPanel(session);
@@ -391,7 +430,7 @@ async function activateResumedSession(
     session,
   );
   vscode.window.showInformationMessage(
-    `GEWU: Resumed Shadow Typing for ${session.unit_id}.`,
+    `GEWU: Resumed ${displayMode(session.mode)} for ${session.unit_id}.`,
   );
 }
 
@@ -409,7 +448,11 @@ function activeCheckpointId(): string | undefined {
 }
 
 function progress(session: CoreSession): string {
-  if (session.mode === "flow_recall")
+  if (
+    session.mode === "flow_recall" ||
+    session.mode === "reasoning_recall" ||
+    session.mode === "transfer_practice"
+  )
     return `${session.completed_steps}/${session.total_steps} steps`;
   return `${Array.from(session.accepted_text).length}/${Array.from(session.target_text).length} characters`;
 }

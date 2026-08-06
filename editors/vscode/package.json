@@ -14,6 +14,7 @@
   "categories": ["Other"],
   "activationEvents": [
     "onCommand:gewuAlgorithm.startShadowTyping",
+    "onCommand:gewuAlgorithm.startCodeRecall",
     "onCommand:gewuAlgorithm.startFlowRecall",
     "onCommand:gewuAlgorithm.submitFlowRecall",
     "onCommand:gewuAlgorithm.revealFlowPrompt",
@@ -31,6 +32,7 @@
         "command": "gewuAlgorithm.startShadowTyping",
         "title": "GEWU: Start Shadow Typing"
       },
+      { "command": "gewuAlgorithm.startCodeRecall", "title": "GEWU: Start Code Recall" },
       { "command": "gewuAlgorithm.startFlowRecall", "title": "GEWU: Start Flow Recall" },
       { "command": "gewuAlgorithm.submitFlowRecall", "title": "GEWU: Submit Flow Recall Answer" },
       { "command": "gewuAlgorithm.revealFlowPrompt", "title": "GEWU: Reveal Flow Recall Prompt" },

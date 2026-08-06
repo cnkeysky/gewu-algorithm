@@ -17,7 +17,7 @@ type PracticeCoreClient = Pick<
 >;
 
 /**
- * Editor adapter for a Rust-owned shadow-typing session. It translates native
+ * Editor adapter for Rust-owned code practice sessions. It translates native
  * transactions and renders the state returned by the core; it never scores.
  */
 export class CorePracticeDocumentController implements Disposable {
@@ -39,8 +39,8 @@ export class CorePracticeDocumentController implements Disposable {
     client: PracticeCoreClient,
     session: CoreSession,
   ) {
-    if (session.mode !== "shadow_typing")
-      throw new Error("native practice document only supports shadow_typing");
+    if (session.mode !== "shadow_typing" && session.mode !== "code_recall")
+      throw new Error("native practice document only supports code practice");
     this.#host = host;
     this.#client = client;
     this.#session = session;
@@ -66,6 +66,10 @@ export class CorePracticeDocumentController implements Disposable {
 
   public get unitTitle(): string {
     return this.#session.unit_title;
+  }
+
+  public get mode(): CoreSession["mode"] {
+    return this.#session.mode;
   }
 
   public async stop(): Promise<void> {
@@ -170,7 +174,9 @@ export class CorePracticeDocumentController implements Disposable {
 
   #render(): void {
     this.#host.setDecorations(
-      decorationsFor(this.#session.accepted_text, this.#session.target_text),
+      this.#session.mode === "shadow_typing"
+        ? decorationsFor(this.#session.accepted_text, this.#session.target_text)
+        : decorationsFor(this.#session.accepted_text, ""),
     );
   }
 
