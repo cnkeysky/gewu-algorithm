@@ -23,6 +23,8 @@ test("shadow typing advances multiline guidance through Enter and indentation", 
   await page.locator("#practice-unit").selectOption("graph.bfs");
   await page.locator("#practice-mode").selectOption("shadow_typing");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator(".session-problem")).toBeVisible();
+  await expect(page.locator("#session-question")).toContainText("states");
 
   const editor = page.locator("#session-editor");
   await expect(editor).toBeVisible();
@@ -403,4 +405,15 @@ test("Unicode paste and deletion use scalar character progress", async ({ page }
   await page.keyboard.press("Backspace");
   await expect(meta).toContainText("progress 50/110");
   await expect(guidance).toHaveText('"');
+});
+
+test("practice workspace recovers its Core connection after a transient disconnect", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.route("**/core/rpc", (route) => route.abort());
+  await page.locator("#refresh-checkpoints").click();
+  await expect(page.locator("#practice-connection")).toContainText("disconnected");
+  await page.unroute("**/core/rpc");
+  await expect(page.locator("#practice-connection")).toContainText("Core connected", { timeout: 5000 });
 });

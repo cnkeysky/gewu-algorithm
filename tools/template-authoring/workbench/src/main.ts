@@ -111,7 +111,7 @@ root.innerHTML = `
         </form>
         <section class="practice-session" id="practice-session" hidden>
           <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span></div></div>
-          <p class="session-question" id="session-question"></p>
+          <div class="session-problem"><span>Problem</span><p class="session-question" id="session-question"></p></div>
           <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-cloze-template" class="session-cloze-template" hidden data-text-layout></pre><pre id="session-target" class="session-target" data-text-layout></pre>
           <div id="session-editor-shell" class="practice-editor-shell" hidden><div class="practice-editor-toolbar"><span class="session-language" id="session-language">Template language</span><label>Font size <select id="editor-font-size"><option value="12">12</option><option value="13" selected>13</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option></select></label></div><div id="session-editor" class="shadow-editor" aria-label="Practice code editor"></div></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
           <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button danger" type="button" id="session-stop">Stop practice</button></div>
@@ -127,7 +127,8 @@ root.innerHTML = `
     <section id="drafts-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
       <div class="draft-list" id="draft-list"></div>
-      <p class="view-note">Draft entries will become API-backed once the local authoring service is connected.</p>
+      <section class="artifact-inspector" id="artifact-inspector" hidden><div class="panel-heading"><div><p class="eyebrow">Artifact inspection</p><h3 id="artifact-title">Generated template</h3></div><button class="inline-action" type="button" id="close-artifact">Close</button></div><p class="inspector-meta" id="artifact-meta"></p><div class="inspector-grid"><div><h4>Manifest</h4><pre id="artifact-manifest"></pre></div><div><h4>Source and tests</h4><div id="artifact-files"></div></div></div><div><h4>LLM pre-review feedback</h4><div id="artifact-reviews"></div></div></section>
+      <p class="view-note">Generated artifacts and LLM pre-review reports remain inspectable; only Human approve promotes a draft.</p>
     </section>
     <section id="history-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Audit trail</p><h2>Review history</h2></div><span class="lock">Immutable reports</span></div>
@@ -145,6 +146,7 @@ const assistanceFieldset = document.querySelector<HTMLFieldSetElement>("#assista
 const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
 const draftList = document.querySelector<HTMLDivElement>("#draft-list")!;
 const historyList = document.querySelector<HTMLDivElement>("#history-list")!;
+const artifactInspector = document.querySelector<HTMLElement>("#artifact-inspector")!;
 const selectAllModes = document.querySelector<HTMLInputElement>("#select-all-modes")!;
 const assistanceNote = document.querySelector<HTMLParagraphElement>("#assistance-note")!;
 const submitDraft = document.querySelector<HTMLButtonElement>("#submit-draft")!;
@@ -181,16 +183,56 @@ const practicePages: Record<PracticeListName, number> = { checkpoints: 0, recomm
 let checkpointItems: Checkpoint[] = [];
 let recommendationItems: Recommendation[] = [];
 let attemptItems: Attempt[] = [];
+let practiceReconnectTimer: number | undefined;
+let reconnectingPractice = false;
+let practiceWasDisconnected = false;
+function setPracticeConnection(connected: boolean, message?: string): void {
+  const connection = document.querySelector<HTMLElement>("#practice-connection")!;
+  connection.textContent = connected
+    ? practiceHandshake ? `Core connected · v${practiceHandshake.core_version} / protocol ${practiceHandshake.protocol_version}` : "Core connected"
+    : "Core disconnected · retrying";
+  connection.classList.toggle("is-connected", connected);
+  if (!connected) practiceWasDisconnected = true;
+  if (message) practiceMessage(message, !connected);
+}
+async function establishPracticeHandshake(): Promise<void> {
+  const response = await fetch(practiceApi, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: practiceRequestId++, method: "gewu/handshake", params: { protocol_min: 1, protocol_max: 1, client_name: "gewu-web", client_version: "0.1.0" } }) });
+  if (!response.ok) throw new Error(`Core HTTP ${response.status}`);
+  const payload = await response.json() as { result?: { core_version: string; protocol_version: number }; error?: { message?: string } };
+  if (payload.error || !payload.result) throw new Error(payload.error?.message ?? "Core handshake failed");
+  practiceHandshake = payload.result;
+  practiceHandshaken = true;
+}
 async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> {
   if (!practiceHandshaken && method !== "gewu/handshake") {
-    practiceHandshake = await practiceRpc<{ core_version: string; protocol_version: number }>("gewu/handshake", { protocol_min: 1, protocol_max: 1, client_name: "gewu-web", client_version: "0.1.0" });
-    practiceHandshaken = true;
+    await establishPracticeHandshake();
   }
-  const response = await fetch(practiceApi, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: practiceRequestId++, method, params }) });
-  if (!response.ok) throw new Error(`Core HTTP ${response.status}`);
-  const payload = await response.json() as { result?: T; error?: { message?: string } };
-  if (payload.error) throw new Error(payload.error.message ?? "Core request failed");
-  return payload.result as T;
+  try {
+    const response = await fetch(practiceApi, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: practiceRequestId++, method, params }) });
+    if (!response.ok) {
+      if (response.status >= 500) { practiceHandshaken = false; setPracticeConnection(false); }
+      throw new Error(`Core HTTP ${response.status}`);
+    }
+    const payload = await response.json() as { result?: T; error?: { message?: string } };
+    if (payload.error) {
+      const errorMessage = payload.error.message ?? "Core request failed";
+      if (/session (not found|unknown)|checkpoint.*not found/i.test(errorMessage)) {
+        practiceHandshaken = false;
+        practiceHandshake = undefined;
+        setPracticeConnection(false);
+        void refreshPracticeData();
+      }
+      throw new Error(errorMessage);
+    }
+    return payload.result as T;
+  } catch (error) {
+    if (error instanceof TypeError || (error instanceof Error && error.message.startsWith("Core HTTP 5"))) {
+      practiceHandshaken = false;
+      practiceHandshake = undefined;
+      setPracticeConnection(false);
+    }
+    throw error;
+  }
 }
 function practiceMessage(text: string, error = false): void { const target = document.querySelector<HTMLParagraphElement>("#practice-message")!; target.textContent = text; target.className = `form-message ${error ? "error" : "success"}`; }
 function renderPracticeSession(session: PracticeSession): void {
@@ -341,11 +383,9 @@ async function refreshPracticeData(): Promise<void> {
     const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit")!;
     unitSelect.innerHTML = units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("");
     renderPracticeOptions();
-    const connection = document.querySelector<HTMLElement>("#practice-connection")!;
-    connection.textContent = practiceHandshake
-      ? `Core connected · v${practiceHandshake.core_version} / protocol ${practiceHandshake.protocol_version}`
-      : "Core connected";
-    connection.classList.add("is-connected");
+    const shouldRecoverSession = practiceWasDisconnected;
+    setPracticeConnection(true);
+    practiceWasDisconnected = false;
     const uniqueCheckpoints = new Map<string, Checkpoint>();
     for (const checkpoint of checkpoints.checkpoints) {
       const key = `${checkpoint.unit_id}:${checkpoint.revision}:${checkpoint.mode}:${checkpoint.implementation ?? ""}:${checkpoint.practice_id ?? ""}`;
@@ -355,8 +395,23 @@ async function refreshPracticeData(): Promise<void> {
     recommendationItems = recommendations;
     attemptItems = attempts.attempts;
     renderPracticeLists();
-  } catch (error) { const connection = document.querySelector<HTMLElement>("#practice-connection")!; connection.textContent = "Core offline"; connection.classList.remove("is-connected"); practiceMessage("Rust Core 未启动。请先运行 `cargo run -p gewu-cli -- serve`。", true); }
+    if (practiceReconnectTimer !== undefined) { window.clearTimeout(practiceReconnectTimer); practiceReconnectTimer = undefined; }
+    if (shouldRecoverSession && activePracticeSession && activePracticeSnapshot?.status === "active" && !reconnectingPractice) {
+      const matching = checkpointItems.find((item) => item.unit_title === activePracticeSnapshot?.unit_title && item.mode === activePracticeSession?.mode && (!activePracticeSnapshot.practice_id || item.practice_id === activePracticeSnapshot.practice_id));
+      if (matching && matching.id !== activePracticeSession.session_id) {
+        reconnectingPractice = true;
+        try {
+          const resumed = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: matching.id });
+          if (resumed.session) { activePracticeSession = { session_id: resumed.session.session_id, mode: resumed.session.mode }; renderPracticeSession(resumed.session); practiceMessage("Core reconnected; interrupted practice resumed."); }
+        } finally { reconnectingPractice = false; }
+      }
+    }
+  } catch (error) {
+    setPracticeConnection(false, "Rust Core is unavailable. Retrying automatically.");
+    if (practiceReconnectTimer === undefined) practiceReconnectTimer = window.setTimeout(() => { practiceReconnectTimer = undefined; void refreshPracticeData(); }, 1500);
+  }
 }
+window.addEventListener("online", () => { void refreshPracticeData(); });
 function renderPagedPracticeList<T>(name: PracticeListName, targetId: string, items: T[], renderItem: (item: T) => string, emptyText: string): void {
   const target = document.querySelector<HTMLElement>(targetId)!;
   const totalPages = Math.max(1, Math.ceil(items.length / PRACTICE_PAGE_SIZE));
@@ -395,10 +450,12 @@ interface DraftRecord {
   variants: number;
   modes: PracticeMode[];
   assistance: Assistance[];
-  status: "draft" | "queued" | "generated" | "validated" | "accepted";
+  status: "draft" | "queued" | "generated" | "validated" | "llm_reviewed" | "needs_revision" | "revision_requested" | "accepted";
   createdAt: string;
+  artifactPath?: string;
 }
-interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; createdAt: string; }
+interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; reportPath?: string; createdAt: string; }
+interface ArtifactPayload { draft: DraftRecord; files: Record<string, string>; reviews: Array<ReviewRecord & { report?: { verdict?: string; findings?: Array<{ rule_id: string; severity: string; path: string; problem: string; evidence: string; suggested_change: string }> } }> }
 
 const DRAFTS_KEY = "gewu.authoring.drafts.v1";
 const REVIEWS_KEY = "gewu.authoring.reviews.v1";
@@ -447,14 +504,25 @@ function formatDateTime(value: string): string { const date = new Date(value); r
 function progressPercent(accepted: number, target: number): number { return target > 0 ? Math.min(100, Math.round((accepted / target) * 100)) : 0; }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
 function variantLabel(value: { implementation?: string; practice_id?: string }): string { return value.implementation ? `implementation · ${value.implementation}` : value.practice_id ? `practice · ${value.practice_id}` : "default configuration"; }
+function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM pre-reviewed", needs_revision: "Needs revision", revision_requested: "Revision requested", accepted: "Human approved" })[status]; }
 function renderDrafts(): void {
   const drafts = readDrafts();
   document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
   draftList.innerHTML = drafts.length ? drafts.map((draft) => {
-    const passingReview = readReviews().some((review) => review.draftId === draft.id && review.verdict === "pass");
+    const canGenerate = ["queued", "needs_revision", "revision_requested"].includes(draft.status);
+    const canValidate = ["generated", "needs_revision"].includes(draft.status);
     const canReview = draft.status === "validated";
-    const canAccept = draft.status === "validated" && passingReview;
-    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.status} · ${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)}</span><span class="draft-buttons"><button class="inline-action" type="button" data-generate-id="${draft.id}" ${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "generated" || draft.status === "validated" || draft.status === "accepted" ? "Generated" : "Generate"}</button><button class="inline-action" type="button" data-validate-id="${draft.id}" ${draft.status === "validated" || draft.status === "accepted" ? "disabled" : ""}>${draft.status === "validated" || draft.status === "accepted" ? "Validated" : "Validate"}</button><button class="inline-action" type="button" data-review-id="${draft.id}" ${canReview ? "" : "disabled"}>Review</button><button class="inline-action" type="button" data-accept-id="${draft.id}" ${canAccept ? "" : "disabled"}>${draft.status === "accepted" ? "Accepted" : "Accept"}</button></span></span></div>`;
+    const canAccept = draft.status === "llm_reviewed";
+    const canRollback = ["generated", "validated", "llm_reviewed", "needs_revision", "accepted"].includes(draft.status);
+    const actions = [
+      draft.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View artifact</button>` : "",
+      canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">Generate template</button>` : "",
+      canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
+      canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}">LLM pre-review</button>` : "",
+      canAccept ? `<button class="inline-action approval-action" type="button" data-accept-id="${draft.id}">Human approve</button>` : "",
+      canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}">Request revision</button>` : "",
+    ].filter(Boolean).join("");
+    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${statusLabel(draft.status)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
   }).join("") : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
   renderWorkflow();
 }
@@ -472,10 +540,12 @@ function renderWorkflow(): void {
   }
   const report = draftPersistence === "local" ? undefined : readReviews().filter((item) => item.draftId === draft.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const setStatus = (target: HTMLElement, value: string, kind: "pending" | "ready" | "passed" | "blocked") => { target.textContent = value; target.className = `workflow-status ${kind}`; };
-  state.textContent = draftDirty ? "Unsaved changes" : draftPersistence === "local" ? "Local only / sync pending" : draft.status === "accepted" ? "Accepted" : draft.status;
-  setStatus(validation, draft.status === "validated" || draft.status === "accepted" ? "Passed" : draft.status === "generated" ? "Ready" : "Pending", draft.status === "validated" || draft.status === "accepted" ? "passed" : draft.status === "generated" ? "ready" : "pending");
-  setStatus(review, report ? report.verdict.replaceAll("_", " ") : "Pending", report?.verdict === "pass" ? "passed" : report ? "blocked" : "pending");
-  setStatus(acceptance, draft.status === "accepted" ? "Accepted" : report?.verdict === "pass" && draft.status === "validated" ? "Ready" : "Pending", draft.status === "accepted" ? "passed" : report?.verdict === "pass" && draft.status === "validated" ? "ready" : "pending");
+  state.textContent = draftDirty ? "Unsaved changes" : draftPersistence === "local" ? "Local only / sync pending" : statusLabel(draft.status);
+  const contractValid = ["validated", "llm_reviewed", "accepted"].includes(draft.status);
+  const readyToValidate = ["generated", "revision_requested", "needs_revision"].includes(draft.status);
+  setStatus(validation, contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : "Pending", contractValid ? "passed" : readyToValidate ? "ready" : "pending");
+  setStatus(review, report ? report.verdict.replaceAll("_", " ") : draft.status === "validated" ? "Ready to run" : "Pending", report?.verdict === "pass" ? "passed" : report ? "blocked" : draft.status === "validated" ? "ready" : "pending");
+  setStatus(acceptance, draft.status === "accepted" ? "Human approved" : draft.status === "llm_reviewed" ? "Ready for you" : "Pending", draft.status === "accepted" ? "passed" : draft.status === "llm_reviewed" ? "ready" : "pending");
 }
 function markDraftDirty(): void {
   if (!editingDraftId) return;
@@ -487,6 +557,22 @@ function renderHistory(): void {
   const reviews = readReviews();
   historyList.innerHTML = reviews.length ? reviews.map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status">${review.verdict}</span></div>`; }).join("") : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
 }
+
+async function inspectArtifact(id: string): Promise<void> {
+  const response = await fetch(`/api/drafts/${id}/artifact`);
+  const payload = await response.json() as ArtifactPayload & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "Unable to load artifact");
+  artifactInspector.hidden = false;
+  document.querySelector<HTMLElement>("#artifact-title")!.textContent = payload.draft.title;
+  document.querySelector<HTMLElement>("#artifact-meta")!.textContent = `${statusLabel(payload.draft.status)} · ${payload.draft.provider} / ${payload.draft.model}`;
+  const manifest = payload.files["unit.json"];
+  try { document.querySelector<HTMLElement>("#artifact-manifest")!.textContent = manifest ? JSON.stringify(JSON.parse(manifest) as unknown, null, 2) : "Manifest unavailable"; }
+  catch { document.querySelector<HTMLElement>("#artifact-manifest")!.textContent = manifest ?? "Manifest unavailable"; }
+  document.querySelector<HTMLElement>("#artifact-files")!.innerHTML = Object.entries(payload.files).filter(([path]) => path !== "unit.json" && path !== "generation.json").map(([path, content]) => `<details class="artifact-file"><summary>${escapeHtml(path)}</summary><pre>${escapeHtml(content)}</pre></details>`).join("") || "<p class='compact-empty'>No source files.</p>";
+  document.querySelector<HTMLElement>("#artifact-reviews")!.innerHTML = payload.reviews.length ? payload.reviews.map((review) => `<article class="review-feedback"><strong>${escapeHtml(review.role.replaceAll("_", " "))} · ${escapeHtml(review.verdict)}</strong>${review.report?.findings?.map((finding) => `<p><b>${escapeHtml(finding.severity)} · ${escapeHtml(finding.rule_id)}</b> ${escapeHtml(finding.problem)}<small>${escapeHtml(finding.evidence)}</small></p>`).join("") ?? "<p>No findings were returned.</p>"}</article>`).join("") : "<p class='compact-empty'>No LLM pre-review report yet.</p>";
+  artifactInspector.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+document.querySelector<HTMLButtonElement>("#close-artifact")!.addEventListener("click", () => { artifactInspector.hidden = true; });
 
 function showView(view: string): void {
   renderDrafts();
@@ -504,13 +590,19 @@ document.addEventListener("click", (event) => {
     showView(view);
     if (view === "practice") void refreshPracticeData();
   }
+  const viewArtifact = target.closest<HTMLButtonElement>("[data-view-artifact-id]");
+  if (viewArtifact) {
+    event.stopPropagation();
+    void inspectArtifact(viewArtifact.dataset.viewArtifactId!).catch((error) => { message.textContent = error instanceof Error ? error.message : "Unable to inspect artifact"; message.className = "form-message error"; });
+    return;
+  }
   const generateButton = target.closest<HTMLButtonElement>("[data-generate-id]");
   if (generateButton) {
     event.stopPropagation();
     const id = generateButton.dataset.generateId;
     void fetch(`/api/drafts/${id}/generate`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { error?: string; status?: string };
-      message.textContent = response.ok ? "Draft generated and stored as a local artifact." : `Generation failed: ${payload.error ?? "unknown error"}`;
+      message.textContent = response.ok ? "Template generated. Run Validate contract next." : `Generation failed: ${payload.error ?? "unknown error"}`;
       message.className = response.ok ? "form-message success" : "form-message error";
       if (response.ok) { await syncFromApi(); showView("drafts"); }
     }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
@@ -522,7 +614,7 @@ document.addEventListener("click", (event) => {
     const id = validateButton.dataset.validateId;
     void fetch(`/api/drafts/${id}/validate`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { status?: string; errors?: string[] };
-      message.textContent = response.ok ? "Deterministic validation passed." : `Validation failed: ${(payload.errors ?? ["unknown error"]).join("; ")}`;
+      message.textContent = response.ok ? "Rust contract validation passed. Run LLM pre-review next." : `Validation failed: ${(payload.errors ?? ["unknown error"]).join("; ")}`;
       message.className = response.ok ? "form-message success" : "form-message error";
       if (response.ok) { await syncFromApi(); showView("drafts"); }
     }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
@@ -534,9 +626,9 @@ document.addEventListener("click", (event) => {
     const id = reviewButton.dataset.reviewId;
     void fetch(`/api/drafts/${id}/reviews`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "algorithm_correctness" }) }).then(async (response) => {
       const payload = await response.json() as { error?: string };
-      message.textContent = response.ok ? "Algorithm correctness review completed." : `Review failed: ${payload.error ?? "unknown error"}`;
+      message.textContent = response.ok ? "LLM pre-review completed. Inspect feedback, then Human approve." : `LLM pre-review failed: ${payload.error ?? "unknown error"}`;
       message.className = response.ok ? "form-message success" : "form-message error";
-      if (response.ok) { await syncFromApi(); showView("history"); }
+      if (response.ok) { await syncFromApi(); await inspectArtifact(id!); showView("drafts"); }
     }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
     return;
   }
@@ -546,7 +638,19 @@ document.addEventListener("click", (event) => {
     const id = acceptButton.dataset.acceptId;
     void fetch(`/api/drafts/${id}/accept`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { error?: string };
-      message.textContent = response.ok ? "Draft accepted for publication." : `Acceptance failed: ${payload.error ?? "unknown error"}`;
+      message.textContent = response.ok ? "Human approval recorded; draft is accepted." : `Human approval failed: ${payload.error ?? "unknown error"}`;
+      message.className = response.ok ? "form-message success" : "form-message error";
+      if (response.ok) { await syncFromApi(); showView("drafts"); }
+    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+    return;
+  }
+  const rollbackButton = target.closest<HTMLButtonElement>("[data-rollback-id]");
+  if (rollbackButton) {
+    event.stopPropagation();
+    const id = rollbackButton.dataset.rollbackId;
+    void fetch(`/api/drafts/${id}/rollback`, { method: "POST" }).then(async (response) => {
+      const payload = await response.json() as { error?: string };
+      message.textContent = response.ok ? "Revision requested. The previous artifact remains in history." : `Revision request failed: ${payload.error ?? "unknown error"}`;
       message.className = response.ok ? "form-message success" : "form-message error";
       if (response.ok) { await syncFromApi(); showView("drafts"); }
     }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });

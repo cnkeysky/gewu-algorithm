@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -25,11 +27,12 @@ database.exec(`
   );
   CREATE TABLE IF NOT EXISTS reviews (
     id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, role TEXT NOT NULL, verdict TEXT NOT NULL,
-    artifact_hash TEXT, created_at TEXT NOT NULL, FOREIGN KEY (draft_id) REFERENCES drafts(id)
+    artifact_hash TEXT, report_path TEXT, created_at TEXT NOT NULL, FOREIGN KEY (draft_id) REFERENCES drafts(id)
   );
 `);
+try { database.exec("ALTER TABLE reviews ADD COLUMN report_path TEXT"); } catch { /* Existing database already has the column. */ }
 
-type DraftStatus = "draft" | "queued" | "generated" | "validated" | "accepted";
+type DraftStatus = "draft" | "queued" | "generated" | "validated" | "llm_reviewed" | "needs_revision" | "revision_requested" | "accepted";
 type DraftRecord = {
   id: string;
   taskId?: string;
@@ -51,6 +54,7 @@ type ReviewRecord = {
   role: string;
   verdict: "pending" | "pass" | "needs_revision" | "reject";
   artifactHash: string | null;
+  reportPath?: string;
   createdAt: string;
 };
 type State = { drafts: DraftRecord[]; reviews: ReviewRecord[] };
@@ -80,10 +84,10 @@ class DraftInputError extends Error {
 
 function loadState(): State {
   const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path FROM drafts ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
-  const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, created_at FROM reviews ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
+  const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, created_at FROM reviews ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
   return {
     drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), artifactPath: row.artifact_path ? String(row.artifact_path) : undefined })),
-    reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, createdAt: String(row.created_at) })),
+    reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, reportPath: row.report_path ? String(row.report_path) : undefined, createdAt: String(row.created_at) })),
   };
 }
 
@@ -93,8 +97,8 @@ function saveState(state: State): void {
     database.exec("DELETE FROM reviews; DELETE FROM drafts;");
     const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.artifactPath ?? null);
-    const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)");
-    for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.createdAt);
+    const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.reportPath ?? null, review.createdAt);
     database.exec("COMMIT");
   } catch (error) {
     database.exec("ROLLBACK");
@@ -151,7 +155,56 @@ async function generateDraft(draft: DraftRecord): Promise<{ provider: string; mo
     await writeFile(destination, content, "utf8");
   }
   await writeFile(join(artifactAbsolutePath, "generation.json"), `${JSON.stringify({ provider: artifact.provider, model: artifact.model, task_id: artifact.taskId, task_version: artifact.taskVersion, review: artifact.review }, null, 2)}\n`, "utf8");
+  await validateArtifactWithRust(artifactAbsolutePath);
   return { provider: artifact.provider, model: artifact.model, artifactPath: relative(resolve(here, "../..", ".."), artifactAbsolutePath) };
+}
+
+const execFileAsync = promisify(execFile);
+async function validateArtifactWithRust(artifactPath: string): Promise<void> {
+  const repoRoot = resolve(here, "../..", "..");
+  const validator = join(repoRoot, "target/debug/validate");
+  try {
+    if (existsSync(validator)) {
+      await execFileAsync(validator, [join(artifactPath, "unit.json")], { cwd: repoRoot, maxBuffer: 2_000_000 });
+    } else {
+      await execFileAsync("cargo", ["run", "--quiet", "-p", "gewu-template", "--bin", "validate", "--", join(artifactPath, "unit.json")], { cwd: repoRoot, maxBuffer: 2_000_000 });
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    await rm(artifactPath, { recursive: true, force: true });
+    throw new Error(`Rust template validation failed: ${detail}`);
+  }
+}
+
+function artifactAbsolutePath(draft: DraftRecord): string {
+  if (!draft.artifactPath) throw new Error("draft has no generated artifact");
+  const repoRoot = resolve(here, "../..", "..");
+  const absolute = resolve(repoRoot, draft.artifactPath);
+  const draftsRoot = resolve(here, "../drafts");
+  if (!absolute.startsWith(`${draftsRoot}/`)) throw new Error("artifact is outside the drafts root");
+  return absolute;
+}
+
+function latestArtifactHash(reviews: ReviewRecord[], draftId: string): string | null {
+  return reviews.find((review) => review.draftId === draftId)?.artifactHash ?? null;
+}
+
+async function readArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Promise<Record<string, unknown>> {
+  const root = artifactAbsolutePath(draft);
+  const files: Record<string, string> = {};
+  const walk = async (directory: string): Promise<void> => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const absolute = join(directory, entry.name);
+      if (entry.isDirectory()) await walk(absolute);
+      else files[relative(root, absolute)] = await readFile(absolute, "utf8");
+    }
+  };
+  await walk(root);
+  const reports = await Promise.all(reviews.filter((review) => review.draftId === draft.id && review.reportPath).map(async (review) => ({
+    ...review,
+    report: JSON.parse(await readFile(resolve(here, "../..", "..", review.reportPath!), "utf8")) as unknown,
+  })));
+  return { draft, files, reviews: reports };
 }
 
 function send(response: ServerResponse, status: number, body: unknown): void {
@@ -247,6 +300,7 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && generationMatch) {
       const draft = state.drafts.find((item) => item.id === generationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
+      if (!["queued", "revision_requested", "needs_revision"].includes(draft.status)) return send(response, 409, { error: "only a queued or revision-requested draft can be generated" });
       const generated = await generateDraft(draft);
       draft.status = "generated";
       draft.artifactPath = generated.artifactPath;
@@ -257,8 +311,10 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && validationMatch) {
       const draft = state.drafts.find((item) => item.id === validationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
+      if (!draft.artifactPath || !["generated", "revision_requested", "needs_revision"].includes(draft.status)) return send(response, 409, { error: "generate the draft before deterministic validation" });
       const errors = validateDraft(draft);
       if (errors.length > 0) return send(response, 422, { status: "failed", errors });
+      try { await validateArtifactWithRust(artifactAbsolutePath(draft)); } catch (error) { return send(response, 422, { status: "failed", errors: [error instanceof Error ? error.message : String(error)] }); }
       draft.status = "validated";
       await saveState(state);
       return send(response, 200, { status: "passed", draft });
@@ -267,9 +323,9 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && acceptanceMatch) {
       const draft = state.drafts.find((item) => item.id === acceptanceMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (draft.status !== "validated") return send(response, 409, { error: "validate the draft before acceptance" });
-      const passedReview = state.reviews.some((review) => review.draftId === draft.id && review.verdict === "pass");
-      if (!passedReview) return send(response, 409, { error: "a passing role review is required before acceptance" });
+      if (draft.status !== "llm_reviewed") return send(response, 409, { error: "LLM pre-review must pass before human acceptance" });
+      const passedReview = state.reviews.some((review) => review.draftId === draft.id && review.verdict === "pass" && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
+      if (!passedReview) return send(response, 409, { error: "a passing LLM pre-review for the current artifact is required before human acceptance" });
       draft.status = "accepted";
       await saveState(state);
       return send(response, 200, { status: "accepted", draft });
@@ -286,10 +342,30 @@ const server = createServer(async (request, response) => {
       await reviewTemplateDraft(relative(repoRoot, artifactAbsolutePath), payload.role);
       const reportPath = join(artifactAbsolutePath, "reviews", `${payload.role}.json`);
       const report = JSON.parse(await readFile(reportPath, "utf8")) as { verdict?: ReviewRecord["verdict"]; artifact_hash?: string };
-      const review: ReviewRecord = { id: crypto.randomUUID(), draftId: draft.id, role: payload.role, verdict: report.verdict ?? "pending", artifactHash: report.artifact_hash ?? null, createdAt: new Date().toISOString() };
+      const reportPathRelative = relative(resolve(here, "../..", ".."), reportPath);
+      const review: ReviewRecord = { id: crypto.randomUUID(), draftId: draft.id, role: payload.role, verdict: report.verdict ?? "pending", artifactHash: report.artifact_hash ?? null, reportPath: reportPathRelative, createdAt: new Date().toISOString() };
       state.reviews = [review, ...state.reviews];
+      if (review.verdict === "pass") draft.status = "llm_reviewed";
+      else if (review.verdict === "needs_revision" || review.verdict === "reject") draft.status = "needs_revision";
       await saveState(state);
       return send(response, 201, { review });
+    }
+    const artifactMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/artifact$/);
+    if (request.method === "GET" && artifactMatch) {
+      const draft = state.drafts.find((item) => item.id === artifactMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      if (!draft.artifactPath) return send(response, 409, { error: "draft has no current artifact" });
+      return send(response, 200, await readArtifact(draft, state.reviews));
+    }
+    const rollbackMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/rollback$/);
+    if (request.method === "POST" && rollbackMatch) {
+      const draft = state.drafts.find((item) => item.id === rollbackMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      if (draft.status === "queued" || draft.status === "draft") return send(response, 409, { error: "draft is already awaiting generation" });
+      draft.status = "revision_requested";
+      draft.artifactPath = undefined;
+      await saveState(state);
+      return send(response, 200, { status: "revision_requested", draft });
     }
     return send(response, 404, { error: "route not found" });
   } catch (error) {

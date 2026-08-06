@@ -3,8 +3,9 @@
 This package is the optional provider-backed authoring adapter for Stage 7.
 It uses `@earendil-works/pi-ai` for provider selection, authentication,
 streaming, and model compatibility. It does not own practice transitions or
-publish content. Returned drafts remain `pending` until the Rust template
-validator and explicit human review accept them.
+publish content. Drafts follow an explicit gate: `queued` -> `generated` ->
+`validated` -> `llm_reviewed` -> `accepted`; only the final human approval can
+promote a template.
 
 The package intentionally imports Pi-ai only here. Rust Core and VS Code do not
 depend on npm provider packages.
@@ -98,17 +99,15 @@ Use `npm run workbench:api:local` when the API should load the ignored
 
 The API stores draft metadata and review records in the ignored SQLite database
 `drafts/.workbench/authoring.sqlite`; an earlier `state.json` is migrated once.
-It never accepts provider credentials. The UI
-falls back to browser local storage when the API is unavailable. The
-`POST /api/drafts/:id/validate` performs the deterministic profile check and
-moves a valid draft to `validated`. For the currently supported Kahn
-topological-sort example, `POST /api/drafts/:id/generate` calls the configured
-Pi-ai provider and stores a contained artifact; `POST
-/api/drafts/:id/reviews` runs a role-specific review against that artifact. New
-algorithm categories use the general AlgorithmUnit contract until a specialized
-schema and validator are registered. Finally,
-`POST /api/drafts/:id/accept` requires deterministic validation and a passing
-review before moving the draft to `accepted`.
+It never accepts provider credentials. The UI falls back to browser local
+storage when the API is unavailable. Generation and validation both invoke the
+Rust template validator, so malformed artifacts never become reviewable. The
+`POST /api/drafts/:id/reviews` endpoint runs the LLM pre-review and stores its
+report and artifact hash. The UI exposes the generated manifest, source files,
+and findings, while `POST /api/drafts/:id/accept` requires a passing review and
+an explicit human action. `POST /api/drafts/:id/rollback` clears the current
+artifact, keeps prior reports immutable, and returns the draft to
+`revision_requested` so it can be generated again.
 
 Existing drafts can be revised with `PATCH /api/drafts/:id`. A revision keeps
 the draft identity, clears its current artifact pointer, returns it to
