@@ -641,7 +641,7 @@ document.addEventListener("click", (event) => {
       message.textContent = response.ok ? "Template generated. Run Validate contract next." : `Generation failed: ${payload.error ?? "unknown error"}`;
       message.className = response.ok ? "form-message success" : "form-message error";
       if (response.ok) { await syncFromApi(); showView("drafts"); }
-    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+    }).catch((error) => { message.textContent = error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
     return;
   }
   const validateButton = target.closest<HTMLButtonElement>("[data-validate-id]");
@@ -660,12 +660,16 @@ document.addEventListener("click", (event) => {
   if (reviewButton) {
     event.stopPropagation();
     const id = reviewButton.dataset.reviewId;
-    void fetch(`/api/drafts/${id}/reviews`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role: "algorithm_correctness" }) }).then(async (response) => {
-      const payload = await response.json() as { error?: string };
-      message.textContent = response.ok ? "LLM pre-review completed. Inspect feedback, then Human approve." : `LLM pre-review failed: ${payload.error ?? "unknown error"}`;
-      message.className = response.ok ? "form-message success" : "form-message error";
-      if (response.ok) { await syncFromApi(); await inspectArtifact(id!); showView("drafts"); }
-    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+    void (async () => {
+      const roles = ["algorithm_correctness", "learning_design", "provenance_safety"];
+      for (const role of roles) {
+        const response = await fetch(`/api/drafts/${id}/reviews`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role }) });
+        if (!response.ok) { const payload = await response.json() as { error?: string }; throw new Error(`${role}: ${payload.error ?? "review failed"}`); }
+      }
+      message.textContent = "All LLM pre-reviews passed. Inspect feedback, then Human approve.";
+      message.className = "form-message success";
+      await syncFromApi(); await inspectArtifact(id!); showView("drafts");
+    })().catch((error) => { message.textContent = error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
     return;
   }
   const acceptButton = target.closest<HTMLButtonElement>("[data-accept-id]");

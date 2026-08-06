@@ -193,6 +193,9 @@ function artifactAbsolutePath(draft: DraftRecord): string {
 function latestArtifactHash(reviews: ReviewRecord[], draftId: string): string | null {
   return reviews.find((review) => review.draftId === draftId)?.artifactHash ?? null;
 }
+function latestReviewForRole(reviews: ReviewRecord[], draftId: string, role: string): ReviewRecord | undefined {
+  return reviews.find((review) => review.draftId === draftId && review.role === role);
+}
 
 async function readArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Promise<Record<string, unknown>> {
   const root = artifactAbsolutePath(draft);
@@ -400,7 +403,9 @@ const server = createServer(async (request, response) => {
       const reportPathRelative = relative(resolve(here, "../..", ".."), reportPath);
       const review: ReviewRecord = { id: crypto.randomUUID(), draftId: draft.id, role: payload.role, verdict: report.verdict ?? "pending", artifactHash: report.artifact_hash ?? null, reportPath: reportPathRelative, createdAt: new Date().toISOString() };
       state.reviews = [review, ...state.reviews];
-      if (review.verdict === "pass") draft.status = "llm_reviewed";
+      const currentHash = review.artifactHash;
+      const allRolesPassed = [...REVIEW_ROLES].every((role) => latestReviewForRole(state.reviews, draft.id, role)?.verdict === "pass" && latestReviewForRole(state.reviews, draft.id, role)?.artifactHash === currentHash);
+      if (allRolesPassed) draft.status = "llm_reviewed";
       else if (review.verdict === "needs_revision" || review.verdict === "reject") draft.status = "needs_revision";
       await saveState(state);
       return send(response, 201, { review });
