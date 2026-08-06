@@ -110,9 +110,10 @@ root.innerHTML = `
           <p class="form-message" id="practice-message" role="status"></p>
         </form>
         <section class="practice-session" id="practice-session" hidden>
-          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3></div><div class="session-heading-meta"><span class="session-language" id="session-language">Template language</span><span class="valid-badge" id="session-status">Active</span></div></div>
+          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span></div></div>
+          <p class="session-question" id="session-question"></p>
           <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-target" class="session-target" data-text-layout></pre>
-          <div id="session-editor" class="shadow-editor" aria-label="Practice code editor" hidden></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
+          <div id="session-editor-shell" class="practice-editor-shell" hidden><div class="practice-editor-toolbar"><span class="session-language" id="session-language">Template language</span><label>Font size <select id="editor-font-size"><option value="12">12</option><option value="13" selected>13</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option></select></label></div><div id="session-editor" class="shadow-editor" aria-label="Practice code editor"></div></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
           <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button danger" type="button" id="session-stop">Stop practice</button></div>
           <div class="session-meta" id="session-meta"></div>
         </section>
@@ -169,7 +170,7 @@ let codePromptRevealed = false;
 const promptRevealedModes = new Set<PracticeMode>();
 type PracticeOption = { id: string; label: string; language: string; mode: PracticeMode; selector: "implementation" | "practice_id" };
 type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[]; practice_options: PracticeOption[] };
-type PracticeSession = { session_id: string; unit_title: string; problem_question?: string; mode: PracticeMode; language: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
+type PracticeSession = { session_id: string; unit_title: string; problem_question: string; mode: PracticeMode; language: string; implementation?: string; practice_id?: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
 type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
 type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
 type Attempt = { id: string; unit_id: string; mode: PracticeMode; implementation?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
@@ -197,6 +198,8 @@ function renderPracticeSession(session: PracticeSession): void {
   activePracticeSnapshot = session;
   document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
+  document.querySelector<HTMLElement>("#session-question")!.textContent = session.problem_question;
+  document.querySelector<HTMLElement>("#session-context")!.textContent = `${session.mode.replaceAll("_", " ")} · ${session.implementation ? `implementation ${session.implementation}` : session.practice_id ? `practice ${session.practice_id}` : "default variant"}`;
   document.querySelector<HTMLElement>("#session-status")!.textContent = session.status;
   const progress = document.querySelector<HTMLElement>("#session-progress")!;
   const completed = document.querySelector<HTMLElement>("#session-completed")!;
@@ -222,10 +225,11 @@ function renderPracticeSession(session: PracticeSession): void {
   prompt.classList.toggle("is-hidden", requiresPromptReveal && !promptVisible);
   reveal.hidden = !requiresPromptReveal || session.status !== "active";
   reveal.textContent = promptVisible ? "Hide prompt" : "Reveal prompt";
-  restart.hidden = !isFlow && !isCode;
+  restart.hidden = isShadow;
   scaffold.hidden = !isCode;
   scaffold.innerHTML = isCode ? `<div class="scaffold-heading"><span>${session.code_assistance ?? "Code assistance"}</span><button class="inline-action" type="button" id="reveal-scaffold" ${session.status !== "active" || (session.scaffold_count ?? 0) <= (session.revealed_scaffold_indices?.length ?? 0) ? "disabled" : ""}>Reveal next hint</button></div><ul>${(session.visible_scaffold ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const target = document.querySelector<HTMLElement>("#session-target")!;
+  const editorShell = document.querySelector<HTMLElement>("#session-editor-shell")!;
   const editorContainer = document.querySelector<HTMLElement>("#session-editor")!;
   const answer = document.querySelector<HTMLTextAreaElement>("#session-answer")!;
   const submit = document.querySelector<HTMLButtonElement>("#session-submit")!;
@@ -236,7 +240,7 @@ function renderPracticeSession(session: PracticeSession): void {
       ? "Describe how the algorithm transfers to this variation."
       : "Enter your answer or the next code segment.";
   const isCodeEditor = isShadow || isCode;
-  editorContainer.hidden = !isCodeEditor;
+  editorShell.hidden = !isCodeEditor;
   answer.hidden = isCodeEditor;
   submit.hidden = isCodeEditor;
   submit.textContent = isFlow || isCode ? "Submit answer" : "Submit event";
@@ -285,6 +289,10 @@ async function updateShadowEditor(container: HTMLElement, session: PracticeSessi
     shadowEditor.focus();
   }
 }
+document.querySelector<HTMLSelectElement>("#editor-font-size")!.addEventListener("change", (event) => {
+  const size = Number((event.target as HTMLSelectElement).value);
+  shadowEditor?.setFontSize(size);
+});
 async function applyShadowEdit(edit: { start: number; end: number; text: string }): Promise<{ acceptedText: string }> {
   if (!activePracticeSession) throw new Error("No active practice session");
   const requestSessionId = activePracticeSession.session_id;
@@ -663,6 +671,10 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
   event.preventDefault();
   try {
     if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
+    if (activePracticeSession && activePracticeSnapshot?.status === "active") {
+      await practiceRpc("gewu/stopSession", { session_id: activePracticeSession.session_id, elapsed: { active_ms: 1000, wall_ms: 1000 } });
+    }
+    activePracticeSession = undefined;
     flowPromptRevealed = false;
     codePromptRevealed = false;
     promptRevealedModes.clear();
@@ -672,9 +684,9 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
     const mode = document.querySelector<HTMLSelectElement>("#practice-mode")!.value as PracticeMode;
     const revision = practiceUnits.find((unit) => unit.id === unitId)?.revision;
     const defaultOption = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.find((option) => option.mode === mode);
-    const expectedImplementation = mode === "shadow_typing" ? selectedOption ?? defaultOption?.id : undefined;
-    const expectedPracticeId = mode === "shadow_typing" ? undefined : selectedOption;
-    const matching = checkpointItems.find((checkpoint) => checkpoint.unit_id === unitId && checkpoint.revision === revision && checkpoint.mode === mode && checkpoint.implementation === expectedImplementation && checkpoint.practice_id === expectedPracticeId);
+    const expectedImplementation = practiceOption.dataset.selector === "implementation" ? selectedOption ?? defaultOption?.id : undefined;
+    const expectedPracticeId = practiceOption.dataset.selector === "practice_id" ? selectedOption : undefined;
+    const matching = checkpointItems.find((checkpoint) => checkpoint.unit_id === unitId && checkpoint.revision === revision && checkpoint.mode === mode && (expectedImplementation === undefined || checkpoint.implementation === expectedImplementation) && (expectedPracticeId === undefined || checkpoint.practice_id === expectedPracticeId));
     if (matching) {
       const resumed = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: matching.id });
       if (!resumed.session) throw new Error("The interrupted practice is no longer available");
@@ -712,11 +724,12 @@ document.querySelector<HTMLButtonElement>("#session-reveal")!.addEventListener("
 document.querySelector<HTMLButtonElement>("#session-restart")!.addEventListener("click", async () => {
   if (!activePracticeSession || activePracticeSession.mode === "shadow_typing") return;
   try {
-    const result = await practiceRpc<PracticeSession>("gewu/restartSession", { session_id: activePracticeSession.session_id });
+    const result = await practiceRpc<{ session: PracticeSession }>("gewu/restartSession", { session_id: activePracticeSession.session_id });
     flowPromptRevealed = false;
     codePromptRevealed = false;
     promptRevealedModes.clear();
-    renderPracticeSession(result);
+    activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode };
+    renderPracticeSession(result.session);
     await refreshPracticeData();
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to restart practice", true); }
 });

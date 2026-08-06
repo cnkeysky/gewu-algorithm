@@ -93,9 +93,9 @@ test("active session shows template language and keeps the editor scrollbar avai
   await expect(page.locator("#session-language")).toHaveText("python");
   await expect(page.locator("#session-stop")).toHaveClass(/danger/);
   await expect(page.locator(".monaco-scrollable-element[role='presentation']")).toBeVisible();
-  await expect(page.locator(".shadow-editor-language")).toHaveText("python");
+  await expect(page.locator("#session-language")).toHaveText("python");
   const fontSizeBefore = await page.locator("#session-editor .view-lines").evaluate((node) => getComputedStyle(node).fontSize);
-  await page.getByRole("button", { name: "Increase editor font size" }).click();
+  await page.locator("#editor-font-size").selectOption("16");
   await expect.poll(() => page.locator("#session-editor .view-lines").evaluate((node) => getComputedStyle(node).fontSize)).not.toBe(fontSizeBefore);
 });
 
@@ -119,6 +119,22 @@ test("code recall reuses the editor with explicit prompt and scaffold controls",
   await expect(page.locator("#session-meta")).toContainText("hints 1");
 });
 
+test("code recall restart keeps the mode and variant bound", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("code_recall");
+  await page.locator("#practice-id").selectOption("bfs-comments");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator("#session-context")).toContainText("practice bfs-comments");
+  await page.locator("#session-restart").click();
+  await expect(page.locator("#session-editor .monaco-editor")).toBeVisible();
+  await expect(page.locator("#session-context")).toContainText("code recall");
+  await expect(page.locator("#session-context")).toContainText("practice bfs-comments");
+  await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
+});
+
 test("reasoning and transfer recall expose step context through the shared answer surface", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
@@ -140,6 +156,27 @@ test("reasoning and transfer recall expose step context through the shared answe
   await expect(page.locator("#session-answer")).toBeVisible();
   await expect(page.locator("#session-progress")).toContainText("Step 1 of 1");
   await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
+});
+
+test("all recall modes keep restart and stop state transitions bound", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+
+  for (const [mode, variant] of [["flow_recall", ""], ["reasoning_recall", "fifo-shortest-distance"], ["transfer_practice", "rotting-oranges"]] as const) {
+    await page.locator("#practice-mode").selectOption(mode);
+    if (variant) await page.locator("#practice-id").selectOption(variant);
+    await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+    await expect(page.locator("#session-context")).toContainText(mode.replaceAll("_", " "));
+    if (variant) await expect(page.locator("#session-context")).toContainText(`practice ${variant}`);
+    await page.locator("#session-reveal").click();
+    await expect(page.locator("#session-prompt")).not.toHaveText("Prompt hidden until Reveal");
+    await page.locator("#session-restart").click();
+    await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
+    await page.locator("#session-stop").click();
+    await expect(page.locator("#session-status")).toHaveText("stopped");
+  }
 });
 
 test("practice list cards keep natural height inside equal sections", async ({ page }) => {

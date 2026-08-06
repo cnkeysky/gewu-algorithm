@@ -834,6 +834,8 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ShadowTyping,
                 language: language_for(unit, Some(implementation)),
+                implementation: Some(implementation.clone()),
+                practice_id: None,
                 status: status(session.status()),
                 accepted_text: session.accepted_text().to_owned(),
                 target_text: session.target().to_owned(),
@@ -862,6 +864,8 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::FlowRecall,
                 language: language_for(unit, None),
+                implementation: None,
+                practice_id: None,
                 status: status(session.status()),
                 accepted_text: String::new(),
                 target_text: String::new(),
@@ -889,6 +893,7 @@ impl ActiveSession {
             Self::Code {
                 unit,
                 implementation,
+                practice_id,
                 session,
                 ..
             } => SessionView {
@@ -899,6 +904,8 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::CodeRecall,
                 language: language_for(unit, Some(implementation)),
+                implementation: Some(implementation.clone()),
+                practice_id: Some(practice_id.clone()),
                 status: status(session.status()),
                 accepted_text: session.accepted_text().to_owned(),
                 target_text: session.target().to_owned(),
@@ -924,7 +931,12 @@ impl ActiveSession {
                     .collect(),
                 revealed_scaffold_indices: session.revealed_scaffold_indices().to_vec(),
             },
-            Self::Reasoning { unit, session, .. } => SessionView {
+            Self::Reasoning {
+                unit,
+                practice_id,
+                session,
+                ..
+            } => SessionView {
                 session_id: session_id.to_owned(),
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
@@ -932,6 +944,8 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ReasoningRecall,
                 language: language_for(unit, None),
+                implementation: None,
+                practice_id: Some(practice_id.clone()),
                 status: status(session.status()),
                 accepted_text: String::new(),
                 target_text: String::new(),
@@ -954,7 +968,12 @@ impl ActiveSession {
                 visible_scaffold: Vec::new(),
                 revealed_scaffold_indices: Vec::new(),
             },
-            Self::Transfer { unit, session, .. } => SessionView {
+            Self::Transfer {
+                unit,
+                practice_id,
+                session,
+                ..
+            } => SessionView {
                 session_id: session_id.to_owned(),
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
@@ -962,6 +981,8 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::TransferPractice,
                 language: language_for(unit, None),
+                implementation: None,
+                practice_id: Some(practice_id.clone()),
                 status: status(session.status()),
                 accepted_text: String::new(),
                 target_text: String::new(),

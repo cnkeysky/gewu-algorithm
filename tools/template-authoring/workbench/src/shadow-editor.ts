@@ -8,6 +8,7 @@ export type ShadowEditorController = {
   update: (acceptedText: string, targetText: string, language: string, readOnly: boolean, showGuidance: boolean, force?: boolean, resetActivation?: boolean) => void;
   flush: () => Promise<void>;
   focus: () => void;
+  setFontSize: (fontSize: number) => void;
   dispose: () => void;
 };
 
@@ -54,31 +55,10 @@ export function mountShadowEditor(
     theme: "vs-light",
   });
   let fontSize = 13;
-  const toolbar = document.createElement("div");
-  toolbar.className = "shadow-editor-toolbar";
-  const languageBadge = document.createElement("span");
-  languageBadge.className = "shadow-editor-language";
-  languageBadge.textContent = language;
-  const decreaseFont = document.createElement("button");
-  decreaseFont.type = "button";
-  decreaseFont.className = "shadow-editor-font-button";
-  decreaseFont.textContent = "A-";
-  decreaseFont.setAttribute("aria-label", "Decrease editor font size");
-  decreaseFont.title = "Decrease editor font size";
-  const increaseFont = document.createElement("button");
-  increaseFont.type = "button";
-  increaseFont.className = "shadow-editor-font-button";
-  increaseFont.textContent = "A+";
-  increaseFont.setAttribute("aria-label", "Increase editor font size");
-  increaseFont.title = "Increase editor font size";
   const setFontSize = (next: number) => {
     fontSize = Math.max(11, Math.min(20, next));
     editor.updateOptions({ fontSize, lineHeight: Math.round(fontSize * 1.7) });
   };
-  decreaseFont.addEventListener("click", () => setFontSize(fontSize - 1));
-  increaseFont.addEventListener("click", () => setFontSize(fontSize + 1));
-  toolbar.append(languageBadge, decreaseFont, increaseFont);
-  container.appendChild(toolbar);
   let syncing = false;
   let locked = readOnly;
   let flushTimer: number | undefined;
@@ -257,7 +237,6 @@ export function mountShadowEditor(
       const replaceModel = force || readOnlyNext || (!responseMatchesInFlight && !inFlight && pending.length === 0);
       if (replaceModel) model.setValue(value);
       monaco.editor.setModelLanguage(model, nextLanguage.toLowerCase() === "python" ? "python" : "plaintext");
-      languageBadge.textContent = nextLanguage;
       locked = readOnlyNext;
       guidanceEnabled = showGuidanceNext;
       editor.updateOptions({ readOnly: locked || !activated });
@@ -286,6 +265,7 @@ export function mountShadowEditor(
       }
       editor.focus();
     },
-    dispose: () => { subscription.dispose(); activateSubscription.dispose(); focusSubscription.dispose(); container.removeEventListener("mousedown", activate, true); container.removeEventListener("keydown", captureEnter, true); container.removeEventListener("keydown", blockHistoryShortcuts, true); if (flushTimer !== undefined) window.clearTimeout(flushTimer); decreaseFont.remove(); increaseFont.remove(); toolbar.remove(); editor.removeContentWidget(guidanceWidget); editor.dispose(); model.dispose(); },
+    setFontSize,
+    dispose: () => { subscription.dispose(); activateSubscription.dispose(); focusSubscription.dispose(); container.removeEventListener("mousedown", activate, true); container.removeEventListener("keydown", captureEnter, true); container.removeEventListener("keydown", blockHistoryShortcuts, true); if (flushTimer !== undefined) window.clearTimeout(flushTimer); editor.removeContentWidget(guidanceWidget); editor.dispose(); model.dispose(); },
   };
 }

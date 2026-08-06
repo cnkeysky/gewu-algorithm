@@ -229,6 +229,10 @@ pub struct SessionView {
     pub revision: u64,
     pub mode: PracticeModeDto,
     pub language: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implementation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub practice_id: Option<String>,
     pub status: SessionStatusDto,
     pub accepted_text: String,
     pub target_text: String,
