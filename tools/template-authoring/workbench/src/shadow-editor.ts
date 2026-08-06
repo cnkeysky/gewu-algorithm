@@ -167,12 +167,14 @@ export function mountShadowEditor(
     insertNewline();
   };
   container.addEventListener("keydown", captureEnter, true);
-  const activationSubscription = editor.onMouseDown(() => {
+  const activate = () => {
     if (locked || activated) return;
     activated = true;
     editor.updateOptions({ readOnly: false });
     editor.focus();
-  });
+  };
+  const activateSubscription = editor.onMouseDown(activate);
+  container.addEventListener("mousedown", activate, true);
   const focusSubscription = editor.onDidFocusEditorText(() => {
     if (!activated && !locked) editor.getDomNode()?.blur();
   });
@@ -198,7 +200,13 @@ export function mountShadowEditor(
       syncing = false;
       if (!readOnlyNext && model.getValue() !== value && !responseMatchesInFlight) enqueue();
     },
-    focus: () => editor.focus(),
-    dispose: () => { subscription.dispose(); activationSubscription.dispose(); focusSubscription.dispose(); container.removeEventListener("keydown", captureEnter, true); if (flushTimer !== undefined) window.clearTimeout(flushTimer); editor.removeContentWidget(guidanceWidget); editor.dispose(); model.dispose(); },
+    focus: () => {
+      if (!locked) {
+        activated = true;
+        editor.updateOptions({ readOnly: false });
+      }
+      editor.focus();
+    },
+    dispose: () => { subscription.dispose(); activateSubscription.dispose(); focusSubscription.dispose(); container.removeEventListener("mousedown", activate, true); container.removeEventListener("keydown", captureEnter, true); if (flushTimer !== undefined) window.clearTimeout(flushTimer); editor.removeContentWidget(guidanceWidget); editor.dispose(); model.dispose(); },
   };
 }

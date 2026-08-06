@@ -27,6 +27,10 @@ fn main() {
     let data_root = option_value(&arguments, "--data-root")
         .map(PathBuf::from)
         .unwrap_or_else(default_data_root);
+    let http_port = option_value(&arguments, "--port")
+        .map(str::to_owned)
+        .or_else(|| env::var("GEWU_HTTP_PORT").ok())
+        .unwrap_or_else(|| "4175".to_owned());
     match command {
         "stdio" => {
             if let Err(error) = run_stdio(content_root, data_root) {
@@ -35,7 +39,7 @@ fn main() {
             }
         }
         "serve" => {
-            if let Err(error) = http::run(content_root, data_root) {
+            if let Err(error) = http::run(content_root, data_root, http_port) {
                 eprintln!("GEWU HTTP core host failed: {error}");
                 std::process::exit(1);
             }
@@ -238,6 +242,6 @@ fn fail(message: &str) {
 }
 fn print_help() {
     println!(
-        "gewu <stdio|serve|list-units|recent-attempts|review|delete-history> [--content-root PATH] [--data-root PATH]"
+        "gewu <stdio|serve|list-units|recent-attempts|review|delete-history> [--content-root PATH] [--data-root PATH] [--port PORT]"
     );
 }

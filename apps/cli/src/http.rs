@@ -1,5 +1,4 @@
 use std::{
-    env,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     path::PathBuf,
@@ -8,8 +7,7 @@ use std::{
 use gewu_core::Core;
 use gewu_protocol::{JsonRpcRequest, JsonRpcResponse, RpcError};
 
-pub fn run(content_root: PathBuf, data_root: PathBuf) -> Result<(), String> {
-    let port = env::var("GEWU_HTTP_PORT").unwrap_or_else(|_| "4175".to_owned());
+pub fn run(content_root: PathBuf, data_root: PathBuf, port: String) -> Result<(), String> {
     let listener =
         TcpListener::bind(("127.0.0.1", port.parse::<u16>().map_err(|e| e.to_string())?))
             .map_err(|error| error.to_string())?;
@@ -28,6 +26,10 @@ pub fn run(content_root: PathBuf, data_root: PathBuf) -> Result<(), String> {
 
 fn handle(stream: &mut TcpStream, core: &mut Core, handshaken: &mut bool) -> Result<(), String> {
     let request = read_request(stream)?;
+    if request.method == "GET" && request.path == "/health" {
+        write_response(stream, 200, "{\"status\":\"ok\"}")?;
+        return Ok(());
+    }
     if request.method == "OPTIONS" {
         write_response(stream, 204, "")?;
         return Ok(());

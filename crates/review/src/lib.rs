@@ -105,10 +105,25 @@ pub struct ReviewDecision {
 
 /// Derives one stable recommendation per unit/revision/mode from terminal attempts.
 pub fn recommend(attempts: &[AttemptFact]) -> Vec<ReviewRecommendation> {
-    let mut groups: BTreeMap<(UnitId, Revision, PracticeMode, Option<String>, Option<String>), Vec<&AttemptFact>> = BTreeMap::new();
+    let mut groups: BTreeMap<
+        (
+            UnitId,
+            Revision,
+            PracticeMode,
+            Option<String>,
+            Option<String>,
+        ),
+        Vec<&AttemptFact>,
+    > = BTreeMap::new();
     for attempt in attempts {
         groups
-            .entry((attempt.unit_id.clone(), attempt.revision, attempt.mode, attempt.implementation.clone(), attempt.practice_id.clone()))
+            .entry((
+                attempt.unit_id.clone(),
+                attempt.revision,
+                attempt.mode,
+                attempt.implementation.clone(),
+                attempt.practice_id.clone(),
+            ))
             .or_default()
             .push(attempt);
     }

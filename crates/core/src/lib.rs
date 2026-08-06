@@ -312,21 +312,30 @@ impl Core {
         let mut seen = HashSet::new();
         let mut summaries = Vec::new();
         for checkpoint in self.store.list_checkpoints()? {
-            let key = format!("{}:{}:{}:{:?}:{:?}", checkpoint.unit_id, checkpoint.revision, checkpoint.mode, checkpoint.implementation, checkpoint.practice_id);
-            if !seen.insert(key) { continue; }
+            let key = format!(
+                "{}:{}:{}:{:?}:{:?}",
+                checkpoint.unit_id,
+                checkpoint.revision,
+                checkpoint.mode,
+                checkpoint.implementation,
+                checkpoint.practice_id
+            );
+            if !seen.insert(key) {
+                continue;
+            }
             summaries.push(CheckpointSummary {
-                    id: checkpoint.id,
-                    unit_id: checkpoint.unit_id,
-                    unit_title: checkpoint.unit_title,
-                    revision: checkpoint.revision,
-                    mode: parse_mode(&checkpoint.mode)?,
-                    implementation: checkpoint.implementation,
-                    practice_id: checkpoint.practice_id,
-                    completed_steps: checkpoint.completed_steps,
-                    total_steps: checkpoint.total_steps,
-                    accepted_characters: checkpoint.accepted_characters,
-                    target_characters: checkpoint.target_characters,
-                    saved_at: checkpoint.saved_at,
+                id: checkpoint.id,
+                unit_id: checkpoint.unit_id,
+                unit_title: checkpoint.unit_title,
+                revision: checkpoint.revision,
+                mode: parse_mode(&checkpoint.mode)?,
+                implementation: checkpoint.implementation,
+                practice_id: checkpoint.practice_id,
+                completed_steps: checkpoint.completed_steps,
+                total_steps: checkpoint.total_steps,
+                accepted_characters: checkpoint.accepted_characters,
+                target_characters: checkpoint.target_characters,
+                saved_at: checkpoint.saved_at,
             });
         }
         Ok(summaries)
@@ -1109,17 +1118,29 @@ impl ActiveSession {
             Self::Flow { session, .. } => session
                 .attempt()
                 .map(|attempt| flow_attempt(attempt, session_id)),
-            Self::Code { session, practice_id, .. } => session.attempt().map(|attempt| {
+            Self::Code {
+                session,
+                practice_id,
+                ..
+            } => session.attempt().map(|attempt| {
                 let mut stored = code_attempt(attempt, session_id);
                 stored.practice_id = Some(practice_id.clone());
                 stored
             }),
-            Self::Reasoning { session, practice_id, .. } => session.attempt().map(|attempt| {
+            Self::Reasoning {
+                session,
+                practice_id,
+                ..
+            } => session.attempt().map(|attempt| {
                 let mut stored = reasoning_attempt(attempt, session_id);
                 stored.practice_id = Some(practice_id.clone());
                 stored
             }),
-            Self::Transfer { session, practice_id, .. } => session.attempt().map(|attempt| {
+            Self::Transfer {
+                session,
+                practice_id,
+                ..
+            } => session.attempt().map(|attempt| {
                 let mut stored = transfer_attempt(attempt, session_id);
                 stored.practice_id = Some(practice_id.clone());
                 stored

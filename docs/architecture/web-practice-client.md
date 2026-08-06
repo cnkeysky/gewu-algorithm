@@ -39,6 +39,7 @@ Start the core from the repository root:
 
 ```bash
 cargo run -p gewu-cli -- serve \
+  --port 4175 \
   --content-root fixtures/algorithm-units/valid \
   --data-root .gewu-data
 ```
@@ -49,6 +50,22 @@ Then start the Vite workbench:
 cd tools/template-authoring
 npm run workbench:dev
 ```
+
+Ports can be overridden without editing source files. Vite accepts its native
+`--port` argument, while the proxy targets use environment overrides:
+
+```bash
+cargo run -p gewu-cli -- serve --port 4185 \
+  --content-root fixtures/algorithm-units/valid \
+  --data-root .gewu-data
+
+cd tools/template-authoring/workbench
+GEWU_CORE_PORT=4185 npm run dev -- --port 5183
+```
+
+`GEWU_AUTHORING_PORT` overrides the authoring API port. The corresponding
+`GEWU_CORE_TARGET` and `GEWU_AUTHORING_TARGET` variables accept complete target
+URLs for advanced proxy setups and take precedence over the port variables.
 
 Open `http://127.0.0.1:5173/` and select `Practice`. The workspace supports
 all current modes, selected `practice_id`, typed submit/stop events, resume or

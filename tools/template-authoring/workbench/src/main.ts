@@ -159,6 +159,7 @@ let activePracticeSession: { session_id: string; mode: PracticeMode } | undefine
 let activePracticeSnapshot: PracticeSession | undefined;
 let shadowEditor: ShadowEditorController | undefined;
 let shadowEditorLoading: Promise<ShadowEditorController> | undefined;
+let shadowEditorPendingFocus = false;
 let shadowAcceptedText = "";
 let shadowTargetText = "";
 let shadowLanguage = "plaintext";
@@ -244,6 +245,12 @@ function renderPracticeSession(session: PracticeSession): void {
   }
 }
 async function updateShadowEditor(container: HTMLElement, session: PracticeSession, sessionChanged = false): Promise<void> {
+  if (!shadowEditor && !shadowEditorLoading) {
+    container.addEventListener("pointerdown", () => {
+      if (shadowEditor) shadowEditor.focus();
+      else shadowEditorPendingFocus = true;
+    }, { once: true });
+  }
   if (shadowEditor) {
     shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", sessionChanged);
     return;
@@ -253,6 +260,10 @@ async function updateShadowEditor(container: HTMLElement, session: PracticeSessi
   }
   shadowEditor = await shadowEditorLoading;
   shadowEditor.update(shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", sessionChanged);
+  if (shadowEditorPendingFocus) {
+    shadowEditorPendingFocus = false;
+    shadowEditor.focus();
+  }
 }
 async function applyShadowEdit(edit: { start: number; end: number; text: string }): Promise<{ acceptedText: string }> {
   if (!activePracticeSession) throw new Error("No active practice session");

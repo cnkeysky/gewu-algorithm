@@ -64,8 +64,8 @@ temp/
 Thumbs.db
 
 # Test artifacts
-/test-results/
-/playwright-report/
+**/test-results/
+**/playwright-report/
 
 # Keep application lockfiles committed:
 # Cargo.lock, package-lock.json, pnpm-lock.yaml, and yarn.lock.
