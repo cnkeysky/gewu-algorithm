@@ -229,6 +229,24 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
 
 const REVIEW_ROLES = new Set(["algorithm_correctness", "learning_design", "provenance_safety"]);
 
+async function pruneUnreferencedArtifacts(draft: DraftRecord, reviews: ReviewRecord[]): Promise<void> {
+  const root = join(storageRoot, "artifacts");
+  if (!existsSync(root)) return;
+  const retention = Math.max(1, Number(process.env.GEWU_ARTIFACT_RETENTION ?? 5));
+  const current = draft.artifactPath ? basenameSafe(draft.artifactPath) : "";
+  const referenced = reviews.filter((review) => review.draftId === draft.id && review.reportPath).map((review) => review.reportPath!);
+  const entries = (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory() && entry.name.startsWith(`${draft.id}-`)).sort((left, right) => right.name.localeCompare(left.name));
+  let keptUnreferenced = 0;
+  for (const entry of entries) {
+    const isCurrent = entry.name === current;
+    const isReferenced = referenced.some((path) => path.includes(`/artifacts/${entry.name}/`));
+    if (isCurrent || isReferenced || keptUnreferenced++ < retention) continue;
+    await rm(join(root, entry.name), { recursive: true, force: true });
+  }
+}
+
+function basenameSafe(path: string): string { return path.split(/[\\/]/).pop() ?? ""; }
+
 function send(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
@@ -327,6 +345,7 @@ const server = createServer(async (request, response) => {
       const generated = await generateDraft(draft);
       draft.status = "generated";
       draft.artifactPath = generated.artifactPath;
+      await pruneUnreferencedArtifacts(draft, state.reviews);
       await saveState(state);
       return send(response, 200, { status: "generated", provider: generated.provider, model: generated.model, artifactPath: generated.artifactPath });
     }
