@@ -460,8 +460,10 @@ fn validate_practice(
 
     let code_recall =
         validate_code_recall(practice.code_recall, &implementation_keys, implementations)?;
-    let reasoning_recall = validate_reasoning_recall(practice.reasoning_recall, &implementation_keys)?;
-    let transfer_practice = validate_transfer_practice(practice.transfer_practice, patterns, &implementation_keys)?;
+    let reasoning_recall =
+        validate_reasoning_recall(practice.reasoning_recall, &implementation_keys)?;
+    let transfer_practice =
+        validate_transfer_practice(practice.transfer_practice, patterns, &implementation_keys)?;
 
     Ok(PracticeDefinition {
         shadow_typing,

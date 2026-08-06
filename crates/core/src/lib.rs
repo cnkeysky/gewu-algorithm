@@ -1419,7 +1419,11 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
             },
             language: implementation
                 .map(|item| item.language.clone())
-                .or_else(|| unit.implementations.first().map(|item| item.language.clone()))
+                .or_else(|| {
+                    unit.implementations
+                        .first()
+                        .map(|item| item.language.clone())
+                })
                 .unwrap_or_else(|| "plaintext".to_owned()),
             code_layout: None,
             mode: PracticeModeDto::ReasoningRecall,
@@ -1439,7 +1443,11 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
             },
             language: implementation
                 .map(|item| item.language.clone())
-                .or_else(|| unit.implementations.first().map(|item| item.language.clone()))
+                .or_else(|| {
+                    unit.implementations
+                        .first()
+                        .map(|item| item.language.clone())
+                })
                 .unwrap_or_else(|| "plaintext".to_owned()),
             code_layout: None,
             mode: PracticeModeDto::TransferPractice,
