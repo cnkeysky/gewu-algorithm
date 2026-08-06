@@ -333,14 +333,36 @@ pub enum CodeRecallAssistance {
     None,
 }
 
+/// The interaction layout for a Code Recall projection.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeRecallLayout {
+    #[default]
+    FullRecall,
+    CommentGuided,
+    CommentToCode,
+    Cloze,
+}
+
 /// One reduced-guidance code reconstruction configuration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodeRecallDefinition {
     pub id: String,
     pub implementation: String,
+    pub layout: CodeRecallLayout,
     pub assistance: CodeRecallAssistance,
     pub prompt: String,
     pub scaffold: Vec<String>,
+    pub source_template: Option<String>,
+    pub slots: Vec<CodeRecallSlotDefinition>,
+}
+
+/// One reviewed editable region in a structured Code Recall layout.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodeRecallSlotDefinition {
+    pub id: String,
+    pub cue: Option<String>,
+    pub expected: String,
 }
 
 /// One deterministic recall prompt about an algorithm's mechanism or boundaries.

@@ -1,4 +1,10 @@
 import { expect, test } from "playwright/test";
+import { readFileSync } from "node:fs";
+
+const bfsSource = readFileSync(
+  new URL("../../../../fixtures/algorithm-units/valid/graph/bfs/code/python.py", import.meta.url),
+  "utf8",
+);
 
 test.beforeEach(async ({ request }) => {
   const rpc = async (method: string, params: unknown = {}) => request.post("/core/rpc", {
@@ -99,7 +105,7 @@ test("active session shows template language and keeps the editor scrollbar avai
   await expect.poll(() => page.locator("#session-editor .view-lines").evaluate((node) => getComputedStyle(node).fontSize)).not.toBe(fontSizeBefore);
 });
 
-test("code recall reuses the editor with explicit prompt and scaffold controls", async ({ page }) => {
+test("comment-to-code exposes reviewed comments and keeps the full-code editor", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
   await expect(page.locator("#practice-connection")).toContainText("Core connected");
@@ -109,14 +115,18 @@ test("code recall reuses the editor with explicit prompt and scaffold controls",
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
 
   await expect(page.locator("#session-editor .monaco-editor")).toBeVisible();
+  await expect(page.locator("#session-context")).toContainText("comment to code");
   await expect(page.locator(".gewu-shadow-guidance")).toHaveText("");
   await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
   await expect(page.locator("#session-reveal")).toHaveText("Reveal prompt");
   await page.locator("#session-reveal").click();
   await expect(page.locator("#session-prompt")).toHaveText("Reconstruct the traversal from the reviewed operation comments.");
-  await page.locator("#reveal-scaffold").click();
-  await expect(page.locator("#session-scaffold li")).toHaveCount(1);
-  await expect(page.locator("#session-meta")).toContainText("hints 1");
+  await expect(page.locator("#session-scaffold li")).toHaveCount(3);
+  await expect(page.locator("#reveal-scaffold")).toHaveCount(0);
+  await page.evaluate((source) => navigator.clipboard.writeText(source), bfsSource);
+  await page.locator("#session-editor .monaco-editor").click({ position: { x: 180, y: 30 } });
+  await page.keyboard.press("Control+V");
+  await expect(page.locator("#session-status")).toHaveText("completed");
 });
 
 test("code recall restart keeps the mode and variant bound", async ({ page }) => {
@@ -133,6 +143,41 @@ test("code recall restart keeps the mode and variant bound", async ({ page }) =>
   await expect(page.locator("#session-context")).toContainText("code recall");
   await expect(page.locator("#session-context")).toContainText("practice bfs-comments");
   await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
+});
+
+test("cloze recall renders fixed context and submits the active slot", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("code_recall");
+  await page.locator("#practice-id").selectOption("bfs-cloze-frontier");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator("#session-context")).toContainText("cloze");
+  await expect(page.locator("#session-cloze-template")).toBeVisible();
+  await expect(page.locator("#session-answer")).toBeVisible();
+  await page.locator("#session-answer").fill("queue.popleft()");
+  await page.locator("#session-submit").click();
+  await expect(page.locator("#session-status")).toHaveText("completed");
+  await expect(page.locator("#session-progress")).toContainText("Slot 1 of 1");
+});
+
+test("comment-guided recall presents a reviewed cue and scores one code slot", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("code_recall");
+  await page.locator("#practice-id").selectOption("bfs-comment-guided-frontier");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator("#session-context")).toContainText("comment guided");
+  await expect(page.locator("#session-scaffold li")).toHaveText("Remove the next FIFO frontier node.");
+  await expect(page.locator("#session-cloze-template")).toBeVisible();
+  await expect(page.locator("#session-editor-shell")).toBeHidden();
+  await page.locator("#session-answer").fill("queue.popleft()");
+  await page.locator("#session-submit").click();
+  await expect(page.locator("#session-status")).toHaveText("completed");
+  await expect(page.locator("#session-progress")).toContainText("Slot 1 of 1");
 });
 
 test("reasoning and transfer recall expose step context through the shared answer surface", async ({ page }) => {

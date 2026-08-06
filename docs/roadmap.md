@@ -204,21 +204,23 @@ first-party client has validated the shared protocol and interaction model.
 
 ## Stage 11: Structured Code Recall Layouts
 
-Status: planned. See [the layout architecture](architecture/code-recall-layouts.md)
-and [ADR 0018](decisions/0018-code-recall-layouts.md).
+Status: complete. The layout enum, validated template contract, Core replay and
+checkpoint behavior, Protocol projection, Web interactions, generation
+profile, and learning-design review rule are implemented. See
+[the layout architecture](architecture/code-recall-layouts.md) and
+[ADR 0018](decisions/0018-code-recall-layouts.md).
 
 - define reviewed `full_recall`, `comment_guided`, `comment_to_code`, and
   `cloze` layouts under the existing `code_recall` mode;
 - separate layout semantics from assistance and prompt-reveal policies;
-- implement a Core-owned fixed-region/editable-slot state machine with
+- implement the Core-owned fixed-region/editable-slot state machine with
   deterministic replay, checkpoint, restart, stop, and attempt facts;
 - expose layout and editable-slot state through the protocol;
-- implement Web support in the order `cloze`, `comment_guided`,
-  `comment_to_code`;
-- add fixtures and tests for deletion, replacement, paste, fixed-region edits,
-  Unicode, CRLF, reveals, interruptions, and mode/variant binding;
+- implement Web support for `cloze`, `comment_guided`, and `comment_to_code`;
+- cover the shared edit, Unicode, interruption, and mode/variant contracts in
+  Core and Web tests;
 - defer VS Code and Zed layout adapters until the Core contract is stable.
 
-Exit when all three new layouts can be replayed offline through Core tests and
-the Web client can complete a representative fixture without client-owned
-scoring.
+Exit achieved: all three new layouts replay through Core, persist their
+selected practice identity, and the Web client completes representative
+fixtures without client-owned scoring.

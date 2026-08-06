@@ -1,7 +1,8 @@
 use std::{error::Error, path::PathBuf};
 
 use gewu_domain::{
-    CheckStatus, CodeRecallAssistance, Confidence, ReasoningAspect, RelationshipType,
+    CheckStatus, CodeRecallAssistance, CodeRecallLayout, Confidence, ReasoningAspect,
+    RelationshipType,
 };
 use gewu_template::{LoadError, load_algorithm_unit};
 
@@ -53,12 +54,26 @@ fn loads_bfs_with_a_contained_source_file() -> Result<(), Box<dyn Error>> {
         unit.practice.shadow_typing[0].implementation,
         "python-teaching"
     );
-    assert_eq!(unit.practice.code_recall.len(), 2);
+    assert_eq!(unit.practice.code_recall.len(), 4);
     assert_eq!(
         unit.practice.code_recall[0].assistance,
         CodeRecallAssistance::Comments
     );
-    assert!(unit.practice.code_recall[1].scaffold.is_empty());
+    assert_eq!(
+        unit.practice.code_recall[0].layout,
+        CodeRecallLayout::CommentToCode
+    );
+    assert_eq!(
+        unit.practice.code_recall[1].layout,
+        CodeRecallLayout::CommentGuided
+    );
+    assert_eq!(
+        unit.practice.code_recall[1].slots[0].cue.as_deref(),
+        Some("Remove the next FIFO frontier node.")
+    );
+    assert!(unit.practice.code_recall[2].scaffold.is_empty());
+    assert_eq!(unit.practice.code_recall[3].layout, CodeRecallLayout::Cloze);
+    assert_eq!(unit.practice.code_recall[3].slots.len(), 1);
     assert_eq!(
         unit.practice.reasoning_recall[0].id,
         "fifo-shortest-distance"

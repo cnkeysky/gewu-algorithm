@@ -42,6 +42,7 @@
 .session-completed ol { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .session-completed li span { display: inline-block; width: 20px; color: var(--green); }
 .session-target { min-height: 118px; max-height: 260px; overflow: auto; margin: 0 0 14px; padding: 19px; border: 1px solid #d6e1d9; background: #172321; color: #dcebe2; font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; box-shadow: 8px 8px 0 #e0ebe4; }
+.session-cloze-template { max-height: 300px; overflow: auto; margin: 14px 0; padding: 16px; border: 1px solid #d6e1d9; background: #172321; color: #dcebe2; font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
 .practice-session textarea { min-height: 130px; border-color: #c7d7cc; background: #fff; font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .practice-session textarea[hidden] { display: none !important; }
 .practice-editor-shell { margin-top: 16px; }

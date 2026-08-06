@@ -12,11 +12,12 @@ use std::{
 
 pub use gewu_domain::AlgorithmUnit;
 use gewu_domain::{
-    CheckStatus, CodeRecallAssistance, CodeRecallDefinition, Confidence, ContentStatus, FlowStep,
-    Generator, Implementation, ImplementationComplexity, Normalization, Pattern, Position,
-    PracticeDefinition, Problem, Provenance, ReasoningAspect, ReasoningRecallDefinition,
-    Relationship, RelationshipType, Revision, ShadowTypingDefinition, Source, SupersededRevision,
-    TransferPracticeDefinition, Understanding, UnitId, ValidationState,
+    CheckStatus, CodeRecallAssistance, CodeRecallDefinition, CodeRecallLayout,
+    CodeRecallSlotDefinition, Confidence, ContentStatus, FlowStep, Generator, Implementation,
+    ImplementationComplexity, Normalization, Pattern, Position, PracticeDefinition, Problem,
+    Provenance, ReasoningAspect, ReasoningRecallDefinition, Relationship, RelationshipType,
+    Revision, ShadowTypingDefinition, Source, SupersededRevision, TransferPracticeDefinition,
+    Understanding, UnitId, ValidationState,
 };
 use serde::Deserialize;
 use thiserror::Error;
@@ -455,7 +456,8 @@ fn validate_practice(
         });
     }
 
-    let code_recall = validate_code_recall(practice.code_recall, &implementation_keys)?;
+    let code_recall =
+        validate_code_recall(practice.code_recall, &implementation_keys, implementations)?;
     let reasoning_recall = validate_reasoning_recall(practice.reasoning_recall)?;
     let transfer_practice = validate_transfer_practice(practice.transfer_practice, patterns)?;
 
@@ -471,6 +473,7 @@ fn validate_practice(
 fn validate_code_recall(
     definitions: Vec<RawCodeRecallDefinition>,
     implementation_keys: &HashSet<&str>,
+    implementations: &[Implementation],
 ) -> Result<Vec<CodeRecallDefinition>, LoadError> {
     let mut ids = HashSet::new();
     let mut validated = Vec::with_capacity(definitions.len());
@@ -495,6 +498,98 @@ fn validate_code_recall(
         }
         validate_text(&definition.prompt, &format!("{base}.prompt"))?;
         validate_optional_texts(&definition.scaffold, &format!("{base}.scaffold"))?;
+        let mut slot_ids = HashSet::new();
+        for (slot_index, slot) in definition.slots.iter().enumerate() {
+            let slot_base = format!("{base}.slots[{slot_index}]");
+            validate_slug(&slot.id, &format!("{slot_base}.id"))?;
+            if let Some(cue) = &slot.cue {
+                validate_text(cue, &format!("{slot_base}.cue"))?;
+            }
+            validate_text(&slot.expected, &format!("{slot_base}.expected"))?;
+            if !slot_ids.insert(slot.id.clone()) {
+                return Err(validation(
+                    format!("{slot_base}.id"),
+                    "duplicates a prior code recall slot ID",
+                ));
+            }
+        }
+        match definition.layout {
+            CodeRecallLayout::Cloze | CodeRecallLayout::CommentGuided => {
+                let template = definition.source_template.as_deref().ok_or_else(|| {
+                    validation(
+                        format!("{base}.source_template"),
+                        "is required for structured Code Recall layouts",
+                    )
+                })?;
+                validate_text(template, &format!("{base}.source_template"))?;
+                if definition.slots.is_empty() {
+                    return Err(validation(
+                        format!("{base}.slots"),
+                        "must contain at least one slot for a structured Code Recall layout",
+                    ));
+                }
+                if definition.layout == CodeRecallLayout::CommentGuided
+                    && definition.slots.iter().any(|slot| slot.cue.is_none())
+                {
+                    return Err(validation(
+                        format!("{base}.slots"),
+                        "every `comment_guided` slot must declare a reviewed cue",
+                    ));
+                }
+                for slot in &definition.slots {
+                    let marker = format!("{{{{{}}}}}", slot.id);
+                    if template.matches(&marker).count() != 1 {
+                        return Err(validation(
+                            format!("{base}.source_template"),
+                            format!("must contain exactly one `{marker}` marker"),
+                        ));
+                    }
+                }
+                let mut reconstructed = template.to_owned();
+                for slot in &definition.slots {
+                    reconstructed =
+                        reconstructed.replace(&format!("{{{{{}}}}}", slot.id), &slot.expected);
+                }
+                let implementation = implementations
+                    .iter()
+                    .find(|item| item.key == definition.implementation)
+                    .ok_or_else(|| {
+                        validation(
+                            format!("{base}.implementation"),
+                            "does not reference a declared implementation",
+                        )
+                    })?;
+                let source = fs::read_to_string(&implementation.source_path).map_err(|source| {
+                    LoadError::SourceUnavailable {
+                        source_path: implementation.source_path.clone(),
+                        source,
+                    }
+                })?;
+                if reconstructed != source {
+                    return Err(validation(
+                        format!("{base}.source_template"),
+                        "does not reconstruct the selected canonical implementation",
+                    ));
+                }
+            }
+            _ if definition.source_template.is_some() || !definition.slots.is_empty() => {
+                return Err(validation(
+                    format!("{base}.slots"),
+                    "structured slots are supported only by `cloze` and `comment_guided` layouts",
+                ));
+            }
+            _ => {}
+        }
+        if matches!(
+            definition.layout,
+            CodeRecallLayout::CommentGuided | CodeRecallLayout::CommentToCode
+        ) && definition.assistance != CodeRecallAssistance::Comments
+        {
+            return Err(validation(
+                format!("{base}.assistance"),
+                "must be `comments` for a comment-based layout",
+            ));
+        }
         match definition.assistance {
             CodeRecallAssistance::None if !definition.scaffold.is_empty() => {
                 return Err(validation(
@@ -514,9 +609,20 @@ fn validate_code_recall(
         validated.push(CodeRecallDefinition {
             id: definition.id,
             implementation: definition.implementation,
+            layout: definition.layout,
             assistance: definition.assistance,
             prompt: definition.prompt,
             scaffold: definition.scaffold,
+            source_template: definition.source_template,
+            slots: definition
+                .slots
+                .into_iter()
+                .map(|slot| CodeRecallSlotDefinition {
+                    id: slot.id,
+                    cue: slot.cue,
+                    expected: slot.expected,
+                })
+                .collect(),
         });
     }
     Ok(validated)
@@ -908,9 +1014,24 @@ struct RawFlowStep {
 struct RawCodeRecallDefinition {
     id: String,
     implementation: String,
+    #[serde(default)]
+    layout: CodeRecallLayout,
     assistance: CodeRecallAssistance,
     prompt: String,
     scaffold: Vec<String>,
+    #[serde(default)]
+    source_template: Option<String>,
+    #[serde(default)]
+    slots: Vec<RawCodeRecallSlot>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawCodeRecallSlot {
+    id: String,
+    #[serde(default)]
+    cue: Option<String>,
+    expected: String,
 }
 
 #[derive(Deserialize)]

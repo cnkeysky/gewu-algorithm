@@ -19,8 +19,8 @@ const REQUIRED_PRACTICE_SHAPE = `The manifest.practice field is an OBJECT, never
   "shadow_typing": [{"implementation": "python-teaching", "strict": true}],
   "flow_recall": {"steps": [{"id": "a-lowercase-slug", "prompt": "nonempty", "concepts": ["lowercase-slug"], "aliases": ["optional nonempty text"]}]},
   "code_recall": [
-    {"id": "comments-recall", "implementation": "python-teaching", "assistance": "comments", "prompt": "nonempty", "scaffold": ["nonempty comment"]},
-    {"id": "no-hints-recall", "implementation": "python-teaching", "assistance": "none", "prompt": "nonempty", "scaffold": []}
+    {"id": "comments-recall", "implementation": "python-teaching", "layout": "full_recall", "assistance": "comments", "prompt": "nonempty", "scaffold": ["nonempty comment"]},
+    {"id": "no-hints-recall", "implementation": "python-teaching", "layout": "full_recall", "assistance": "none", "prompt": "nonempty", "scaffold": []}
   ],
   "reasoning_recall": [{"id": "reasoning-slug", "aspect": "invariant", "prompt": "nonempty", "concepts": ["lowercase-slug"], "aliases": ["optional nonempty text"]}],
   "transfer_practice": [{"id": "transfer-slug", "pattern": "a-declared-pattern-id", "new_case": "nonempty", "prompt": "nonempty", "concepts": ["lowercase-slug"], "transfers": ["nonempty"], "differences": ["nonempty"], "boundaries": ["nonempty"]}]
@@ -138,7 +138,7 @@ Return exactly one JSON object with this shape:
 
 The manifest must be schema_version "1", status "draft", and use only these enum values:
 confidence low|medium|high; relationship type depends_on|influences|analogous_to|contrasts_with|composes_with|generalizes|specializes|supersedes;
-code recall assistance skeleton|comments|keywords|cloze|none; reasoning aspect mechanism|invariant|trade_off|boundary|failure_condition;
+code recall layout full_recall|comment_guided|comment_to_code|cloze; code recall assistance skeleton|comments|keywords|cloze|none; reasoning aspect mechanism|invariant|trade_off|boundary|failure_condition;
 validation checks pending. Use a single implementation with key "python-teaching", language "python",
 source "code/python.py", purpose "teaching", strategy/complexity/assumptions metadata,
 test reference "tests/python_test.py", and strict LF/strict-whitespace normalization.
@@ -155,6 +155,7 @@ ${REQUIRED_MANIFEST_FIELDS}`,
   profile: {
     practice_modes: ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"],
     code_recall_assistance: ["comments", "none"],
+    code_recall_layouts: ["full_recall"],
     implementation_languages: ["python"],
     implementation_variants: 1,
   } satisfies GenerationProfile,

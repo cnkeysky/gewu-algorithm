@@ -21,17 +21,19 @@ one line may contain several independent decisions.
 CodeRecallDefinition
   layout
   prompt
-  blocks[]
+  scaffold[]
+  source_template
+  slots[]
     id
     cue
-    editable_slots[]
-      id
-      expected_text
+    expected
 ```
 
-`comments` is therefore an interaction/layout concern, not an assistance mode.
-Assistance policies such as `none`, `keywords`, and `skeleton` control what may
-be revealed; they do not determine the scoring model.
+Layout determines the scoring model. In schema version 1, the two comment-based
+layouts require `comments` assistance so their reviewed cues and scaffold use
+the existing assistance field without a parallel content channel. Those
+comments are intrinsic fixed content and are not counted as revealed hints.
+Other assistance policies continue to control optional reveal behavior.
 
 ## Shared Engine
 
@@ -51,9 +53,10 @@ surrounding code are not learner input in `comment_guided` or `cloze`. A session
 completes only when every required editable slot is accepted. Reveals remain
 separate assistance facts and do not make a slot correct.
 
-## Rollout
+## Client Boundary
 
-Implement `cloze` first to validate fixed/editable regions, then
-`comment_guided`, and finally `comment_to_code`. Web is the first client for
-these layouts; native editor adapters follow after the Core and protocol
-contracts have stable replay tests.
+Web is the first client for these layouts. `comment_guided` and `cloze` render
+the fixed template outside the editable answer control and submit only slot
+text. `comment_to_code` renders its complete reviewed comment scaffold beside
+the full-code editor. Native editor adapters follow the same Core contract
+after the protocol has stable replay tests.

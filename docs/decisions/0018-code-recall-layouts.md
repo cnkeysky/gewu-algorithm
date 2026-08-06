@@ -27,11 +27,11 @@ reviewed alternatives.
 
 ## Consequences
 
-- Existing `comments` scaffold behavior remains supported as a transitional
-  assistance presentation.
+- Existing `comments` scaffold behavior remains the schema-v1 transport for
+  intrinsic comment content; structured layouts do not count it as a reveal.
 - New layouts require schema, protocol, persistence, and replay tests before
   client integration.
 - Exact canonical matching remains the initial deterministic policy; semantic
   equivalence is a separate reviewed-content problem.
-- `cloze` is implemented before the two comment layouts to validate the shared
-  fixed/editable-region engine.
+- Web and Core now ship all structured layouts; native editor adapters remain
+  downstream clients of this stable contract.

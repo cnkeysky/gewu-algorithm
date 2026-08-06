@@ -127,6 +127,8 @@ pub struct PracticeOptionDto {
     pub id: String,
     pub label: String,
     pub language: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_layout: Option<String>,
     pub mode: PracticeModeDto,
     pub selector: PracticeSelectorDto,
 }
@@ -229,6 +231,14 @@ pub struct SessionView {
     pub revision: u64,
     pub mode: PracticeModeDto,
     pub language: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_layout: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_template: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub code_slot_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_code_slot: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implementation: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

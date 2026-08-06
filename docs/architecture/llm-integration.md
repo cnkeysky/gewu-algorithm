@@ -94,6 +94,16 @@ Generated drafts record:
 
 Raw prompts and responses may contain private data and are not committed by default.
 
+Generation profiles also declare requested Code Recall layouts. Generation
+must keep `layout` separate from assistance: `full_recall` targets the complete
+canonical implementation, `comment_guided` supplies reviewed operation cues,
+`comment_to_code` reconstructs code from reviewed intent, and `cloze` hides
+meaningful algorithm decisions. Models must not create cloze slots for
+punctuation, formatting, or arbitrary syntax merely to satisfy a requested
+count. Comment-guided slots require non-revealing cues and exact source
+reconstruction; comment-to-code scaffolds must cover the complete algorithm
+flow. Learning-design review checks these rules before publication.
+
 ## Failure Behavior
 
 Provider timeouts, rate limits, malformed output, and unavailable capabilities are expected errors. They must not corrupt an existing unit or block local practice.

@@ -117,6 +117,15 @@ async function generateDraft(draft: DraftRecord): Promise<{ provider: string; mo
   const artifact = await new PiGenerator(optionsFromEnvironment()).generate(definition.buildTask(draft.problem, {
       practice_modes: draft.modes as PracticeModeSelection[],
       code_recall_assistance: draft.assistance as CodeRecallAssistanceSelection[],
+      code_recall_layouts: draft.modes.includes("code_recall")
+        ? [
+            "full_recall",
+            ...(draft.assistance.includes("comments")
+              ? ["comment_guided" as const, "comment_to_code" as const]
+              : []),
+            ...(draft.assistance.includes("cloze") ? ["cloze" as const] : []),
+          ]
+        : [],
       implementation_languages: [draft.language],
       implementation_variants: draft.variants,
     }));

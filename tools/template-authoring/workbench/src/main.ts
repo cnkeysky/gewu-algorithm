@@ -112,7 +112,7 @@ root.innerHTML = `
         <section class="practice-session" id="practice-session" hidden>
           <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span></div></div>
           <p class="session-question" id="session-question"></p>
-          <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-target" class="session-target" data-text-layout></pre>
+          <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-cloze-template" class="session-cloze-template" hidden data-text-layout></pre><pre id="session-target" class="session-target" data-text-layout></pre>
           <div id="session-editor-shell" class="practice-editor-shell" hidden><div class="practice-editor-toolbar"><span class="session-language" id="session-language">Template language</span><label>Font size <select id="editor-font-size"><option value="12">12</option><option value="13" selected>13</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option></select></label></div><div id="session-editor" class="shadow-editor" aria-label="Practice code editor"></div></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
           <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button danger" type="button" id="session-stop">Stop practice</button></div>
           <div class="session-meta" id="session-meta"></div>
@@ -168,9 +168,9 @@ let shadowLanguage = "plaintext";
 let flowPromptRevealed = false;
 let codePromptRevealed = false;
 const promptRevealedModes = new Set<PracticeMode>();
-type PracticeOption = { id: string; label: string; language: string; mode: PracticeMode; selector: "implementation" | "practice_id" };
+type PracticeOption = { id: string; label: string; language: string; code_layout?: string; mode: PracticeMode; selector: "implementation" | "practice_id" };
 type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[]; practice_options: PracticeOption[] };
-type PracticeSession = { session_id: string; unit_title: string; problem_question: string; mode: PracticeMode; language: string; implementation?: string; practice_id?: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
+type PracticeSession = { session_id: string; unit_title: string; problem_question: string; mode: PracticeMode; language: string; implementation?: string; practice_id?: string; code_layout?: string; code_template?: string; code_slot_ids?: string[]; current_code_slot?: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
 type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
 type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
 type Attempt = { id: string; unit_id: string; mode: PracticeMode; implementation?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
@@ -199,7 +199,11 @@ function renderPracticeSession(session: PracticeSession): void {
   document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
   document.querySelector<HTMLElement>("#session-question")!.textContent = session.problem_question;
-  document.querySelector<HTMLElement>("#session-context")!.textContent = `${session.mode.replaceAll("_", " ")} · ${session.implementation ? `implementation ${session.implementation}` : session.practice_id ? `practice ${session.practice_id}` : "default variant"}`;
+  const sessionBindings = [
+    session.implementation ? `implementation ${session.implementation}` : "",
+    session.practice_id ? `practice ${session.practice_id}` : "",
+  ].filter(Boolean);
+  document.querySelector<HTMLElement>("#session-context")!.textContent = `${session.mode.replaceAll("_", " ")}${session.code_layout ? ` · ${session.code_layout.replaceAll("_", " ")}` : ""} · ${sessionBindings.join(" · ") || "default variant"}`;
   document.querySelector<HTMLElement>("#session-status")!.textContent = session.status;
   const progress = document.querySelector<HTMLElement>("#session-progress")!;
   const completed = document.querySelector<HTMLElement>("#session-completed")!;
@@ -213,10 +217,14 @@ function renderPracticeSession(session: PracticeSession): void {
   const isCode = session.mode === "code_recall";
   const isReasoning = session.mode === "reasoning_recall";
   const isTransfer = session.mode === "transfer_practice";
+  const isCloze = isCode && session.code_layout === "cloze";
+  const isCommentGuided = isCode && session.code_layout === "comment_guided";
+  const isCommentToCode = isCode && session.code_layout === "comment_to_code";
+  const isStructuredCode = isCloze || isCommentGuided;
   const requiresPromptReveal = isFlow || isCode || isReasoning || isTransfer;
   const promptVisible = !requiresPromptReveal || promptRevealedModes.has(session.mode);
-  progress.hidden = !isFlow && !isReasoning && !isTransfer;
-  progress.textContent = progress.hidden ? "" : `Step ${Math.min(session.completed_steps + 1, session.total_steps)} of ${session.total_steps}`;
+  progress.hidden = !isFlow && !isReasoning && !isTransfer && !isStructuredCode;
+  progress.textContent = progress.hidden ? "" : `${isStructuredCode ? "Slot" : "Step"} ${Math.min(session.completed_steps + 1, session.total_steps)} of ${session.total_steps}`;
   completed.hidden = !isFlow;
   completed.innerHTML = isFlow && session.completed_prompts.length > 0
     ? `<strong>Completed flow</strong><ol>${session.completed_prompts.map((item) => `<li><span aria-hidden="true">&#10003;</span>${escapeHtml(item)}</li>`).join("")}</ol>`
@@ -227,23 +235,29 @@ function renderPracticeSession(session: PracticeSession): void {
   reveal.textContent = promptVisible ? "Hide prompt" : "Reveal prompt";
   restart.hidden = isShadow;
   scaffold.hidden = !isCode;
-  scaffold.innerHTML = isCode ? `<div class="scaffold-heading"><span>${session.code_assistance ?? "Code assistance"}</span><button class="inline-action" type="button" id="reveal-scaffold" ${session.status !== "active" || (session.scaffold_count ?? 0) <= (session.revealed_scaffold_indices?.length ?? 0) ? "disabled" : ""}>Reveal next hint</button></div><ul>${(session.visible_scaffold ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
+  const assistanceIsIntrinsic = isCommentGuided || isCommentToCode;
+  scaffold.innerHTML = isCode ? `<div class="scaffold-heading"><span>${session.code_assistance ?? "Code assistance"}</span>${assistanceIsIntrinsic ? "" : `<button class="inline-action" type="button" id="reveal-scaffold" ${session.status !== "active" || (session.scaffold_count ?? 0) <= (session.revealed_scaffold_indices?.length ?? 0) ? "disabled" : ""}>Reveal next hint</button>`}</div><ul>${(session.visible_scaffold ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const target = document.querySelector<HTMLElement>("#session-target")!;
+  const clozeTemplate = document.querySelector<HTMLElement>("#session-cloze-template")!;
   const editorShell = document.querySelector<HTMLElement>("#session-editor-shell")!;
   const editorContainer = document.querySelector<HTMLElement>("#session-editor")!;
   const answer = document.querySelector<HTMLTextAreaElement>("#session-answer")!;
   const submit = document.querySelector<HTMLButtonElement>("#session-submit")!;
   target.hidden = true;
-  answer.placeholder = isReasoning
+  answer.placeholder = isStructuredCode
+    ? `Enter code for ${session.current_code_slot ?? "the current slot"}.`
+    : isReasoning
     ? "Explain the reasoning for this step."
     : isTransfer
       ? "Describe how the algorithm transfers to this variation."
       : "Enter your answer or the next code segment.";
-  const isCodeEditor = isShadow || isCode;
+  clozeTemplate.hidden = !isStructuredCode;
+  clozeTemplate.textContent = isStructuredCode ? (session.code_template ?? "") : "";
+  const isCodeEditor = isShadow || (isCode && !isStructuredCode);
   editorShell.hidden = !isCodeEditor;
   answer.hidden = isCodeEditor;
   submit.hidden = isCodeEditor;
-  submit.textContent = isFlow || isCode ? "Submit answer" : "Submit event";
+  submit.textContent = isFlow || (isCode && !isStructuredCode) ? "Submit answer" : isStructuredCode ? "Submit code" : "Submit event";
   if (isCodeEditor) {
     shadowAcceptedText = session.accepted_text;
     shadowTargetText = session.target_text;
@@ -255,8 +269,10 @@ function renderPracticeSession(session: PracticeSession): void {
   observeTextElement(document.querySelector<HTMLElement>("#session-target")!);
   document.querySelector<HTMLElement>("#session-meta")!.textContent = session.mode === "shadow_typing"
     ? `shadow typing · progress ${Array.from(session.accepted_text).length}/${Array.from(session.target_text).length} · accepted inputs ${session.accepted_input_count} · rejected inputs ${session.rejected_input_count} · corrections ${session.correction_count}`
-    : session.mode === "code_recall"
+    : session.mode === "code_recall" && !isStructuredCode
     ? `code recall · progress ${Array.from(session.accepted_text).length}/${Array.from(session.target_text).length} · ${session.code_assistance ?? "no hints"} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count} · hints ${session.scaffold_reveal_count}`
+    : session.mode === "code_recall"
+    ? `${session.code_layout?.replaceAll("_", " ") ?? "structured code recall"} · slot ${session.completed_steps}/${session.total_steps} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count}`
     : `${session.mode.replaceAll("_", " ")} · completed ${session.accepted_input_count} steps · rejected ${session.rejected_input_count} answers · prompts ${session.prompt_count}`;
   if (session.status !== "active") {
     document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = true;

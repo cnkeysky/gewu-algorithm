@@ -11,6 +11,7 @@
     ],
     "learning_design": [
       "LEARN-MODE-001",
+      "LEARN-CODE-LAYOUT-001",
       "LEARN-CONCEPT-001",
       "LEARN-TRANSFER-001",
       "LEARN-VARIANT-001"
@@ -30,6 +31,7 @@
     {"id": "ALG-BOUNDARY-001", "description": "Boundaries distinguish unsupported inputs, detected invalid cases, and actual runtime failures."},
     {"id": "ALG-TESTS-001", "description": "Executable tests cover the contract and distinguish implementation variants."},
     {"id": "LEARN-MODE-001", "description": "One AlgorithmUnit owns all applicable practice modes; modes are not duplicated as separate templates."},
+    {"id": "LEARN-CODE-LAYOUT-001", "description": "Every Code Recall projection declares a supported layout; comment-guided slots have non-revealing operation cues, comment-to-code scaffolds cover the complete algorithm flow, cloze slots target meaningful decisions, and every structured template exactly reconstructs its canonical source."},
     {"id": "LEARN-CONCEPT-001", "description": "Concept keys are specific enough for deterministic scoring and aliases are reviewed expressions."},
     {"id": "LEARN-TRANSFER-001", "description": "Transfer content states what transfers, what differs, and where the pattern stops applying."},
     {"id": "LEARN-VARIANT-001", "description": "Each implementation has a stable key and explicit strategy, complexity, assumptions, and relevant practice references."},

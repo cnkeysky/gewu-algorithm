@@ -117,6 +117,7 @@
       {
         "id": "bfs-comments",
         "implementation": "python-teaching",
+        "layout": "comment_to_code",
         "assistance": "comments",
         "prompt": "Reconstruct the traversal from the reviewed operation comments.",
         "scaffold": [
@@ -126,11 +127,40 @@
         ]
       },
       {
+        "id": "bfs-comment-guided-frontier",
+        "implementation": "python-teaching",
+        "layout": "comment_guided",
+        "assistance": "comments",
+        "prompt": "Reconstruct the selected operation from its reviewed algorithm comment.",
+        "scaffold": ["Remove the next FIFO frontier node."],
+        "source_template": "from collections import deque\n\n\ndef bfs(graph: list[list[int]], start: int) -> list[int]:\n    visited = {start}\n    queue = deque([start])\n    order = []\n\n    while queue:\n        node = {{frontier-pop}}\n        order.append(node)\n\n        for neighbor in graph[node]:\n            if neighbor not in visited:\n                visited.add(neighbor)\n                queue.append(neighbor)\n\n    return order\n",
+        "slots": [
+          {
+            "id": "frontier-pop",
+            "cue": "Remove the next FIFO frontier node.",
+            "expected": "queue.popleft()"
+          }
+        ]
+      },
+      {
         "id": "bfs-no-hints",
         "implementation": "python-teaching",
+        "layout": "full_recall",
         "assistance": "none",
         "prompt": "Reconstruct the canonical BFS implementation without code guidance.",
         "scaffold": []
+      },
+      {
+        "id": "bfs-cloze-frontier",
+        "implementation": "python-teaching",
+        "layout": "cloze",
+        "assistance": "cloze",
+        "prompt": "Complete the operation that removes the next FIFO frontier node.",
+        "scaffold": ["node = ____"],
+        "source_template": "from collections import deque\n\n\ndef bfs(graph: list[list[int]], start: int) -> list[int]:\n    visited = {start}\n    queue = deque([start])\n    order = []\n\n    while queue:\n        node = {{frontier-pop}}\n        order.append(node)\n\n        for neighbor in graph[node]:\n            if neighbor not in visited:\n                visited.add(neighbor)\n                queue.append(neighbor)\n\n    return order\n",
+        "slots": [
+          {"id": "frontier-pop", "expected": "queue.popleft()"}
+        ]
       }
     ],
     "reasoning_recall": [

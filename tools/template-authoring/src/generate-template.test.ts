@@ -61,6 +61,7 @@ test("generation profile rejects assistance without code recall", () => {
   assert.throws(() => validateGenerationProfile({
     practice_modes: ["shadow_typing"],
     code_recall_assistance: ["comments"],
+    code_recall_layouts: [],
     implementation_languages: ["python"],
     implementation_variants: 1,
   }), /code recall assistance/);

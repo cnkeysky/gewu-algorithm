@@ -8,7 +8,10 @@
 
 use std::time::Duration;
 
-use gewu_domain::{CodeRecallAssistance, Normalization, PracticeMode, Revision, UnitId};
+use gewu_domain::{
+    CodeRecallAssistance, CodeRecallLayout, CodeRecallSlotDefinition, Normalization, PracticeMode,
+    Revision, UnitId,
+};
 use thiserror::Error;
 
 use crate::{CharacterRange, ENGINE_VERSION, ElapsedTime, SessionStatus, TerminalReason};
@@ -21,18 +24,24 @@ pub struct CodeRecallConfig {
     schema_version: String,
     implementation: String,
     target: String,
+    layout: CodeRecallLayout,
     assistance: CodeRecallAssistance,
     prompt: String,
     scaffold: Vec<String>,
+    source_template: Option<String>,
+    slots: Vec<CodeRecallSlotDefinition>,
     normalization: Normalization,
 }
 
 /// Reviewed prompt and assistance content for one Code Recall session.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodeRecallGuidance {
+    layout: CodeRecallLayout,
     assistance: CodeRecallAssistance,
     prompt: String,
     scaffold: Vec<String>,
+    source_template: Option<String>,
+    slots: Vec<CodeRecallSlotDefinition>,
 }
 
 impl CodeRecallGuidance {
@@ -42,14 +51,36 @@ impl CodeRecallGuidance {
         scaffold: Vec<String>,
     ) -> Self {
         Self {
+            layout: CodeRecallLayout::FullRecall,
             assistance,
             prompt: prompt.into(),
             scaffold,
+            source_template: None,
+            slots: Vec::new(),
         }
     }
 
     pub fn assistance(&self) -> CodeRecallAssistance {
         self.assistance
+    }
+
+    pub fn with_layout(mut self, layout: CodeRecallLayout) -> Self {
+        self.layout = layout;
+        self
+    }
+
+    pub fn layout(&self) -> CodeRecallLayout {
+        self.layout
+    }
+
+    pub fn with_structured_layout(
+        mut self,
+        source_template: impl Into<String>,
+        slots: Vec<CodeRecallSlotDefinition>,
+    ) -> Self {
+        self.source_template = Some(source_template.into());
+        self.slots = slots;
+        self
     }
 
     pub fn prompt(&self) -> &str {
@@ -83,9 +114,12 @@ impl CodeRecallConfig {
             schema_version: schema_version.into(),
             implementation: implementation.into(),
             target: target.into(),
+            layout: guidance.layout,
             assistance: guidance.assistance,
             prompt: guidance.prompt,
             scaffold: guidance.scaffold,
+            source_template: guidance.source_template,
+            slots: guidance.slots,
             normalization,
         }
     }
@@ -114,12 +148,24 @@ impl CodeRecallConfig {
         self.assistance
     }
 
+    pub fn layout(&self) -> CodeRecallLayout {
+        self.layout
+    }
+
     pub fn prompt(&self) -> &str {
         &self.prompt
     }
 
     pub fn scaffold(&self) -> &[String] {
         &self.scaffold
+    }
+
+    pub fn source_template(&self) -> Option<&str> {
+        self.source_template.as_deref()
+    }
+
+    pub fn slots(&self) -> &[CodeRecallSlotDefinition] {
+        &self.slots
     }
 
     pub fn normalization(&self) -> &Normalization {
@@ -304,7 +350,24 @@ impl CodeRecallSession {
         validate_nonempty("implementation key", &config.implementation)?;
         validate_nonempty("prompt", &config.prompt)?;
         validate_scaffold(&config.assistance, &config.scaffold)?;
-        let target = normalize_target(&config.target, &config.normalization)?;
+        let structured = matches!(
+            config.layout,
+            CodeRecallLayout::Cloze | CodeRecallLayout::CommentGuided
+        );
+        let target_source = if structured {
+            config
+                .slots
+                .iter()
+                .map(|slot| slot.expected.as_str())
+                .collect::<String>()
+        } else {
+            config.target.clone()
+        };
+        let target = if structured {
+            normalize_slot_target(&target_source, &config.normalization)?
+        } else {
+            normalize_target(&target_source, &config.normalization)?
+        };
         if target.is_empty() {
             return Err(CodeRecallStartError::EmptyTarget);
         }
@@ -417,12 +480,37 @@ impl CodeRecallSession {
         self.config.assistance
     }
 
+    pub fn layout(&self) -> CodeRecallLayout {
+        self.config.layout
+    }
+
     pub fn prompt(&self) -> &str {
         &self.config.prompt
     }
 
     pub fn scaffold(&self) -> &[String] {
         &self.config.scaffold
+    }
+
+    pub fn source_template(&self) -> Option<&str> {
+        self.config.source_template()
+    }
+
+    pub fn slots(&self) -> &[CodeRecallSlotDefinition] {
+        self.config.slots()
+    }
+
+    pub fn completed_slot_count(&self) -> usize {
+        let accepted = self.accepted.chars().count();
+        let mut consumed = 0;
+        self.config
+            .slots
+            .iter()
+            .take_while(|slot| {
+                consumed += slot.expected.chars().count();
+                consumed <= accepted
+            })
+            .count()
     }
 
     pub fn accepted_input_count(&self) -> u64 {
@@ -736,6 +824,23 @@ fn normalize_target(target: &str, policy: &Normalization) -> Result<String, Code
         normalized.push('\n');
     }
     Ok(normalized)
+}
+
+fn normalize_slot_target(
+    target: &str,
+    policy: &Normalization,
+) -> Result<String, CodeRecallStartError> {
+    if policy.line_endings != "lf" {
+        return Err(CodeRecallStartError::UnsupportedLineEndings {
+            value: policy.line_endings.clone(),
+        });
+    }
+    if policy.whitespace != "strict" {
+        return Err(CodeRecallStartError::UnsupportedWhitespace {
+            value: policy.whitespace.clone(),
+        });
+    }
+    Ok(target.replace("\r\n", "\n").replace('\r', "\n"))
 }
 
 fn replace_char_range(text: &str, start: usize, end: usize, replacement: &str) -> String {

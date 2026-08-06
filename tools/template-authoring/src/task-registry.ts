@@ -19,6 +19,21 @@ function inputHash(problem: string): string {
   return `sha256:${createHash("sha256").update(problem).digest("hex")}`;
 }
 
+function codeRecallLayoutInstruction(profile: GenerationProfile): string {
+  if (!profile.practice_modes.includes("code_recall")) return "";
+  const requested = profile.code_recall_layouts.join(", ") || "full_recall";
+  const cloze = profile.code_recall_layouts.includes("cloze")
+    ? ` For each cloze projection, declare layout "cloze", a source_template containing each {{slot-id}} marker exactly once, and nonempty slots with lowercase slug ids and expected code. Replacing every marker must exactly reconstruct the canonical implementation. Select algorithm decisions, not punctuation or arbitrary syntax.`
+    : "";
+  const commentGuided = profile.code_recall_layouts.includes("comment_guided")
+    ? ` For each comment_guided projection, use assistance "comments", declare a source_template and nonempty slots, give every slot a concise reviewed cue describing the algorithm operation without revealing its code, and ensure marker replacement exactly reconstructs the canonical implementation.`
+    : "";
+  const commentToCode = profile.code_recall_layouts.includes("comment_to_code")
+    ? ` For each comment_to_code projection, use assistance "comments", omit source_template and slots, and provide an ordered scaffold of reviewed algorithm-operation comments from which the learner reconstructs the complete canonical implementation.`
+    : "";
+  return `\n\nRequested Code Recall layouts: ${requested}.${cloze}${commentGuided}${commentToCode}`;
+}
+
 const kahnDefinition: AuthoringTaskDefinition = {
   taskId: kahnTask.taskId,
   label: "AlgorithmUnit · Kahn topological sort",
@@ -27,7 +42,7 @@ const kahnDefinition: AuthoringTaskDefinition = {
   buildTask: (problem, profile) => ({
     ...kahnTask,
     selectedInputHash: inputHash(problem),
-    instruction: `${kahnTask.instruction}\n\nAuthor problem supplied by the workbench:\n${problem}`,
+    instruction: `${kahnTask.instruction}${codeRecallLayoutInstruction(profile)}\n\nAuthor problem supplied by the workbench:\n${problem}`,
     profile,
   }),
   validateArtifact: (value) => assertGeneratedTemplate(value),
@@ -53,7 +68,7 @@ The implementation must expose Python function binary_search(values: list[int], 
 returning the index of target or -1 when absent. State the sorted-input precondition, duplicate-value
 behavior, empty-list behavior, and the inclusive/exclusive interval invariant. Use an iterative midpoint
 calculation that cannot overflow in fixed-width integer languages. Include shadow typing, flow recall,
-code recall, reasoning recall, and transfer practice. Return only one JSON object with manifest and sources:
+code recall with an explicit requested layout, reasoning recall, and transfer practice. A cloze layout must target midpoint, interval-update, or termination decisions rather than punctuation or incidental syntax. Return only one JSON object with manifest and sources:
 {"manifest": <complete AlgorithmUnit manifest>, "sources": {"code/python.py": <Python source>, "tests/python_test.py": <pytest source>}}
 Use schema_version "1", status "draft", lowercase ids/tags, pending validation fields, and provenance.generated_by.
 The implementation key must be "python-teaching", source "code/python.py", and test_references must include
@@ -79,7 +94,7 @@ const binarySearchDefinition: AuthoringTaskDefinition = {
     taskId: "algorithm-unit-binary-search",
     taskVersion: "1",
     selectedInputHash: inputHash(problem),
-    instruction: `${BINARY_SEARCH_INSTRUCTION}\n\nAuthor problem supplied by the workbench:\n${problem}`,
+    instruction: `${BINARY_SEARCH_INSTRUCTION}${codeRecallLayoutInstruction(profile)}\n\nAuthor problem supplied by the workbench:\n${problem}`,
     outputSchema: BINARY_SEARCH_SCHEMA,
     profile,
   }),
@@ -95,7 +110,7 @@ const genericDefinition: AuthoringTaskDefinition = {
     taskId: "algorithm-unit-v1",
     taskVersion: "1",
     selectedInputHash: inputHash(problem),
-    instruction: `Create a GEWU AlgorithmUnit for the following algorithm problem. Infer its domain, category, prerequisites, implementation strategy, complexity, assumptions, tests, patterns, relationships, and all selected practice projections from the problem. Preserve the exact contract fields and pending lifecycle claims. Return only the structured artifact requested by the schema; do not invent unknown fields.\n\nAlgorithm problem:\n${problem}`,
+    instruction: `Create a GEWU AlgorithmUnit for the following algorithm problem. Infer its domain, category, prerequisites, implementation strategy, complexity, assumptions, tests, patterns, relationships, and all selected practice projections from the problem. Every code_recall item must declare one requested layout. full_recall reconstructs the complete canonical implementation. cloze and comment_guided use reviewed structured slots; comment_to_code presents ordered algorithm comments while the learner reconstructs the complete implementation. Keep layout separate from optional assistance. Preserve the exact contract fields and pending lifecycle claims. Return only the structured artifact requested by the schema; do not invent unknown fields.${codeRecallLayoutInstruction(profile)}\n\nAlgorithm problem:\n${problem}`,
     outputSchema: kahnTask.outputSchema,
     profile,
   }),

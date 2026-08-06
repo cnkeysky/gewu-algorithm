@@ -9,7 +9,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use gewu_domain::{AlgorithmUnit, CodeRecallAssistance};
+use gewu_domain::{AlgorithmUnit, CodeRecallAssistance, CodeRecallLayout};
 use gewu_practice::{
     CharacterRange, CodeRecallConfig, CodeRecallEvent, CodeRecallGuidance, CodeRecallSession,
     ElapsedTime, FlowRecallConfig, FlowRecallEvent, FlowRecallSession, ReasoningRecallConfig,
@@ -199,17 +199,23 @@ impl Core {
                             source,
                         }
                     })?;
+                let mut guidance = CodeRecallGuidance::new(
+                    definition.assistance,
+                    definition.prompt.clone(),
+                    definition.scaffold.clone(),
+                )
+                .with_layout(definition.layout);
+                if let Some(template) = &definition.source_template {
+                    guidance =
+                        guidance.with_structured_layout(template.clone(), definition.slots.clone());
+                }
                 let session = CodeRecallSession::start(CodeRecallConfig::new(
                     unit.id.clone(),
                     unit.revision,
                     unit.schema_version.clone(),
                     implementation.clone(),
                     source,
-                    CodeRecallGuidance::new(
-                        definition.assistance,
-                        definition.prompt.clone(),
-                        definition.scaffold.clone(),
-                    ),
+                    guidance,
                     implementation_data.normalization.clone(),
                 ))?;
                 ActiveSession::Code {
@@ -558,6 +564,16 @@ impl Core {
                         path: data.source_path.clone(),
                         source,
                     })?;
+                let mut guidance = CodeRecallGuidance::new(
+                    definition.assistance,
+                    definition.prompt.clone(),
+                    definition.scaffold.clone(),
+                )
+                .with_layout(definition.layout);
+                if let Some(template) = &definition.source_template {
+                    guidance =
+                        guidance.with_structured_layout(template.clone(), definition.slots.clone());
+                }
                 ActiveSession::Code {
                     session: Box::new(CodeRecallSession::start(CodeRecallConfig::new(
                         unit.id.clone(),
@@ -565,11 +581,7 @@ impl Core {
                         unit.schema_version.clone(),
                         implementation.clone(),
                         source,
-                        CodeRecallGuidance::new(
-                            definition.assistance,
-                            definition.prompt.clone(),
-                            definition.scaffold.clone(),
-                        ),
+                        guidance,
                         data.normalization.clone(),
                     ))?),
                     unit: Box::new(unit),
@@ -834,6 +846,10 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ShadowTyping,
                 language: language_for(unit, Some(implementation)),
+                code_layout: None,
+                code_template: None,
+                code_slot_ids: Vec::new(),
+                current_code_slot: None,
                 implementation: Some(implementation.clone()),
                 practice_id: None,
                 status: status(session.status()),
@@ -864,6 +880,10 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::FlowRecall,
                 language: language_for(unit, None),
+                code_layout: None,
+                code_template: None,
+                code_slot_ids: Vec::new(),
+                current_code_slot: None,
                 implementation: None,
                 practice_id: None,
                 status: status(session.status()),
@@ -904,6 +924,13 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::CodeRecall,
                 language: language_for(unit, Some(implementation)),
+                code_layout: Some(code_layout_label(session.layout()).to_owned()),
+                code_template: session.source_template().map(str::to_owned),
+                code_slot_ids: session.slots().iter().map(|slot| slot.id.clone()).collect(),
+                current_code_slot: session
+                    .slots()
+                    .get(session.completed_slot_count())
+                    .map(|slot| slot.id.clone()),
                 implementation: Some(implementation.clone()),
                 practice_id: Some(practice_id.clone()),
                 status: status(session.status()),
@@ -911,8 +938,8 @@ impl ActiveSession {
                 target_text: session.target().to_owned(),
                 current_prompt: Some(session.prompt().to_owned()),
                 completed_prompts: Vec::new(),
-                completed_steps: 0,
-                total_steps: 0,
+                completed_steps: session.completed_slot_count(),
+                total_steps: session.slots().len(),
                 accepted_input_count: session.accepted_input_count(),
                 rejected_input_count: session.rejected_input_count(),
                 correction_count: session.correction_count(),
@@ -923,12 +950,21 @@ impl ActiveSession {
                 terminal_reason: terminal(session.status()),
                 code_assistance: Some(assistance_label(session.assistance()).to_owned()),
                 scaffold_count: session.scaffold().len(),
-                visible_scaffold: session
-                    .revealed_scaffold_indices()
-                    .iter()
-                    .filter_map(|index| session.scaffold().get(*index))
-                    .cloned()
-                    .collect(),
+                visible_scaffold: match session.layout() {
+                    CodeRecallLayout::CommentToCode => session.scaffold().to_vec(),
+                    CodeRecallLayout::CommentGuided => session
+                        .slots()
+                        .get(session.completed_slot_count())
+                        .and_then(|slot| slot.cue.clone())
+                        .into_iter()
+                        .collect(),
+                    _ => session
+                        .revealed_scaffold_indices()
+                        .iter()
+                        .filter_map(|index| session.scaffold().get(*index))
+                        .cloned()
+                        .collect(),
+                },
                 revealed_scaffold_indices: session.revealed_scaffold_indices().to_vec(),
             },
             Self::Reasoning {
@@ -944,6 +980,10 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ReasoningRecall,
                 language: language_for(unit, None),
+                code_layout: None,
+                code_template: None,
+                code_slot_ids: Vec::new(),
+                current_code_slot: None,
                 implementation: None,
                 practice_id: Some(practice_id.clone()),
                 status: status(session.status()),
@@ -981,6 +1021,10 @@ impl ActiveSession {
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::TransferPractice,
                 language: language_for(unit, None),
+                code_layout: None,
+                code_template: None,
+                code_slot_ids: Vec::new(),
+                current_code_slot: None,
                 implementation: None,
                 practice_id: Some(practice_id.clone()),
                 status: status(session.status()),
@@ -1306,6 +1350,7 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
             language: implementation
                 .map(|item| item.language.clone())
                 .unwrap_or_else(|| "plaintext".to_owned()),
+            code_layout: None,
             mode: PracticeModeDto::ShadowTyping,
             selector: PracticeSelectorDto::Implementation,
         });
@@ -1314,8 +1359,9 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
             label: format!(
-                "{} · {}",
+                "{} · {} · {}",
                 definition.id.replace('-', " "),
+                code_layout_label(definition.layout),
                 assistance_label(definition.assistance)
             ),
             language: unit
@@ -1323,6 +1369,7 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
                 .first()
                 .map(|item| item.language.clone())
                 .unwrap_or_else(|| "plaintext".to_owned()),
+            code_layout: Some(code_layout_label(definition.layout).to_owned()),
             mode: PracticeModeDto::CodeRecall,
             selector: PracticeSelectorDto::PracticeId,
         });
@@ -1336,6 +1383,7 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
                 .first()
                 .map(|item| item.language.clone())
                 .unwrap_or_else(|| "plaintext".to_owned()),
+            code_layout: None,
             mode: PracticeModeDto::ReasoningRecall,
             selector: PracticeSelectorDto::PracticeId,
         });
@@ -1349,6 +1397,7 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
                 .first()
                 .map(|item| item.language.clone())
                 .unwrap_or_else(|| "plaintext".to_owned()),
+            code_layout: None,
             mode: PracticeModeDto::TransferPractice,
             selector: PracticeSelectorDto::PracticeId,
         });
@@ -1442,6 +1491,15 @@ fn assistance_label(value: CodeRecallAssistance) -> &'static str {
         CodeRecallAssistance::Keywords => "keywords",
         CodeRecallAssistance::Cloze => "cloze",
         CodeRecallAssistance::None => "none",
+    }
+}
+
+fn code_layout_label(value: CodeRecallLayout) -> &'static str {
+    match value {
+        CodeRecallLayout::FullRecall => "full_recall",
+        CodeRecallLayout::CommentGuided => "comment_guided",
+        CodeRecallLayout::CommentToCode => "comment_to_code",
+        CodeRecallLayout::Cloze => "cloze",
     }
 }
 fn status(value: SessionStatus) -> SessionStatusDto {
@@ -1956,6 +2014,7 @@ mod tests {
             })
             .unwrap_or_else(|error| panic!("start selected code recall: {error}"));
         assert_eq!(selected.code_assistance.as_deref(), Some("none"));
+        assert_eq!(selected.code_layout.as_deref(), Some("full_recall"));
         assert_eq!(selected.scaffold_count, 0);
         assert!(
             core.discard_checkpoint(&checkpoint_id(&selected.session_id))
@@ -1973,7 +2032,14 @@ mod tests {
         assert_eq!(session.mode, PracticeModeDto::CodeRecall);
         assert!(session.current_prompt.is_some());
         assert!(!session.target_text.is_empty());
-        assert!(session.visible_scaffold.is_empty());
+        assert_eq!(
+            session.visible_scaffold,
+            vec![
+                "Initialize the FIFO frontier and discovered set.".to_owned(),
+                "Expand one frontier state at a time.".to_owned(),
+                "Mark each neighbor before enqueueing it.".to_owned(),
+            ]
+        );
         assert_eq!(session.scaffold_count, 3);
 
         let prompted = core
@@ -1985,27 +2051,13 @@ mod tests {
             .unwrap_or_else(|error| panic!("reveal prompt: {error}"));
         assert_eq!(prompted.prompt_count, 1);
 
-        let revealed = core
-            .apply_event(ApplyEventParams {
-                session_id: session.session_id.clone(),
-                event: PracticeEventDto::RevealScaffold { index: 0 },
-                elapsed: elapsed(2),
-            })
-            .unwrap_or_else(|error| panic!("reveal scaffold: {error}"));
-        assert_eq!(revealed.prompt_count, 1);
-        assert_eq!(revealed.scaffold_reveal_count, 1);
-        assert_eq!(
-            revealed.visible_scaffold,
-            vec!["Initialize the FIFO frontier and discovered set.".to_owned()]
-        );
-
         let complete = core
             .apply_event(ApplyEventParams {
                 session_id: session.session_id,
                 event: PracticeEventDto::InsertText {
-                    text: revealed.target_text,
+                    text: prompted.target_text,
                 },
-                elapsed: elapsed(3),
+                elapsed: elapsed(2),
             })
             .unwrap_or_else(|error| panic!("complete code recall: {error}"));
         assert_eq!(complete.status, SessionStatusDto::Completed);
@@ -2024,6 +2076,112 @@ mod tests {
     }
 
     #[test]
+    fn cloze_code_recall_exposes_slots_and_accepts_slot_text() {
+        let data = data_root();
+        let mut core = Core::open(fixture_root(), &data).expect("open core");
+        let session = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::CodeRecall,
+                implementation: None,
+                practice_id: Some("bfs-cloze-frontier".to_owned()),
+            })
+            .expect("start cloze");
+        assert_eq!(session.code_layout.as_deref(), Some("cloze"));
+        assert_eq!(session.code_slot_ids, vec!["frontier-pop".to_owned()]);
+        assert_eq!(session.current_code_slot.as_deref(), Some("frontier-pop"));
+        assert_eq!(session.completed_steps, 0);
+        let completed = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id,
+                event: PracticeEventDto::InsertText {
+                    text: "queue.popleft()".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .expect("complete cloze slot");
+        assert_eq!(completed.status, SessionStatusDto::Completed);
+        assert_eq!(completed.completed_steps, 1);
+        fs::remove_dir_all(data).expect("cleanup");
+    }
+
+    #[test]
+    fn comment_guided_code_recall_exposes_the_current_cue_and_accepts_its_slot() {
+        let data = data_root();
+        let mut core = Core::open(fixture_root(), &data).expect("open core");
+        let session = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::CodeRecall,
+                implementation: None,
+                practice_id: Some("bfs-comment-guided-frontier".to_owned()),
+            })
+            .expect("start comment guided recall");
+        assert_eq!(session.code_layout.as_deref(), Some("comment_guided"));
+        assert_eq!(
+            session.visible_scaffold,
+            vec!["Remove the next FIFO frontier node.".to_owned()]
+        );
+        assert_eq!(session.current_code_slot.as_deref(), Some("frontier-pop"));
+        let completed = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id,
+                event: PracticeEventDto::InsertText {
+                    text: "queue.popleft()".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .expect("complete comment guided slot");
+        assert_eq!(completed.status, SessionStatusDto::Completed);
+        assert!(completed.visible_scaffold.is_empty());
+        fs::remove_dir_all(data).expect("cleanup");
+    }
+
+    #[test]
+    fn resumes_comment_guided_progress_with_its_layout_and_cue() {
+        let data = data_root();
+        let mut core = Core::open(fixture_root(), &data).expect("open core");
+        let session = core
+            .start_session(StartSessionParams {
+                unit_id: "graph.bfs".to_owned(),
+                mode: PracticeModeDto::CodeRecall,
+                implementation: None,
+                practice_id: Some("bfs-comment-guided-frontier".to_owned()),
+            })
+            .expect("start comment guided recall");
+        let partial = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id,
+                event: PracticeEventDto::InsertText {
+                    text: "queue.".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .expect("accept partial slot");
+        let checkpoint = core
+            .list_checkpoints()
+            .expect("list checkpoints")
+            .into_iter()
+            .find(|value| value.practice_id.as_deref() == Some("bfs-comment-guided-frontier"))
+            .expect("comment guided checkpoint");
+        assert_eq!(partial.accepted_text, "queue.");
+        drop(core);
+
+        let mut reopened = Core::open(fixture_root(), &data).expect("reopen core");
+        let resumed = reopened
+            .resume_checkpoint(&checkpoint.id)
+            .expect("resume checkpoint")
+            .expect("resumed session");
+        assert_eq!(resumed.code_layout.as_deref(), Some("comment_guided"));
+        assert_eq!(resumed.accepted_text, "queue.");
+        assert_eq!(
+            resumed.visible_scaffold,
+            vec!["Remove the next FIFO frontier node.".to_owned()]
+        );
+        fs::remove_dir_all(data).expect("cleanup");
+    }
+
+    #[test]
     fn resumes_a_code_recall_checkpoint_without_exposing_unrevealed_scaffold() {
         let data = data_root();
         let mut core =
@@ -2033,7 +2191,7 @@ mod tests {
                 unit_id: "graph.bfs".to_owned(),
                 mode: PracticeModeDto::CodeRecall,
                 implementation: None,
-                practice_id: None,
+                practice_id: Some("bfs-no-hints".to_owned()),
             })
             .unwrap_or_else(|error| panic!("start: {error}"));
         let partial = core

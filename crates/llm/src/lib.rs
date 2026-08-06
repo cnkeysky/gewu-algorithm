@@ -76,10 +76,21 @@ pub enum CodeRecallAssistanceSelection {
     None,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeRecallLayoutSelection {
+    FullRecall,
+    CommentGuided,
+    CommentToCode,
+    Cloze,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct GenerationProfile {
     pub practice_modes: Vec<PracticeModeSelection>,
     pub code_recall_assistance: Vec<CodeRecallAssistanceSelection>,
+    #[serde(default)]
+    pub code_recall_layouts: Vec<CodeRecallLayoutSelection>,
     pub implementation_languages: Vec<String>,
     pub implementation_variants: u8,
 }
@@ -102,6 +113,37 @@ impl GenerationProfile {
         if !has_code_recall && !self.code_recall_assistance.is_empty() {
             return Err(LlmError::InvalidRequest(
                 "code recall assistance requires the code_recall mode".to_owned(),
+            ));
+        }
+        if !has_code_recall && !self.code_recall_layouts.is_empty() {
+            return Err(LlmError::InvalidRequest(
+                "code recall layouts requires the code_recall mode".to_owned(),
+            ));
+        }
+        let needs_comments = self.code_recall_layouts.iter().any(|layout| {
+            matches!(
+                layout,
+                CodeRecallLayoutSelection::CommentGuided | CodeRecallLayoutSelection::CommentToCode
+            )
+        });
+        if needs_comments
+            && !self
+                .code_recall_assistance
+                .contains(&CodeRecallAssistanceSelection::Comments)
+        {
+            return Err(LlmError::InvalidRequest(
+                "comment-based layouts require comments assistance".to_owned(),
+            ));
+        }
+        if self
+            .code_recall_layouts
+            .contains(&CodeRecallLayoutSelection::Cloze)
+            && !self
+                .code_recall_assistance
+                .contains(&CodeRecallAssistanceSelection::Cloze)
+        {
+            return Err(LlmError::InvalidRequest(
+                "cloze layout requires cloze assistance".to_owned(),
             ));
         }
         Ok(())
@@ -438,12 +480,17 @@ mod tests {
                 CodeRecallAssistanceSelection::Comments,
                 CodeRecallAssistanceSelection::Cloze,
             ],
+            code_recall_layouts: vec![
+                CodeRecallLayoutSelection::FullRecall,
+                CodeRecallLayoutSelection::Cloze,
+            ],
             implementation_languages: vec!["python".to_owned()],
             implementation_variants: 2,
         };
         assert!(profile.validate().is_ok());
         let invalid = GenerationProfile {
             code_recall_assistance: vec![CodeRecallAssistanceSelection::Comments],
+            code_recall_layouts: vec![CodeRecallLayoutSelection::CommentGuided],
             practice_modes: vec![PracticeModeSelection::ShadowTyping],
             ..profile
         };

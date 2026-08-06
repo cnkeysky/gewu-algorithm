@@ -13,6 +13,7 @@ test("registry resolves the independent binary-search contract", () => {
   const task = definition.buildTask("Build an iterative binary search.", {
     practice_modes: ["shadow_typing"],
     code_recall_assistance: [],
+    code_recall_layouts: [],
     implementation_languages: ["python"],
     implementation_variants: 1,
   });
@@ -31,4 +32,30 @@ test("registry falls back to the general contract for a new category", () => {
     buildTask: () => { throw new Error("unused"); },
     validateArtifact: () => undefined,
   }]), /duplicate authoring task/);
+});
+
+test("requested cloze generation carries the executable slot contract", () => {
+  const definition = builtinTaskRegistry.resolve(undefined, "Implement Kahn topological sorting.");
+  const task = definition.buildTask("Implement Kahn topological sorting.", {
+    practice_modes: ["code_recall"],
+    code_recall_assistance: ["cloze"],
+    code_recall_layouts: ["cloze"],
+    implementation_languages: ["python"],
+    implementation_variants: 1,
+  });
+  assert.match(task.instruction, /source_template/);
+  assert.match(task.instruction, /exactly reconstruct the canonical implementation/);
+});
+
+test("requested comment layouts carry their distinct executable contracts", () => {
+  const definition = builtinTaskRegistry.resolve(undefined, "Implement a red-black tree.");
+  const task = definition.buildTask("Implement a red-black tree.", {
+    practice_modes: ["code_recall"],
+    code_recall_assistance: ["comments"],
+    code_recall_layouts: ["comment_guided", "comment_to_code"],
+    implementation_languages: ["python"],
+    implementation_variants: 1,
+  });
+  assert.match(task.instruction, /every slot a concise reviewed cue/);
+  assert.match(task.instruction, /ordered scaffold of reviewed algorithm-operation comments/);
 });

@@ -45,6 +45,7 @@
     "code_recall": [{
       "id": "binary-search-keywords",
       "implementation": "python-iterative",
+      "layout": "full_recall",
       "assistance": "keywords",
       "prompt": "Reconstruct the iterative interval-halving implementation from these operations.",
       "scaffold": ["left", "right", "middle", "comparison"]

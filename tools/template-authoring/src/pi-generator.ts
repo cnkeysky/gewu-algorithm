@@ -10,11 +10,13 @@ export type PracticeModeSelection =
   | "transfer_practice";
 
 export type CodeRecallAssistanceSelection = "skeleton" | "comments" | "keywords" | "cloze" | "none";
+export type CodeRecallLayoutSelection = "full_recall" | "comment_guided" | "comment_to_code" | "cloze";
 
 /** Selects practice projections for one algorithm unit; it does not duplicate the unit. */
 export interface GenerationProfile {
   readonly practice_modes: PracticeModeSelection[];
   readonly code_recall_assistance: CodeRecallAssistanceSelection[];
+  readonly code_recall_layouts: CodeRecallLayoutSelection[];
   readonly implementation_languages: string[];
   readonly implementation_variants: number;
 }
@@ -26,6 +28,15 @@ export function validateGenerationProfile(profile: GenerationProfile): void {
   }
   if (!profile.practice_modes.includes("code_recall") && profile.code_recall_assistance.length > 0) {
     throw new Error("code recall assistance requires the code_recall mode");
+  }
+  if (!profile.practice_modes.includes("code_recall") && profile.code_recall_layouts.length > 0) {
+    throw new Error("code recall layouts require the code_recall mode");
+  }
+  if (profile.code_recall_layouts.some((layout) => layout === "comment_guided" || layout === "comment_to_code") && !profile.code_recall_assistance.includes("comments")) {
+    throw new Error("comment-based layouts require comments assistance");
+  }
+  if (profile.code_recall_layouts.includes("cloze") && !profile.code_recall_assistance.includes("cloze")) {
+    throw new Error("cloze layout requires cloze assistance");
   }
 }
 
