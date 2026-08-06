@@ -36,7 +36,8 @@ export function mountShadowEditor(
     autoClosingQuotes: "never",
     scrollBeyondLastLine: false,
     renderLineHighlight: "line",
-    scrollbar: { vertical: "visible", horizontal: "auto", verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
+    // Let the document continue scrolling once Monaco reaches its own edge.
+    scrollbar: { vertical: "visible", horizontal: "auto", verticalScrollbarSize: 10, horizontalScrollbarSize: 10, alwaysConsumeMouseWheel: false },
     ariaLabel: "Shadow Typing code editor",
     // Practice becomes editable only after the user explicitly activates the
     // editor surface. This prevents the start button or a stale focus from
