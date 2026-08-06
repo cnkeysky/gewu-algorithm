@@ -9,7 +9,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 /// Current protocol major version. A client must handshake before other calls.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// A JSON-RPC 2.0 request carried on one UTF-8 newline-delimited frame.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -228,6 +228,7 @@ pub struct SessionView {
     pub unit_id: String,
     pub unit_title: String,
     pub problem_question: String,
+    pub problem_statement: String,
     pub revision: u64,
     pub mode: PracticeModeDto,
     pub language: String,
@@ -393,18 +394,18 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn serializes_the_v1_handshake_golden_shape() {
+    fn serializes_the_v2_handshake_golden_shape() {
         let request = JsonRpcRequest::new(
             1,
             "gewu/handshake",
             json!({
-                "protocol_min": 1,
-                "protocol_max": 1,
+                "protocol_min": 2,
+                "protocol_max": 2,
                 "client_name": "fixture",
                 "client_version": "0.1.0"
             }),
         );
-        let fixture = include_str!("../../../fixtures/protocol/v1-handshake.ndjson");
+        let fixture = include_str!("../../../fixtures/protocol/v2-handshake.ndjson");
         let expected = fixture
             .lines()
             .next()

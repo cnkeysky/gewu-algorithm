@@ -103,6 +103,7 @@ It is not initially a problem judge, a complete spaced-repetition platform, a so
 - **NFR-008 Accessibility:** Required actions shall be keyboard operable, and status shall not be communicated by color alone.
 - **NFR-009 Portability:** Persistent paths and protocol messages shall not assume one operating system.
 - **NFR-010 Observability:** Logs shall use levels and structured context while redacting secrets and user content by default.
+- **NFR-011 Content Binding:** Every active or resumed practice view shall present the complete problem statement owned by the exact unit revision used for scoring; no client-side title or ID lookup may replace it.
 
 ## 6. Privacy and Licensing Requirements
 

@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "test": "npm run build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:existing": "GEWU_E2E_EXISTING=1 playwright test"
   },
   "devDependencies": {
     "playwright": "^1.62.1",
@@ -16,6 +18,10 @@
   },
   "dependencies": {
     "@chenglou/pretext": "0.0.8",
+    "@types/dompurify": "^3.0.5",
+    "dompurify": "^3.4.13",
+    "katex": "^0.18.1",
+    "marked": "^18.0.9",
     "monaco-editor": "0.55.1"
   }
 }

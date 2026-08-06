@@ -235,6 +235,8 @@ pub struct Position {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Problem {
     pub question: String,
+    /// Markdown statement shown during practice.
+    pub statement: String,
     pub scope: Vec<String>,
     pub out_of_scope: Vec<String>,
 }

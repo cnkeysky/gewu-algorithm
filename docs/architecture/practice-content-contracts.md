@@ -31,6 +31,12 @@ enough reviewed content to start without a provider. A session records:
 - elapsed-time facts without making wall-clock time part of state transitions;
 - whether qualitative review is pending.
 
+The same revision owns the complete learner-facing Markdown problem statement.
+Every mode displays that statement from its `SessionView`; checkpoint replay is
+rejected if the stored revision no longer matches available content. A mode,
+implementation variant, or practice ID may change the exercise projection but
+must never substitute a different problem statement.
+
 An LLM may draft content or provide optional feedback. It does not own session
 completion, immutable attempt creation, or publication state.
 

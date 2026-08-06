@@ -111,6 +111,7 @@ function session(
     unit_id: "graph.bfs",
     unit_title: "Breadth-First Search",
     problem_question: "How should the frontier be expanded?",
+    problem_statement: "Given a graph, expand the frontier level by level.",
     revision: 1,
     mode: "shadow_typing",
     status,

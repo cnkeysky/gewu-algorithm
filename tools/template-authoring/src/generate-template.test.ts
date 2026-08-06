@@ -11,14 +11,14 @@ import { validateGenerationProfile } from "./pi-generator.js";
 function validDraft(): Record<string, unknown> {
   return {
     manifest: {
-      schema_version: "1",
+      schema_version: "2",
       id: "graph.topological-sort",
       revision: 1,
       status: "draft",
       title: "Kahn Topological Sort",
       tags: ["graph"],
       position: {},
-      problem: {},
+      problem: { statement: "Given a directed graph, return a topological order or report a cycle.", question: "How can dependencies be ordered?", scope: ["directed graphs"], out_of_scope: [] },
       understanding: {},
       implementations: [{
         key: "python-teaching",

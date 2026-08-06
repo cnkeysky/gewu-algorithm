@@ -1,5 +1,5 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "id": "validation.crlf",
   "revision": 1,
   "status": "draft",
@@ -8,6 +8,7 @@
   "position": {"domain": "validation", "category": "editor-boundary", "prerequisites": []},
   "problem": {
     "question": "Does a physical CRLF source produce the same canonical practice text as LF?",
+    "statement": "A host file may use CRLF line endings while the canonical practice target uses LF. Verify that line-ending normalization preserves the algorithm text and does not change accepted character progress.",
     "scope": ["VS Code host line-ending normalization"],
     "out_of_scope": ["Algorithm instruction"]
   },

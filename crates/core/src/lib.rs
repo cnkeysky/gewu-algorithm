@@ -843,6 +843,7 @@ impl ActiveSession {
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
                 problem_question: unit.problem.question.clone(),
+                problem_statement: unit.problem.statement.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ShadowTyping,
                 language: language_for(unit, Some(implementation)),
@@ -877,6 +878,7 @@ impl ActiveSession {
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
                 problem_question: unit.problem.question.clone(),
+                problem_statement: unit.problem.statement.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::FlowRecall,
                 language: language_for(unit, None),
@@ -921,6 +923,7 @@ impl ActiveSession {
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
                 problem_question: unit.problem.question.clone(),
+                problem_statement: unit.problem.statement.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::CodeRecall,
                 language: language_for(unit, Some(implementation)),
@@ -977,6 +980,7 @@ impl ActiveSession {
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
                 problem_question: unit.problem.question.clone(),
+                problem_statement: unit.problem.statement.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::ReasoningRecall,
                 language: language_for(unit, None),
@@ -1018,6 +1022,7 @@ impl ActiveSession {
                 unit_id: unit.id.to_string(),
                 unit_title: unit.title.clone(),
                 problem_question: unit.problem.question.clone(),
+                problem_statement: unit.problem.statement.clone(),
                 revision: unit.revision.get(),
                 mode: PracticeModeDto::TransferPractice,
                 language: language_for(unit, None),
@@ -2435,6 +2440,14 @@ mod tests {
             .unwrap_or_else(|| panic!("checkpoint"));
         assert_eq!(state.accepted_text, "from");
         assert_eq!(state.unit_title, "Breadth-First Search");
+        assert!(state.problem_statement.contains("frontier"));
+        assert_eq!(
+            state.problem_statement,
+            resumed
+                .session_view(&state.session_id)
+                .unwrap()
+                .problem_statement
+        );
         fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
 

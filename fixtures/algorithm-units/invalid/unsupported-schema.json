@@ -1,7 +1,7 @@
 {
-  "schema_version": "2", "id": "graph.invalid", "revision": 1, "status": "draft", "title": "Unsupported schema",
+  "schema_version": "1", "id": "graph.invalid", "revision": 1, "status": "draft", "title": "Unsupported schema",
   "position": {"domain": "graph", "category": "traversal", "prerequisites": []},
-  "problem": {"question": "Question", "scope": ["Scope"], "out_of_scope": []},
+  "problem": {"question": "Question", "statement": "Test problem statement.", "scope": ["Scope"], "out_of_scope": []},
   "understanding": {"summary": "Summary", "confidence": "low", "alternatives": [], "failure_conditions": []},
   "implementations": [{"key": "python-teaching", "language": "python", "source": "code/python.py", "purpose": "teaching", "normalization": {"line_endings": "lf", "trailing_newline": true, "whitespace": "strict"}}],
   "patterns": [], "relationships": [],

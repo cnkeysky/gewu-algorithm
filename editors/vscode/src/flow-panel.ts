@@ -127,6 +127,7 @@ export class FlowRecallPanel implements vscode.Disposable {
     li { color: var(--vscode-descriptionForeground); }
     .check { color: var(--vscode-testing-iconPassed); display: inline-block; width: 20px; }
     .prompt { margin: 0; line-height: 1.5; }
+    .problem-statement { white-space: pre-wrap; overflow-wrap: anywhere; }
     .muted, .message { color: var(--vscode-descriptionForeground); }
     textarea { box-sizing: border-box; width: 100%; min-height: 116px; resize: vertical; padding: 10px; border: 1px solid var(--vscode-input-border); color: var(--vscode-input-foreground); background: var(--vscode-input-background); font: inherit; }
     textarea:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
@@ -141,7 +142,7 @@ export class FlowRecallPanel implements vscode.Disposable {
 <body>
   <header><h1>${escapeHtml(session.unit_title)}</h1><span class="progress">Step ${current} of ${session.total_steps}</span></header>
   <main>
-    <section><h2>Problem context</h2><p class="prompt">${escapeHtml(session.problem_question)}</p></section>
+    <section><h2>Problem context</h2><p class="prompt problem-statement">${escapeHtml(session.problem_statement)}</p></section>
     <section><h2>Completed flow</h2><ol>${completed || '<li class="muted">No steps reconstructed yet</li>'}</ol></section>
     <section><h2>Reviewed prompt</h2>${prompt}</section>
     <section>

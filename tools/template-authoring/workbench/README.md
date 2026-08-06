@@ -42,3 +42,25 @@ GEWU_E2E_EXISTING=1 GEWU_E2E_WEB_PORT=5173 \
 
 The live checkpoint test advances persisted practice state and is skipped by
 the default isolated suite. Use it only when that mutation is intentional.
+
+Some managed WSL/Codex sandboxes allow filesystem writes and outbound network
+access but prohibit child processes from binding loopback sockets. In that
+environment the default isolated runner cannot start `gewu-cli serve`; this is
+not fixed by enabling `network_access`. Start both servers in a normal WSL
+terminal, then run the browser suite in existing-server mode:
+
+```sh
+# terminal 1
+cargo run -p gewu-cli -- serve --port 4185 \
+  --content-root fixtures/algorithm-units/valid \
+  --data-root /tmp/gewu-e2e-data
+
+# terminal 2
+GEWU_CORE_PORT=4185 npm run dev -- --host 127.0.0.1 --port 5183
+
+# terminal 3
+npm run test:e2e:existing
+```
+
+The existing-server mode does not spawn or stop either service. It only uses
+the configured Web URL and its `/core` proxy.

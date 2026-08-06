@@ -224,7 +224,17 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
   await mkdir(publishedRoot, { recursive: true });
   await rm(destination, { recursive: true, force: true });
   await cp(source, destination, { recursive: true, filter: (path) => !path.includes(`${resolve(source, "reviews")}`) });
+  await buildPublishedPackManifest();
   return relative(resolve(here, "../..", ".."), destination);
+}
+
+async function buildPublishedPackManifest(): Promise<void> {
+  const manifestPath = join(publishedRoot, "pack.json");
+  const repoRoot = resolve(here, "../..", "..");
+  const packBinary = join(repoRoot, "target/debug/pack");
+  const args = ["build", publishedRoot, manifestPath, "gewu-workbench", "0.1.0"];
+  if (existsSync(packBinary)) await execFileAsync(packBinary, args, { cwd: repoRoot, maxBuffer: 2_000_000 });
+  else await execFileAsync("cargo", ["run", "--quiet", "-p", "gewu-template", "--bin", "pack", "--", ...args], { cwd: repoRoot, maxBuffer: 2_000_000 });
 }
 
 const REVIEW_ROLES = new Set(["algorithm_correctness", "learning_design", "provenance_safety"]);

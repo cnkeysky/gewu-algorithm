@@ -4,7 +4,7 @@ The roadmap is evidence-driven. Dates may guide planning, but each stage exits o
 
 ## Stage 0: Repository and Model Baseline
 
-Status: complete as of 2026-08-04. The schema remains pre-v1 and may still evolve through explicit compatibility review.
+Status: complete as of 2026-08-04. AlgorithmUnit schema v2 and protocol v2 are the current contracts; the required Markdown problem statement is an intentional incompatible change with no v1 fallback.
 
 - establish requirements, architecture, ADRs, and engineering standards;
 - draft the `AlgorithmUnit` schema;

@@ -19,7 +19,7 @@ authoring contract.
 
 ## Main views
 
-1. **New draft**: problem statement, selected source material, provider/model
+1. **New draft**: complete learner-facing problem statement, selected source material, provider/model
    selection, implementation languages and variant count, practice modes, and
    code-recall assistance.
 2. **Draft workspace**: manifest, implementation sources, tests, and practice
@@ -43,6 +43,10 @@ authoring contract.
 
 The profile is part of the generation request and provenance. It must not be
 used to bypass the unit schema or to publish a mode-specific replacement unit.
+The generator must preserve the complete input problem as reviewed Markdown in
+`problem.statement`, including supported math delimiters. The review gate checks
+its semantic agreement with implementations, tests, and every practice
+projection; a summary or solution-leaking rewrite is not acceptable.
 
 Task and rubric selection are authoring-service decisions, not required user
 inputs. The service resolves a registered task contract from the problem and

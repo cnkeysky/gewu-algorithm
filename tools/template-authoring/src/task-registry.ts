@@ -55,8 +55,8 @@ const BINARY_SEARCH_SCHEMA: Record<string, unknown> = {
       type: "object", additionalProperties: false,
       required: ["schema_version", "id", "revision", "status", "title", "tags", "position", "problem", "understanding", "implementations", "patterns", "relationships", "practice", "validation", "provenance", "supersedes"],
       properties: {
-        schema_version: { const: "1" }, id: { type: "string" }, revision: { type: "integer", minimum: 1 }, status: { const: "draft" }, title: { type: "string" }, tags: { type: "array", items: { type: "string" } },
-        position: { type: "object" }, problem: { type: "object" }, understanding: { type: "object" }, implementations: { type: "array", minItems: 1 }, patterns: { type: "array" }, relationships: { type: "array" }, practice: { type: "object" }, validation: { type: "object" }, provenance: { type: "object" }, supersedes: { type: "array" },
+        schema_version: { const: "2" }, id: { type: "string" }, revision: { type: "integer", minimum: 1 }, status: { const: "draft" }, title: { type: "string" }, tags: { type: "array", items: { type: "string" } },
+        position: { type: "object" }, problem: { type: "object", additionalProperties: false, required: ["question", "statement", "scope", "out_of_scope"], properties: { question: { type: "string" }, statement: { type: "string", minLength: 20 }, scope: { type: "array" }, out_of_scope: { type: "array" } } }, understanding: { type: "object" }, implementations: { type: "array", minItems: 1 }, patterns: { type: "array" }, relationships: { type: "array" }, practice: { type: "object" }, validation: { type: "object" }, provenance: { type: "object" }, supersedes: { type: "array" },
       },
     },
     sources: { type: "object", minProperties: 2, additionalProperties: { type: "string", minLength: 1 } },
@@ -70,14 +70,16 @@ behavior, empty-list behavior, and the inclusive/exclusive interval invariant. U
 calculation that cannot overflow in fixed-width integer languages. Include shadow typing, flow recall,
 code recall with an explicit requested layout, reasoning recall, and transfer practice. A cloze layout must target midpoint, interval-update, or termination decisions rather than punctuation or incidental syntax. Return only one JSON object with manifest and sources:
 {"manifest": <complete AlgorithmUnit manifest>, "sources": {"code/python.py": <Python source>, "tests/python_test.py": <pytest source>}}
-Use schema_version "1", status "draft", lowercase ids/tags, pending validation fields, and provenance.generated_by.
+Use schema_version "2", status "draft", lowercase ids/tags, pending validation fields, and provenance.generated_by.
+The problem.statement field is required and must be the complete learner-facing problem statement in Markdown (not a summary). Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters; do not use raw HTML, scripts, answer keys, or implementation details that reveal the solution.
 The implementation key must be "python-teaching", source "code/python.py", and test_references must include
 "tests/python_test.py". Do not include markdown or unknown fields.`;
 
 function assertBinaryArtifact(value: unknown): asserts value is { manifest: Record<string, unknown>; sources: Record<string, unknown> } {
   if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("binary-search artifact must contain manifest and sources");
   const manifest = value.manifest;
-  if (manifest.schema_version !== "1" || manifest.status !== "draft" || typeof manifest.id !== "string") throw new Error("binary-search manifest lifecycle or id is invalid");
+  if (manifest.schema_version !== "2" || manifest.status !== "draft" || typeof manifest.id !== "string") throw new Error("binary-search manifest lifecycle or id is invalid");
+  if (!isRecord(manifest.problem) || typeof manifest.problem.statement !== "string" || manifest.problem.statement.trim().length < 20) throw new Error("binary-search problem statement is missing");
   if (!Array.isArray(manifest.implementations) || manifest.implementations.length < 1) throw new Error("binary-search implementation is missing");
   const implementation = manifest.implementations[0];
   if (!isRecord(implementation) || implementation.key !== "python-teaching" || implementation.source !== "code/python.py" || !Array.isArray(implementation.test_references) || !implementation.test_references.includes("tests/python_test.py")) throw new Error("binary-search implementation contract is invalid");
@@ -102,21 +104,22 @@ const binarySearchDefinition: AuthoringTaskDefinition = {
 };
 
 const genericDefinition: AuthoringTaskDefinition = {
-  taskId: "algorithm-unit-v1",
+  taskId: "algorithm-unit-v2",
   label: "AlgorithmUnit · General authoring",
   taskVersion: "1",
   supports: () => true,
   buildTask: (problem, profile) => ({
-    taskId: "algorithm-unit-v1",
+    taskId: "algorithm-unit-v2",
     taskVersion: "1",
     selectedInputHash: inputHash(problem),
-    instruction: `Create a GEWU AlgorithmUnit for the following algorithm problem. Infer its domain, category, prerequisites, implementation strategy, complexity, assumptions, tests, patterns, relationships, and all selected practice projections from the problem. Every code_recall item must declare one requested layout. full_recall reconstructs the complete canonical implementation. cloze and comment_guided use reviewed structured slots; comment_to_code presents ordered algorithm comments while the learner reconstructs the complete implementation. Keep layout separate from optional assistance. Preserve the exact contract fields and pending lifecycle claims. Return only the structured artifact requested by the schema; do not invent unknown fields.${codeRecallLayoutInstruction(profile)}\n\nAlgorithm problem:\n${problem}`,
+    instruction: `Create a GEWU AlgorithmUnit for the following algorithm problem. Infer its domain, category, prerequisites, implementation strategy, complexity, assumptions, tests, patterns, relationships, and all selected practice projections from the problem. The problem.statement field is required and must contain the complete learner-facing problem statement in Markdown, not a summary. Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters; do not use raw HTML, scripts, answer keys, or solution-leaking implementation details. Every code_recall item must declare one requested layout. full_recall reconstructs the complete canonical implementation. cloze and comment_guided use reviewed structured slots; comment_to_code presents ordered algorithm comments while the learner reconstructs the complete implementation. Keep layout separate from optional assistance. Preserve the exact contract fields and pending lifecycle claims. Return only the structured artifact requested by the schema; do not invent unknown fields.${codeRecallLayoutInstruction(profile)}\n\nAlgorithm problem:\n${problem}`,
     outputSchema: kahnTask.outputSchema,
     profile,
   }),
   validateArtifact: (value) => {
     if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("AlgorithmUnit artifact must contain manifest and sources");
-    if (value.manifest.schema_version !== "1" || value.manifest.status !== "draft") throw new Error("AlgorithmUnit lifecycle is invalid");
+    if (value.manifest.schema_version !== "2" || value.manifest.status !== "draft") throw new Error("AlgorithmUnit lifecycle is invalid");
+    if (!isRecord(value.manifest.problem) || typeof value.manifest.problem.statement !== "string" || value.manifest.problem.statement.trim().length < 20) throw new Error("AlgorithmUnit problem statement is missing");
     if (typeof value.manifest.id !== "string" || !Array.isArray(value.manifest.implementations) || value.manifest.implementations.length === 0) throw new Error("AlgorithmUnit identity or implementation is missing");
   },
 };

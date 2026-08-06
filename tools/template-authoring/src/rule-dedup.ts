@@ -41,7 +41,7 @@ export function deduplicateRule(proposal: RuleProposal, existing: readonly Rule[
 
 export async function loadReviewRules(): Promise<Rule[]> {
   const here = dirname(fileURLToPath(import.meta.url));
-  const document = JSON.parse(await readFile(join(here, "../rules/algorithm-template-review.v1.json"), "utf8")) as { rules?: Rule[] };
+  const document = JSON.parse(await readFile(join(here, "../rules/algorithm-template-review.v2.json"), "utf8")) as { rules?: Rule[] };
   if (!Array.isArray(document.rules)) throw new Error("review rubric has no rules");
   return document.rules;
 }

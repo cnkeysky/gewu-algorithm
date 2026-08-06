@@ -46,8 +46,10 @@ Review state is user-specific and mutable. It references attempts and records th
 - Unit IDs are stable lowercase ASCII identifiers such as `graph.bfs`.
 - A content revision is a positive integer within one stable ID.
 - Published revisions are immutable.
+- `problem.statement`, implementations, and practice projections are one immutable revision snapshot; changing any of them requires a new revision.
 - Corrections create a new revision and link through `supersedes`.
 - Attempts always reference an exact unit ID and revision.
+- Active and resumed sessions expose the statement from that exact revision. A client must not re-resolve a statement by title, mode, or an unversioned ID.
 - Lifecycle state does not replace revision history.
 
 ## Implementation Variants

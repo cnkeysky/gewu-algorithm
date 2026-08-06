@@ -4,7 +4,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PiGenerator, optionsFromEnvironment, type DraftTask } from "./pi-generator.js";
 
-const RUBRIC_VERSION = "algorithm-template-review.v1";
+const RUBRIC_VERSION = "algorithm-template-review.v2";
 const ROLES = ["algorithm_correctness", "learning_design", "provenance_safety"] as const;
 type ReviewRole = (typeof ROLES)[number];
 
@@ -110,7 +110,7 @@ export async function reviewTemplateDraft(draftArgument: string, roleArgument: s
     return { path, content: await readFile(absolute, "utf8") };
   }));
   const rubricDocument = JSON.parse(
-    await readFile(join(here, "../rules/algorithm-template-review.v1.json"), "utf8"),
+    await readFile(join(here, "../rules/algorithm-template-review.v2.json"), "utf8"),
   ) as { id: string; roles: Record<string, string[]>; rules: Array<{ id: string; description: string }> };
   const assignedRuleIds = rubricDocument.roles[role];
   if (!assignedRuleIds) throw new Error(`rubric does not define role: ${role}`);

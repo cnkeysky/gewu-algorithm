@@ -10,7 +10,7 @@ test.beforeEach(async ({ request }) => {
   const rpc = async (method: string, params: unknown = {}) => request.post("/core/rpc", {
     data: { jsonrpc: "2.0", id: Date.now(), method, params },
   });
-  await rpc("gewu/handshake", { protocol_min: 1, protocol_max: 1, client_name: "gewu-playwright-reset", client_version: "0.1.0" });
+  await rpc("gewu/handshake", { protocol_min: 2, protocol_max: 2, client_name: "gewu-playwright-reset", client_version: "0.1.0" });
   const checkpoints = await rpc("gewu/listCheckpoints");
   const payload = await checkpoints.json() as { result?: { checkpoints?: Array<{ id: string }> } };
   for (const checkpoint of payload.result?.checkpoints ?? []) await rpc("gewu/discardCheckpoint", { checkpoint_id: checkpoint.id });
@@ -52,7 +52,7 @@ test("shadow typing advances multiline guidance through Enter and indentation", 
   await expect(meta).toContainText("progress 32/403");
   await expect(guidance).toHaveText("def bfs(graph: list[list[int]], start: int) -> list[int]:");
 
-  await page.keyboard.type("def bfs(graph: list[list[int]], start: int) -> list[int]:");
+  await page.keyboard.type("def bfs(graph: list[list[int]], start: int) -> list[int]:", { delay: 2 });
   await expect(meta).toContainText("progress 89/403");
   await expect(guidance).toHaveText("Enter");
   await page.keyboard.press("Enter");
@@ -89,6 +89,33 @@ test("shadow typing advances multiline guidance through Enter and indentation", 
   await page.keyboard.press("Tab");
   await expect(meta).toContainText("progress 180/403");
   await expect(guidance).toHaveText("node = queue.popleft()");
+});
+
+test("problem statement stays bound across modes, restart, and checkpoint resume", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("search.binary-search");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+
+  const statement = page.locator("#session-question");
+  await expect(statement).toContainText("ascending sorted array");
+  const original = await statement.textContent();
+  expect(original).toContain("ascending sorted array");
+  await expect(statement.locator(".katex")).toHaveCount(2);
+
+  await page.locator("#refresh-checkpoints").click();
+  await page.locator("#practice-checkpoints [data-resume-checkpoint]").first().click();
+  await expect(statement).toHaveText(original ?? "");
+  await expect(statement.locator(".katex")).toHaveCount(2);
+
+  await page.locator("#practice-mode").selectOption("flow_recall");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(statement).toHaveText(original ?? "");
+  await expect(statement.locator(".katex")).toHaveCount(2);
+  await page.locator("#session-restart").click();
+  await expect(statement).toHaveText(original ?? "");
 });
 
 test("active session shows template language and keeps the editor scrollbar available", async ({ page }) => {
@@ -416,4 +443,24 @@ test("practice workspace recovers its Core connection after a transient disconne
   await expect(page.locator("#practice-connection")).toContainText("disconnected");
   await page.unroute("**/core/rpc");
   await expect(page.locator("#practice-connection")).toContainText("Core connected", { timeout: 5000 });
+});
+
+test("reloading the browser preserves an interrupted practice checkpoint", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  const editor = page.locator("#session-editor .monaco-editor");
+  await editor.click({ position: { x: 180, y: 30 } });
+  await page.keyboard.type("from");
+  await expect(page.locator("#session-meta")).toContainText("progress 4/403");
+
+  await page.reload();
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-checkpoints .practice-record")).toContainText("Breadth-First Search");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator("#session-meta")).toContainText("progress 4/403");
 });

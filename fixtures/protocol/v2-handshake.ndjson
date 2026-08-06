@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","id":1,"method":"gewu/handshake","params":{"client_name":"fixture","client_version":"0.1.0","protocol_max":2,"protocol_min":2}}
+{"jsonrpc":"2.0","id":1,"result":{"core_version":"0.1.0","protocol_version":2}}

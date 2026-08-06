@@ -144,4 +144,10 @@ footer { display: flex; justify-content: space-between; margin-top: auto; paddin
 .session-problem { margin: 18px 0 12px; padding: 12px 14px; border-left: 3px solid var(--green); background: #f2f8f4; }
 .session-problem > span { display: block; margin-bottom: 5px; color: var(--green); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .session-question { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.55; }
+.session-question > :first-child { margin-top: 0; }
+.session-question > :last-child { margin-bottom: 0; }
+.session-question p, .session-question ul, .session-question ol { margin: 8px 0; }
+.session-question ul, .session-question ol { padding-left: 22px; }
+.session-question code { padding: 1px 4px; border: 1px solid #d7e1da; background: #fff; font: .92em ui-monospace, SFMono-Regular, Menlo, monospace; }
+.session-question .katex-display { overflow-x: auto; overflow-y: hidden; margin: 12px 0; }
 @media (max-width: 700px) { .inspector-grid { grid-template-columns: 1fr; } }

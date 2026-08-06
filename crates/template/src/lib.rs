@@ -22,7 +22,7 @@ use gewu_domain::{
 use serde::Deserialize;
 use thiserror::Error;
 
-const SCHEMA_VERSION: &str = "1";
+const SCHEMA_VERSION: &str = "2";
 
 /// Loads an `AlgorithmUnit` JSON manifest and resolves its implementation source files.
 pub fn load_algorithm_unit(path: impl AsRef<Path>) -> Result<AlgorithmUnit, LoadError> {
@@ -227,11 +227,13 @@ fn validate_position(position: RawPosition) -> Result<Position, LoadError> {
 
 fn validate_problem(problem: RawProblem) -> Result<Problem, LoadError> {
     validate_text(&problem.question, "problem.question")?;
+    validate_text(&problem.statement, "problem.statement")?;
     require_nonempty(&problem.scope, "problem.scope")?;
     validate_optional_texts(&problem.scope, "problem.scope")?;
     validate_optional_texts(&problem.out_of_scope, "problem.out_of_scope")?;
     Ok(Problem {
         question: problem.question,
+        statement: problem.statement,
         scope: problem.scope,
         out_of_scope: problem.out_of_scope,
     })
@@ -909,6 +911,7 @@ struct RawPosition {
 #[serde(deny_unknown_fields)]
 struct RawProblem {
     question: String,
+    statement: String,
     scope: Vec<String>,
     out_of_scope: Vec<String>,
 }

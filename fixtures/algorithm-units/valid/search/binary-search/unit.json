@@ -1,5 +1,5 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "id": "search.binary-search",
   "revision": 1,
   "status": "draft",
@@ -8,6 +8,7 @@
   "position": {"domain": "search", "category": "ordered-data", "prerequisites": ["data-structure.array"]},
   "problem": {
     "question": "How can a value be located in sorted data by discarding half of the remaining range?",
+    "statement": "Given an ascending sorted array values and a target, return the target index or -1 when it is absent. Preserve the candidate interval [left, right]. The interval shrinks by half, giving time complexity $O(\\log n)$ and space complexity $O(1)$.",
     "scope": ["Ascending sorted arrays", "Exact value lookup"],
     "out_of_scope": ["Searching unsorted data", "Finding every duplicate occurrence"]
   },

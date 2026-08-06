@@ -115,6 +115,16 @@ the content root used by `gewu-cli`; the published directory contains only
 Core-readable unit files. A generated artifact can be edited in the Artifact
 inspector and saved through `PUT /api/drafts/:id/artifact`; the Rust validator
 must pass again and previous LLM reviews are cleared before another review.
+Each approval also rebuilds `pack.json` with the Rust pack tool. Start Core
+against the same directory to practice the accepted units:
+
+```sh
+GEWU_PUBLISHED_ROOT="$PWD/tools/template-authoring/drafts/.workbench/published" \
+cargo run -p gewu-cli -- serve --content-root "$GEWU_PUBLISHED_ROOT" --data-root .gewu-data
+```
+
+The pack can be checked independently with
+`cargo run -p gewu-template --bin pack -- verify <content-root> <content-root>/pack.json`.
 
 Existing drafts can be revised with `PATCH /api/drafts/:id`. A revision keeps
 the draft identity, clears its current artifact pointer, returns it to

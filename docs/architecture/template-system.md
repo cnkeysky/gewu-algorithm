@@ -67,7 +67,7 @@ persisted practice modes.
 
 Moving official content to a separate repository should occur only when most of these conditions hold:
 
-- schema version 1 is stable;
+- schema version 2 is stable;
 - at least 30 to 50 maintained units exist;
 - content and code have meaningfully different review cadence;
 - independent consumers need the content;

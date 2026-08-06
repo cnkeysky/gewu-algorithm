@@ -14,6 +14,7 @@ export interface CoreSession {
   readonly unit_id: string;
   readonly unit_title: string;
   readonly problem_question: string;
+  readonly problem_statement: string;
   readonly revision: number;
   readonly mode: PracticeMode;
   readonly status: SessionStatus;
@@ -115,8 +116,8 @@ export class GewuCoreClient {
     );
     const client = new GewuCoreClient(process);
     await client.request("gewu/handshake", {
-      protocol_min: 1,
-      protocol_max: 1,
+      protocol_min: 2,
+      protocol_max: 2,
       client_name: "vscode",
       client_version: "0.1.0",
     });
@@ -401,6 +402,7 @@ function isCoreSession(value: unknown): value is CoreSession {
     typeof value.unit_id === "string" &&
     typeof value.unit_title === "string" &&
     typeof value.problem_question === "string" &&
+    typeof value.problem_statement === "string" &&
     typeof value.revision === "number" &&
     isPracticeMode(value.mode) &&
     (value.status === "active" ||

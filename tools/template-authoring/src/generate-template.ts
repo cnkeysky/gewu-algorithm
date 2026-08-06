@@ -28,7 +28,7 @@ const REQUIRED_PRACTICE_SHAPE = `The manifest.practice field is an OBJECT, never
 
 const REQUIRED_MANIFEST_FIELDS = `Every object must contain only the named fields below; do not invent fields such as "order", "type" on a practice item, or "description".
 "position": {"domain": "lowercase-slug", "category": "lowercase-slug", "prerequisites": ["dotted.lowercase-id"]}
-"problem": {"question": "nonempty", "scope": ["nonempty"], "out_of_scope": ["nonempty"]}
+"problem": {"question": "nonempty", "statement": "Markdown problem statement with any formulas preserved", "scope": ["nonempty"], "out_of_scope": ["nonempty"]}
 "understanding": {"summary": "nonempty", "confidence": "low|medium|high", "alternatives": ["nonempty"], "failure_conditions": ["nonempty"]}
 "implementations": [{"key": "python-teaching", "language": "python", "source": "code/python.py", "purpose": "teaching", "strategy": "kahn-fifo-frontier", "complexity": {"time": "O(V + E)", "space": "O(V)"}, "assumptions": ["vertices are numbered 0 through n-1"], "test_references": ["tests/python_test.py"], "normalization": {"line_endings": "lf", "trailing_newline": true, "whitespace": "strict"}}]
 "patterns": [{"id": "lowercase-slug", "summary": "nonempty", "applicability": ["nonempty"], "boundaries": ["nonempty"]}]
@@ -36,6 +36,8 @@ const REQUIRED_MANIFEST_FIELDS = `Every object must contain only the named field
 "validation": {"schema": "pending", "code": "pending", "content_review": "pending", "transfer_review": "pending", "last_validated_at": null}
 "provenance": {"authors": ["nonempty"], "generated_by": {"provider": "deepseek", "model": "deepseek-v4-flash", "task_version": "3", "generated_at": "ISO-8601"}, "reviewed_by": [], "sources": [], "license": "MIT"}
 "supersedes": []`;
+
+const STATEMENT_REQUIREMENT = `problem.statement is required and contains the complete learner-facing problem statement in Markdown, not a summary. Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters. Do not use raw HTML, scripts, answer keys, or implementation details that reveal the solution.`;
 
 const OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
@@ -51,7 +53,7 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
         "practice", "validation", "provenance", "supersedes",
       ],
       properties: {
-        schema_version: { const: "1" },
+        schema_version: { const: "2" },
         id: { type: "string" },
         revision: { type: "integer", minimum: 1 },
         status: { const: "draft" },
@@ -70,9 +72,10 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
         problem: {
           type: "object",
           additionalProperties: false,
-          required: ["question", "scope", "out_of_scope"],
+          required: ["question", "statement", "scope", "out_of_scope"],
           properties: {
             question: { type: "string" },
+            statement: { type: "string", minLength: 20 },
             scope: { type: "array", items: { type: "string" } },
             out_of_scope: { type: "array", items: { type: "string" } },
           },
@@ -136,7 +139,7 @@ Return exactly one JSON object with this shape:
   "sources": {"code/python.py": <complete Python source string>, "tests/python_test.py": <complete pytest source string>}
 }
 
-The manifest must be schema_version "1", status "draft", and use only these enum values:
+The manifest must be schema_version "2", status "draft", and use only these enum values:
 confidence low|medium|high; relationship type depends_on|influences|analogous_to|contrasts_with|composes_with|generalizes|specializes|supersedes;
 code recall layout full_recall|comment_guided|comment_to_code|cloze; code recall assistance skeleton|comments|keywords|cloze|none; reasoning aspect mechanism|invariant|trade_off|boundary|failure_condition;
 validation checks pending. Use a single implementation with key "python-teaching", language "python",
@@ -150,7 +153,9 @@ the unit id must be a dotted lowercase id such as "graph.topological-sort".
 
 ${REQUIRED_PRACTICE_SHAPE}
 
-${REQUIRED_MANIFEST_FIELDS}`,
+${REQUIRED_MANIFEST_FIELDS}
+
+${STATEMENT_REQUIREMENT}`,
   outputSchema: OUTPUT_SCHEMA,
   profile: {
     practice_modes: ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"],
@@ -174,7 +179,7 @@ export function assertGeneratedTemplate(value: unknown): asserts value is Genera
   for (const key of required) {
     if (!(key in manifest)) throw new Error(`manifest is missing required field ${key}`);
   }
-  if (manifest.schema_version !== "1" || manifest.status !== "draft") {
+  if (manifest.schema_version !== "2" || manifest.status !== "draft") {
     throw new Error("manifest must remain schema version 1 and draft status");
   }
   if (typeof manifest.id !== "string" || !/^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(manifest.id)) {
@@ -185,6 +190,9 @@ export function assertGeneratedTemplate(value: unknown): asserts value is Genera
   }
   if (manifest.implementations.length !== 1) {
     throw new Error("this fixed task must declare exactly one implementation");
+  }
+  if (!isRecord(manifest.problem) || typeof manifest.problem.statement !== "string" || manifest.problem.statement.trim().length < 20) {
+    throw new Error("manifest.problem.statement must contain the complete Markdown problem statement");
   }
   const expectedImplementation = manifest.implementations[0];
   if (!isRecord(expectedImplementation)

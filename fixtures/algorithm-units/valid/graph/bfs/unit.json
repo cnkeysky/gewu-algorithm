@@ -1,5 +1,5 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "id": "graph.bfs",
   "revision": 1,
   "status": "draft",
@@ -12,6 +12,7 @@
   },
   "problem": {
     "question": "How can states be explored in nondecreasing distance from a starting state?",
+    "statement": "Given a graph and a starting state, visit reachable states in nondecreasing distance order. The frontier is processed level by level: states at distance d are expanded before states at distance d + 1.",
     "scope": [
       "Graph traversal from one start vertex",
       "Shortest edge count in an unweighted graph"

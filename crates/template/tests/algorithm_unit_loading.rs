@@ -134,8 +134,20 @@ fn rejects_an_unsupported_schema_version() {
     let result = load_algorithm_unit(fixture("invalid/unsupported-schema.json"));
 
     match result {
-        Err(LoadError::UnsupportedSchemaVersion { found }) => assert_eq!(found, "2"),
+        Err(LoadError::UnsupportedSchemaVersion { found }) => assert_eq!(found, "1"),
         other => panic!("expected an unsupported schema error, got {other:?}"),
+    }
+}
+
+#[test]
+fn rejects_schema_v2_without_a_problem_statement() {
+    let result = load_algorithm_unit(fixture("invalid/missing-statement.json"));
+
+    match result {
+        Err(LoadError::InvalidJson { source, .. }) => {
+            assert!(source.to_string().contains("missing field `statement`"));
+        }
+        other => panic!("expected a required statement error, got {other:?}"),
     }
 }
 

@@ -1,6 +1,7 @@
 import "./styles.css";
 import "./practice.css";
 import { observeTextLayout, type TextLayoutHandle } from "./text-layout";
+import { renderProblemStatement } from "./problem-renderer";
 import type { ShadowEditorController } from "./shadow-editor";
 
 type PracticeMode = "shadow_typing" | "flow_recall" | "code_recall" | "reasoning_recall" | "transfer_practice";
@@ -111,7 +112,7 @@ root.innerHTML = `
         </form>
         <section class="practice-session" id="practice-session" hidden>
           <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span></div></div>
-          <div class="session-problem"><span>Problem</span><p class="session-question" id="session-question"></p></div>
+          <div class="session-problem"><span>Problem</span><div class="session-question" id="session-question"></div></div>
           <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-cloze-template" class="session-cloze-template" hidden data-text-layout></pre><pre id="session-target" class="session-target" data-text-layout></pre>
           <div id="session-editor-shell" class="practice-editor-shell" hidden><div class="practice-editor-toolbar"><span class="session-language" id="session-language">Template language</span><label>Font size <select id="editor-font-size"><option value="12">12</option><option value="13" selected>13</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option></select></label></div><div id="session-editor" class="shadow-editor" aria-label="Practice code editor"></div></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
           <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button danger" type="button" id="session-stop">Stop practice</button></div>
@@ -172,10 +173,10 @@ let codePromptRevealed = false;
 const promptRevealedModes = new Set<PracticeMode>();
 type PracticeOption = { id: string; label: string; language: string; code_layout?: string; mode: PracticeMode; selector: "implementation" | "practice_id" };
 type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[]; practice_options: PracticeOption[] };
-type PracticeSession = { session_id: string; unit_title: string; problem_question: string; mode: PracticeMode; language: string; implementation?: string; practice_id?: string; code_layout?: string; code_template?: string; code_slot_ids?: string[]; current_code_slot?: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
+type PracticeSession = { session_id: string; unit_id: string; revision: number; unit_title: string; problem_question: string; problem_statement: string; mode: PracticeMode; language: string; implementation?: string; practice_id?: string; code_layout?: string; code_template?: string; code_slot_ids?: string[]; current_code_slot?: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
 type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
 type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
-type Attempt = { id: string; unit_id: string; mode: PracticeMode; implementation?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
+type Attempt = { id: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
 type PracticeListName = "checkpoints" | "recommendations" | "attempts";
 // Two rows leave enough room for long mode/status labels inside the fixed panels.
 const PRACTICE_PAGE_SIZE = 2;
@@ -196,7 +197,7 @@ function setPracticeConnection(connected: boolean, message?: string): void {
   if (message) practiceMessage(message, !connected);
 }
 async function establishPracticeHandshake(): Promise<void> {
-  const response = await fetch(practiceApi, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: practiceRequestId++, method: "gewu/handshake", params: { protocol_min: 1, protocol_max: 1, client_name: "gewu-web", client_version: "0.1.0" } }) });
+  const response = await fetch(practiceApi, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: practiceRequestId++, method: "gewu/handshake", params: { protocol_min: 2, protocol_max: 2, client_name: "gewu-web", client_version: "0.1.0" } }) });
   if (!response.ok) throw new Error(`Core HTTP ${response.status}`);
   const payload = await response.json() as { result?: { core_version: string; protocol_version: number }; error?: { message?: string } };
   if (payload.error || !payload.result) throw new Error(payload.error?.message ?? "Core handshake failed");
@@ -240,7 +241,7 @@ function renderPracticeSession(session: PracticeSession): void {
   activePracticeSnapshot = session;
   document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
-  document.querySelector<HTMLElement>("#session-question")!.textContent = session.problem_question;
+  document.querySelector<HTMLElement>("#session-question")!.innerHTML = renderProblemStatement(session.problem_statement);
   const sessionBindings = [
     session.implementation ? `implementation ${session.implementation}` : "",
     session.practice_id ? `practice ${session.practice_id}` : "",
@@ -381,7 +382,9 @@ async function refreshPracticeData(): Promise<void> {
     ]);
     practiceUnits = units;
     const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit")!;
+    const selectedUnitId = unitSelect.value;
     unitSelect.innerHTML = units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("");
+    if (units.some((unit) => unit.id === selectedUnitId)) unitSelect.value = selectedUnitId;
     renderPracticeOptions();
     const shouldRecoverSession = practiceWasDisconnected;
     setPracticeConnection(true);
@@ -397,7 +400,7 @@ async function refreshPracticeData(): Promise<void> {
     renderPracticeLists();
     if (practiceReconnectTimer !== undefined) { window.clearTimeout(practiceReconnectTimer); practiceReconnectTimer = undefined; }
     if (shouldRecoverSession && activePracticeSession && activePracticeSnapshot?.status === "active" && !reconnectingPractice) {
-      const matching = checkpointItems.find((item) => item.unit_title === activePracticeSnapshot?.unit_title && item.mode === activePracticeSession?.mode && (!activePracticeSnapshot.practice_id || item.practice_id === activePracticeSnapshot.practice_id));
+      const matching = checkpointItems.find((item) => item.unit_id === activePracticeSnapshot?.unit_id && item.revision === activePracticeSnapshot.revision && item.mode === activePracticeSession?.mode && (!activePracticeSnapshot.practice_id || item.practice_id === activePracticeSnapshot.practice_id) && (!activePracticeSnapshot.implementation || item.implementation === activePracticeSnapshot.implementation));
       if (matching && matching.id !== activePracticeSession.session_id) {
         reconnectingPractice = true;
         try {
@@ -423,7 +426,7 @@ function renderPagedPracticeList<T>(name: PracticeListName, targetId: string, it
 function renderPracticeLists(): void {
   renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
   renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : `Due ${dueDate}`; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><time title="${dueLabel}">${dueLabel}</time><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
-  renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span></div><div class="record-footer"><time title="${created}">${created}</time><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
+  renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id} · r${item.revision}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span></div><div class="record-footer"><time title="${created}">${created}</time><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
 }
 function renderPracticeOptions(): void {
   const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")?.value;

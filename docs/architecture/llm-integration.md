@@ -73,6 +73,12 @@ same immutable artifact hash and a versioned subset of the universal algorithm
 rubric, then returns a structured verdict and findings. A model `pass` still
 requires human confirmation and never mutates lifecycle state.
 
+Rubric v2 adds the required learner-facing statement contract. Algorithm review
+checks Markdown/math safety and agreement with code and tests; learning-design
+review checks that modes and variants remain projections of the same unit
+revision rather than substituting another statement. Layout-specific clauses
+apply only to their declared Code Recall layout.
+
 `needs_revision` produces a repair handoff that another generation call may
 consume. `reject`, reviewer disagreement, source/licensing decisions, and
 changes to the algorithm contract require a human decision. Every repaired

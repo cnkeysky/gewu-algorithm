@@ -1,0 +1,58 @@
+{
+  "id": "algorithm-template-review.v2",
+  "roles": {
+    "algorithm_correctness": [
+      "ALG-CONTRACT-001",
+      "ALG-STATEMENT-001",
+      "ALG-CORRECTNESS-001",
+      "ALG-INVARIANT-001",
+      "ALG-COMPLEXITY-001",
+      "ALG-BOUNDARY-001",
+      "ALG-TESTS-001"
+    ],
+    "learning_design": [
+      "LEARN-MODE-001",
+      "LEARN-CODE-LAYOUT-001",
+      "LEARN-CONCEPT-001",
+      "LEARN-TRANSFER-001",
+      "LEARN-VARIANT-001"
+    ],
+    "provenance_safety": [
+      "SAFE-PATH-001",
+      "SAFE-EXEC-001",
+      "PROV-SOURCE-001",
+      "PROV-LIFECYCLE-001"
+    ]
+  },
+  "rules": [
+    {"id": "ALG-CONTRACT-001", "description": "Input, output, representation, and deterministic tie-breaking agree across problem statement, code, tests, and practice projections."},
+    {"id": "ALG-STATEMENT-001", "description": "problem.statement is the complete learner-facing problem, remains faithful to the author input, uses valid Markdown and supported math delimiters, contains no unsafe raw HTML or unintended solution leakage, and belongs to the same immutable unit revision as every practice projection."},
+    {"id": "ALG-CORRECTNESS-001", "description": "The implementation is correct for normal, empty, boundary, and declared failure cases."},
+    {"id": "ALG-INVARIANT-001", "description": "Reasoning prompts target a concrete invariant or mechanism rather than generic words such as invariant or algorithm."},
+    {"id": "ALG-COMPLEXITY-001", "description": "Declared time and space bounds match the implementation and assumptions."},
+    {"id": "ALG-BOUNDARY-001", "description": "Boundaries distinguish unsupported inputs, detected invalid cases, and actual runtime failures."},
+    {"id": "ALG-TESTS-001", "description": "Executable tests cover the contract and distinguish implementation variants."},
+    {"id": "LEARN-MODE-001", "description": "One AlgorithmUnit revision owns all applicable practice modes. Shadow typing, flow recall, code recall, and reasoning recall bind the exact unit problem statement; transfer practice may introduce one explicitly declared new case while preserving the reviewed pattern, differences, and boundaries."},
+    {"id": "LEARN-CODE-LAYOUT-001", "description": "Evaluate only the clause matching each projection's declared layout: comment_guided slots require non-revealing operation cues; comment_to_code requires ordered comments covering the complete algorithm flow; cloze requires meaningful decision slots; full_recall follows its declared assistance policy. Every structured source template must reconstruct its selected canonical implementation exactly."},
+    {"id": "LEARN-CONCEPT-001", "description": "Concept keys are specific enough for deterministic scoring and aliases are precise, reviewed expressions for that algorithm context; do not borrow ambiguous terms from a different algorithm family."},
+    {"id": "LEARN-TRANSFER-001", "description": "Transfer content states what transfers, what differs, and where the pattern stops applying without changing the source problem bound to the session."},
+    {"id": "LEARN-VARIANT-001", "description": "Each implementation has a stable key and explicit strategy, complexity, assumptions, test references, and practice definitions that refer back to it; variant-specific content remains bound to the same unit revision and problem statement."},
+    {"id": "SAFE-PATH-001", "description": "Generated source and test references stay inside the draft root."},
+    {"id": "SAFE-EXEC-001", "description": "Generated code is executed only in a bounded validation subprocess; template content cannot supply commands."},
+    {"id": "PROV-SOURCE-001", "description": "Publishable factual and problem-statement content has authoritative sources and compatible licensing."},
+    {"id": "PROV-LIFECYCLE-001", "description": "Model output cannot self-assign reviewed, validated, or accepted state."}
+  ],
+  "automatic_changes": [
+    "trusted generator provenance",
+    "draft lifecycle reset",
+    "pending validation reset",
+    "format-only normalization"
+  ],
+  "human_required": [
+    "algorithm, statement, or input-contract changes",
+    "learning objective changes",
+    "source and license decisions",
+    "official publication",
+    "conflicting reviewer verdicts"
+  ]
+}

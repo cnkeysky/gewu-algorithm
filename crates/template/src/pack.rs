@@ -80,7 +80,7 @@ pub fn build_manifest(
         schema_version: PACK_SCHEMA_VERSION.to_owned(),
         pack_id: pack_id.into(),
         pack_version: pack_version.into(),
-        algorithm_unit_schema: "1".to_owned(),
+        algorithm_unit_schema: "2".to_owned(),
         units,
         checksum,
     })

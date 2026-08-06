@@ -414,7 +414,7 @@ mod tests {
         let profile = ProviderProfile::recommended(ProviderKind::DeepSeek, "deepseek-v4-flash");
         let mut pipeline = DraftPipeline::new(FakeProvider::new(
             profile,
-            vec!["{\"schema_version\":\"1\"}".to_owned()],
+            vec!["{\"schema_version\":\"2\"}".to_owned()],
         ));
         let task = DraftTask {
             task_id: "algorithm-unit-draft".to_owned(),
@@ -426,7 +426,7 @@ mod tests {
         };
         let artifact = pipeline.generate(&task).expect("draft");
         assert_eq!(artifact.review, ReviewState::Pending);
-        assert_eq!(artifact.manifest["schema_version"], "1");
+        assert_eq!(artifact.manifest["schema_version"], "2");
         assert!(
             artifact
                 .persist_manifest("/tmp/gewu-stage7-pending.json")
@@ -440,7 +440,7 @@ mod tests {
             &std::fs::read_to_string("/tmp/gewu-stage7-accepted.json").expect("read"),
         )
         .expect("json");
-        assert_eq!(written["schema_version"], "1");
+        assert_eq!(written["schema_version"], "2");
         let _ = std::fs::remove_file("/tmp/gewu-stage7-accepted.json");
     }
 
@@ -448,7 +448,7 @@ mod tests {
     fn model_review_creates_a_repair_handoff_without_promoting_a_draft() {
         let report = LlmReviewReport {
             artifact_hash: "sha256:draft".to_owned(),
-            rubric_version: "algorithm-template-review.v1".to_owned(),
+            rubric_version: "algorithm-template-review.v2".to_owned(),
             role: ReviewRole::AlgorithmCorrectness,
             provider: ProviderKind::DeepSeek,
             model: "deepseek-v4-flash".to_owned(),

@@ -64,9 +64,9 @@ function run(name: string, test: () => void): void {
   }
 }
 
-run("shares the v1 handshake golden request with Rust", () => {
+run("shares the v2 handshake golden request with Rust", () => {
   const fixture = readFileSync(
-    resolve(process.cwd(), "../../fixtures/protocol/v1-handshake.ndjson"),
+    resolve(process.cwd(), "../../fixtures/protocol/v2-handshake.ndjson"),
     "utf8",
   );
   const request = JSON.parse(fixture.split("\n")[0] ?? "") as {
@@ -80,8 +80,8 @@ run("shares the v1 handshake golden request with Rust", () => {
   };
   equal(request.jsonrpc, "2.0", "golden JSON-RPC version");
   equal(request.method, "gewu/handshake", "golden handshake method");
-  equal(request.params?.protocol_min, 1, "golden minimum protocol version");
-  equal(request.params?.protocol_max, 1, "golden maximum protocol version");
+  equal(request.params?.protocol_min, 2, "golden minimum protocol version");
+  equal(request.params?.protocol_max, 2, "golden maximum protocol version");
   equal(request.params?.client_version, "0.1.0", "golden client version");
 });
 

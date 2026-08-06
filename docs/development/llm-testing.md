@@ -45,6 +45,10 @@ Repeat with `learning_design` and `provenance_safety`. A `pass` means only that
 the selected role found no issue under the current rubric; it is not publication
 approval.
 
+Current AlgorithmUnit v2 drafts use `algorithm-template-review.v2`. Confirm
+that algorithm correctness reports include `ALG-STATEMENT-001`, and reject any
+draft whose statement is summarized, mismatched, unsafe, or solution-leaking.
+
 ## DeepSeek Draft Fixture
 
 Run `npm run generate-template:local` from `tools/template-authoring/` to

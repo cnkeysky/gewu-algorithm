@@ -1,5 +1,5 @@
 {
-  "schema_version": "1",
+  "schema_version": "2",
   "id": "validation.unicode",
   "revision": 1,
   "status": "draft",
@@ -8,6 +8,7 @@
   "position": {"domain": "validation", "category": "editor-boundary", "prerequisites": []},
   "problem": {
     "question": "Do Unicode scalar offsets remain stable during typing, deletion, and resume?",
+    "statement": "Use Unicode text containing CJK characters, emoji, and decomposed combining sequences. Editing, deletion, checkpointing, and resume must use Unicode scalar offsets rather than UTF-8 byte offsets.",
     "scope": ["CJK text", "Emoji", "Decomposed combining sequences"],
     "out_of_scope": ["Unicode normalization equivalence"]
   },

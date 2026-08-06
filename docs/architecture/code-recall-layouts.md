@@ -29,7 +29,7 @@ CodeRecallDefinition
     expected
 ```
 
-Layout determines the scoring model. In schema version 1, the two comment-based
+Layout determines the scoring model. In AlgorithmUnit schema version 2, the two comment-based
 layouts require `comments` assistance so their reviewed cues and scaffold use
 the existing assistance field without a parallel content channel. Those
 comments are intrinsic fixed content and are not counted as revealed hints.
