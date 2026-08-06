@@ -49,11 +49,13 @@ its semantic agreement with implementations, tests, and every practice
 projection; a summary or solution-leaking rewrite is not acceptable.
 
 Task and rubric selection are authoring-service decisions, not required user
-inputs. The service resolves a registered task contract from the problem and
-may ask a reviewer model to identify applicable rubric rules. The model may
-only select from versioned rules already present in the registry; it cannot
-invent a rule or promote an artifact. The final review report exposes the
-selected rules and evidence for human inspection.
+inputs. The service resolves the single registered generic task for every
+problem; problem-class prompt templates are intentionally not used, and any
+per-class strictness lives in the versioned review rubric. The service may ask
+a reviewer model to identify applicable rubric rules. The model may only select
+from versioned rules already present in the registry; it cannot invent a rule
+or promote an artifact. The final review report exposes the selected rules and
+evidence for human inspection.
 
 ## Security and persistence
 

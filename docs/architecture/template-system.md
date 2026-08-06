@@ -59,6 +59,9 @@ persisted practice modes.
   shadow typing and code recall reference a variant key, while reasoning recall
   and transfer practice may declare an optional variant binding (absent means
   the unit's first implementation). Multi-variant units must cover every variant.
+- Problem-class prompt templates are not used. One algorithm-agnostic contract
+  prompt drives generation; per-class strictness, when needed, belongs to the
+  versioned review rubric rather than to generation prompts.
 - Model reviewers are read-only. They emit versioned findings and repair
   handoffs; they cannot promote or publish a draft.
 

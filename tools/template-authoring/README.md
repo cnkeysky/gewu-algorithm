@@ -146,13 +146,13 @@ Open `http://127.0.0.1:5173/`, select `Practice`, and use the unit/mode
 picker. Vite proxies `/core/rpc` to the Rust adapter; scoring, checkpoint
 recovery, attempts, and review recommendations remain Rust-owned.
 
-Generation tasks are resolved through the TypeScript task registry. Use
-`GET /api/tasks` to inspect registered task ids and versions. Each task owns
-its support predicate, prompt, output schema, and artifact validator; adding a
-new algorithm task does not require another API generation branch. The registry
-now includes the Kahn topological-sort and Binary Search tasks, both verified
-through real DeepSeek generation, deterministic validation, and a correctness
-review.
+Generation uses one algorithm-agnostic task in the TypeScript task registry.
+`GET /api/tasks` returns its id and version. The task owns the contract prompt,
+output schema, and artifact validator; every algorithm decision is inferred
+from the author's problem input, so no per-algorithm task or prompt template is
+required. The pipeline has been verified through real DeepSeek generation
+(Two Sum, Course Schedule, Binary Search, Kahn topological sort), deterministic
+validation, and correctness review.
 
 Rule proposals can be checked locally before involving a model:
 
