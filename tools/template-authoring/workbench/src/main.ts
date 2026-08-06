@@ -166,9 +166,10 @@ let shadowTargetText = "";
 let shadowLanguage = "plaintext";
 let flowPromptRevealed = false;
 let codePromptRevealed = false;
+const promptRevealedModes = new Set<PracticeMode>();
 type PracticeOption = { id: string; label: string; language: string; mode: PracticeMode; selector: "implementation" | "practice_id" };
 type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[]; practice_options: PracticeOption[] };
-type PracticeSession = { session_id: string; unit_title: string; mode: PracticeMode; language: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
+type PracticeSession = { session_id: string; unit_title: string; problem_question?: string; mode: PracticeMode; language: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
 type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
 type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
 type Attempt = { id: string; unit_id: string; mode: PracticeMode; implementation?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
@@ -207,17 +208,20 @@ function renderPracticeSession(session: PracticeSession): void {
   const isShadow = session.mode === "shadow_typing";
   const isFlow = session.mode === "flow_recall";
   const isCode = session.mode === "code_recall";
-  progress.hidden = !isFlow;
-  progress.textContent = isFlow ? `Step ${Math.min(session.completed_steps + 1, session.total_steps)} of ${session.total_steps}` : "";
+  const isReasoning = session.mode === "reasoning_recall";
+  const isTransfer = session.mode === "transfer_practice";
+  const requiresPromptReveal = isFlow || isCode || isReasoning || isTransfer;
+  const promptVisible = !requiresPromptReveal || promptRevealedModes.has(session.mode);
+  progress.hidden = !isFlow && !isReasoning && !isTransfer;
+  progress.textContent = progress.hidden ? "" : `Step ${Math.min(session.completed_steps + 1, session.total_steps)} of ${session.total_steps}`;
   completed.hidden = !isFlow;
   completed.innerHTML = isFlow && session.completed_prompts.length > 0
     ? `<strong>Completed flow</strong><ol>${session.completed_prompts.map((item) => `<li><span aria-hidden="true">&#10003;</span>${escapeHtml(item)}</li>`).join("")}</ol>`
     : "";
-  const promptVisible = isFlow ? flowPromptRevealed : isCode ? codePromptRevealed : true;
-  prompt.textContent = (isFlow || isCode) ? (promptVisible ? session.current_prompt ?? "No reviewed prompt is available." : "Prompt hidden until Reveal") : session.current_prompt ?? "";
-  prompt.classList.toggle("is-hidden", (isFlow || isCode) && !promptVisible);
-  reveal.hidden = (!isFlow && !isCode) || session.status !== "active";
-  reveal.textContent = isCode ? (codePromptRevealed ? "Hide prompt" : "Reveal prompt") : (flowPromptRevealed ? "Hide" : "Reveal");
+  prompt.textContent = requiresPromptReveal ? (promptVisible ? session.current_prompt ?? "No reviewed prompt is available." : "Prompt hidden until Reveal") : session.current_prompt ?? "";
+  prompt.classList.toggle("is-hidden", requiresPromptReveal && !promptVisible);
+  reveal.hidden = !requiresPromptReveal || session.status !== "active";
+  reveal.textContent = promptVisible ? "Hide prompt" : "Reveal prompt";
   restart.hidden = !isFlow && !isCode;
   scaffold.hidden = !isCode;
   scaffold.innerHTML = isCode ? `<div class="scaffold-heading"><span>${session.code_assistance ?? "Code assistance"}</span><button class="inline-action" type="button" id="reveal-scaffold" ${session.status !== "active" || (session.scaffold_count ?? 0) <= (session.revealed_scaffold_indices?.length ?? 0) ? "disabled" : ""}>Reveal next hint</button></div><ul>${(session.visible_scaffold ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
@@ -225,7 +229,7 @@ function renderPracticeSession(session: PracticeSession): void {
   const editorContainer = document.querySelector<HTMLElement>("#session-editor")!;
   const answer = document.querySelector<HTMLTextAreaElement>("#session-answer")!;
   const submit = document.querySelector<HTMLButtonElement>("#session-submit")!;
-  target.hidden = isShadow;
+  target.hidden = !isShadow && !isCode;
   const isCodeEditor = isShadow || isCode;
   editorContainer.hidden = !isCodeEditor;
   answer.hidden = isCodeEditor;
@@ -656,6 +660,7 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
     if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
     flowPromptRevealed = false;
     codePromptRevealed = false;
+    promptRevealedModes.clear();
     const practiceOption = document.querySelector<HTMLSelectElement>("#practice-id")!;
     const selectedOption = practiceOption.value || undefined;
     const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")!.value;
@@ -687,31 +692,25 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to start practice", true); }
 });
 document.querySelector<HTMLButtonElement>("#session-reveal")!.addEventListener("click", async () => {
-  if (!activePracticeSession || (activePracticeSession.mode !== "flow_recall" && activePracticeSession.mode !== "code_recall")) return;
-  const isCode = activePracticeSession.mode === "code_recall";
-  if (isCode && codePromptRevealed) {
-    codePromptRevealed = false;
-    if (activePracticeSnapshot) renderPracticeSession(activePracticeSnapshot);
-    return;
-  }
-  if (!isCode && flowPromptRevealed) {
-    flowPromptRevealed = false;
+  if (!activePracticeSession || activePracticeSession.mode === "shadow_typing") return;
+  if (promptRevealedModes.has(activePracticeSession.mode)) {
+    promptRevealedModes.delete(activePracticeSession.mode);
     if (activePracticeSnapshot) renderPracticeSession(activePracticeSnapshot);
     return;
   }
   try {
     const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: activePracticeSession.session_id, event: { type: "reveal_prompt" }, elapsed: { active_ms: 1000, wall_ms: 1000 } });
-    if (isCode) codePromptRevealed = true;
-    else flowPromptRevealed = true;
+    promptRevealedModes.add(activePracticeSession.mode);
     renderPracticeSession(result.session);
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to reveal prompt", true); }
 });
 document.querySelector<HTMLButtonElement>("#session-restart")!.addEventListener("click", async () => {
-  if (!activePracticeSession || (activePracticeSession.mode !== "flow_recall" && activePracticeSession.mode !== "code_recall")) return;
+  if (!activePracticeSession || activePracticeSession.mode === "shadow_typing") return;
   try {
     const result = await practiceRpc<PracticeSession>("gewu/restartSession", { session_id: activePracticeSession.session_id });
     flowPromptRevealed = false;
     codePromptRevealed = false;
+    promptRevealedModes.clear();
     renderPracticeSession(result);
     await refreshPracticeData();
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to restart practice", true); }
@@ -774,7 +773,7 @@ document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click",
     if (resume) {
       if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
       const result = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: resume.dataset.resumeCheckpoint });
-      if (result.session) { flowPromptRevealed = false; codePromptRevealed = false; activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
+      if (result.session) { flowPromptRevealed = false; codePromptRevealed = false; promptRevealedModes.clear(); activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
     }
     if (discard) await practiceRpc("gewu/discardCheckpoint", { checkpoint_id: discard.dataset.discardCheckpoint });
     await refreshPracticeData();

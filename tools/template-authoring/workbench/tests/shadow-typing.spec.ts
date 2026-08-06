@@ -119,6 +119,29 @@ test("code recall reuses the editor with explicit prompt and scaffold controls",
   await expect(page.locator("#session-meta")).toContainText("hints 1");
 });
 
+test("reasoning and transfer recall expose step context through the shared answer surface", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+
+  await page.locator("#practice-mode").selectOption("reasoning_recall");
+  await page.locator("#practice-id").selectOption("fifo-shortest-distance");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator("#session-answer")).toBeVisible();
+  await expect(page.locator("#session-target")).toBeHidden();
+  await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
+  await page.locator("#session-reveal").click();
+  await expect(page.locator("#session-prompt")).toHaveText("Why does this frontier order preserve nondecreasing edge distance?");
+
+  await page.locator("#practice-mode").selectOption("transfer_practice");
+  await page.locator("#practice-id").selectOption("rotting-oranges");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator("#session-answer")).toBeVisible();
+  await expect(page.locator("#session-progress")).toContainText("Step 1 of 1");
+  await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
+});
+
 test("practice list cards keep natural height inside equal sections", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
