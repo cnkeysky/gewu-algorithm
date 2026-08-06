@@ -1,5 +1,4 @@
-import { OUTPUT_SCHEMA, practicePropertySchema } from "./generate-template.js";
-import { validateGeneratedShape } from "./task-registry.js";
+import { OUTPUT_SCHEMA, materializeSourceTemplates, practicePropertySchema, validateGeneratedShape } from "./generate-template.js";
 import type { DraftTask, GenerationProfile, PracticeModeSelection } from "./pi-generator.js";
 
 export const EXTRA_PRACTICE_MODES = ["code_recall", "reasoning_recall", "transfer_practice"] as const;
@@ -35,89 +34,6 @@ function normalizeSlugs(values: unknown): string[] {
 
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * Derives code_recall source templates from the canonical implementation instead of trusting the
- * model's copy. Markers replace exactly the declared slot expectations, which makes the Rust
- * reconstructability check deterministic and keeps the repair loop focused on slot selection.
- */
-export function materializeSourceTemplates(manifest: Record<string, unknown>, sources: Record<string, unknown>): void {
-  const code = sources["code/python.py"];
-  if (typeof code !== "string") return;
-  const practice = isRecord(manifest.practice) ? manifest.practice : undefined;
-  const items = practice?.code_recall;
-  if (!Array.isArray(items)) return;
-  const seenItemIds = new Set<string>();
-  for (const [index, item] of items.entries()) {
-    if (!isRecord(item)) continue;
-    let itemId = typeof item.id === "string" && SLOT_MARKER.test(item.id) ? item.id : `recall-${index + 1}`;
-    while (seenItemIds.has(itemId)) itemId = `${itemId}-${index + 1}`;
-    item.id = itemId;
-    seenItemIds.add(itemId);
-    if ((item.layout === "comment_guided" || item.layout === "comment_to_code") && item.assistance !== "comments") {
-      throw new Error(`practice.code_recall[${index}] must use assistance "comments" for layout ${String(item.layout)}`);
-    }
-    if (item.assistance === "none") {
-      item.scaffold = [];
-    } else if (item.layout === "comment_guided") {
-      // Cues are the scaffold; never let a redundant model scaffold duplicate the code.
-      delete item.scaffold;
-    } else if (!Array.isArray(item.scaffold) || item.scaffold.length === 0) {
-      if (item.layout === "cloze") {
-        item.scaffold = ["Fill in each marked decision with the exact code."];
-      } else if (item.layout !== "comment_guided") {
-        throw new Error(`practice.code_recall[${index}] scaffold must contain at least one nonempty item when assistance is enabled`);
-      }
-    } else if (item.scaffold.some((entry) => typeof entry !== "string" || entry.trim() === "")) {
-      item.scaffold = item.scaffold.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
-      if (item.scaffold.length === 0) {
-        if (item.layout === "cloze") {
-          item.scaffold = ["Fill in each marked decision with the exact code."];
-        } else if (item.layout === "comment_guided") {
-          // Derived from slot cues after the slot loop below.
-        } else if (item.layout === "full_recall") {
-          item.scaffold = ["Reconstruct the implementation, guided by the visible comments."];
-        } else {
-          throw new Error(`practice.code_recall[${index}] scaffold must contain at least one nonempty item for comment_to_code`);
-        }
-      }
-    }
-    if (item.layout !== "cloze" && item.layout !== "comment_guided") {
-      delete item.source_template;
-      item.slots = [];
-      continue;
-    }
-    if (!Array.isArray(item.slots) || item.slots.length === 0) {
-      throw new Error(`practice.code_recall[${index}].slots must be nonempty for layout ${String(item.layout)}`);
-    }
-    let template = code;
-    const seenSlotIds = new Set<string>();
-    for (const [slotIndex, slot] of item.slots.entries()) {
-      if (!isRecord(slot)) throw new Error(`practice.code_recall[${index}] slot must be an object`);
-      let slotId = typeof slot.id === "string" && SLOT_MARKER.test(slot.id) ? slot.id : `slot-${slotIndex + 1}`;
-      while (seenSlotIds.has(slotId)) slotId = `${slotId}-${slotIndex + 2}`;
-      slot.id = slotId;
-      seenSlotIds.add(slotId);
-      const expected = slot.expected;
-      if (typeof expected !== "string" || expected.length === 0) {
-        throw new Error(`practice.code_recall[${index}] slot ${slotId} must declare expected code`);
-      }
-      if (item.layout === "comment_guided" && (typeof slot.cue !== "string" || slot.cue.trim() === "")) {
-        throw new Error(`practice.code_recall[${index}] slot ${slotId} must declare a nonempty cue for comment_guided`);
-      }
-      if (typeof slot.cue === "string" && slot.cue.trim() === "") delete slot.cue;
-      if (!template.includes(expected)) {
-        throw new Error(`practice.code_recall[${index}] slot ${slotId} expected code does not appear verbatim in code/python.py`);
-      }
-      template = template.replace(expected, `{{${slotId}}}`);
-    }
-    item.source_template = template;
-    if (item.layout === "comment_guided" && (!Array.isArray(item.scaffold) || item.scaffold.length === 0)) {
-      item.scaffold = item.slots.map((slot: any) => String(slot.cue ?? "").trim()).filter(Boolean);
-      if (item.scaffold.length === 0) throw new Error(`practice.code_recall[${index}] comment_guided cues must be nonempty to derive scaffold`);
-    }
-  }
 }
 
 function modePropertySchema(mode: ExtraPracticeMode): Record<string, unknown> {

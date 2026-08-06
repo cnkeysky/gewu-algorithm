@@ -2,14 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { builtinTaskRegistry, TaskRegistry } from "./task-registry.js";
 
-test("registry resolves a supported task without API-specific branching", () => {
+test("registry resolves every problem to the single generic authoring task", () => {
   const definition = builtinTaskRegistry.resolve(undefined, "Implement Kahn topological sorting.");
-  assert.equal(definition.taskId, "algorithm-unit-topological-sort-kahn");
-});
-
-test("registry resolves the independent binary-search contract", () => {
-  const definition = builtinTaskRegistry.resolve(undefined, "Build an iterative binary search.");
-  assert.equal(definition.taskId, "algorithm-unit-binary-search");
+  assert.equal(definition.taskId, "algorithm-unit-v2");
+  assert.equal(builtinTaskRegistry.resolve(undefined, "Build an iterative binary search.").taskId, "algorithm-unit-v2");
   const task = definition.buildTask("Build an iterative binary search.", {
     practice_modes: ["shadow_typing"],
     code_recall_assistance: [],
@@ -17,11 +13,13 @@ test("registry resolves the independent binary-search contract", () => {
     implementation_languages: ["python"],
     implementation_variants: 1,
   });
-  assert.match(task.instruction, /sorted ascending list/);
+  assert.doesNotMatch(task.instruction, /binary_search\(|sorted ascending|Kahn|topological_order/i);
+  assert.match(task.instruction, /infer .* from the problem/i);
+  assert.match(task.instruction, /Algorithm problem:/);
   assert.equal(task.taskVersion, "1");
 });
 
-test("registry falls back to the general contract for a new category", () => {
+test("registry rejects duplicate task ids and supports any problem", () => {
   assert.equal(builtinTaskRegistry.resolve(undefined, "Implement a red-black tree.").taskId, "algorithm-unit-v2");
   assert.throws(() => new TaskRegistry([{
     taskId: "duplicate", label: "one", taskVersion: "1", supports: () => true,

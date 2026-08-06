@@ -5,39 +5,12 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationProfile } from "./pi-generator.js";
 
-const FIXED_INPUT = `Create a GEWU AlgorithmUnit for Kahn's topological sorting algorithm.
-The learning target is a directed graph represented as graph: list[list[int]], where vertex IDs
-are exactly 0 through len(graph) - 1 and graph[u] lists u's outgoing neighbors. The implementation
-must expose Python function topological_order(graph: list[list[int]]) -> list[int]. It returns the
-FIFO-deterministic topological ordering, or an empty list when the graph contains a cycle. Do not
-use a dictionary adjacency representation or arbitrary vertex labels. Use a FIFO queue for
-zero-indegree vertices and preserve the order in which vertices become ready. This is a new
-algorithm task; do not copy BFS or binary-search content from any repository fixture.`;
-
-const REQUIRED_PRACTICE_SHAPE = `The manifest.practice field is an OBJECT, never an array. It must use this exact nesting:
-"practice": {
-  "shadow_typing": [{"implementation": "python-teaching", "strict": true}],
-  "flow_recall": {"steps": [{"id": "a-lowercase-slug", "prompt": "nonempty", "concepts": ["lowercase-slug"], "aliases": ["optional nonempty text"]}]},
-  "code_recall": [
-    {"id": "comments-recall", "implementation": "python-teaching", "layout": "full_recall", "assistance": "comments", "prompt": "nonempty", "scaffold": ["nonempty comment"]},
-    {"id": "no-hints-recall", "implementation": "python-teaching", "layout": "full_recall", "assistance": "none", "prompt": "nonempty", "scaffold": []}
-  ],
-  "reasoning_recall": [{"id": "reasoning-slug", "aspect": "invariant", "prompt": "nonempty", "concepts": ["lowercase-slug"], "aliases": ["optional nonempty text"]}],
-  "transfer_practice": [{"id": "transfer-slug", "pattern": "a-declared-pattern-id", "new_case": "nonempty", "prompt": "nonempty", "concepts": ["lowercase-slug"], "transfers": ["nonempty"], "differences": ["nonempty"], "boundaries": ["nonempty"]}]
-}`;
-
-const REQUIRED_MANIFEST_FIELDS = `Every object must contain only the named fields below; do not invent fields such as "order", "type" on a practice item, or "description".
-"position": {"domain": "lowercase-slug", "category": "lowercase-slug", "prerequisites": ["dotted.lowercase-id"]}
-"problem": {"question": "nonempty", "statement": "Markdown problem statement with any formulas preserved", "scope": ["nonempty"], "out_of_scope": ["nonempty"]}
-"understanding": {"summary": "nonempty", "confidence": "low|medium|high", "alternatives": ["nonempty"], "failure_conditions": ["nonempty"]}
-"implementations": [{"key": "python-teaching", "language": "python", "source": "code/python.py", "purpose": "teaching", "strategy": "kahn-fifo-frontier", "complexity": {"time": "O(V + E)", "space": "O(V)"}, "assumptions": ["vertices are numbered 0 through n-1"], "test_references": ["tests/python_test.py"], "normalization": {"line_endings": "lf", "trailing_newline": true, "whitespace": "strict"}}]
-"patterns": [{"id": "lowercase-slug", "summary": "nonempty", "applicability": ["nonempty"], "boundaries": ["nonempty"]}]
-"relationships": [{"target": "dotted.lowercase-id", "type": "contrasts_with", "reason": "nonempty", "boundary": "nonempty"}]
-"validation": {"schema": "pending", "code": "pending", "content_review": "pending", "transfer_review": "pending", "last_validated_at": null}
-"provenance": {"authors": ["nonempty"], "generated_by": {"provider": "deepseek", "model": "deepseek-v4-flash", "task_version": "3", "generated_at": "ISO-8601"}, "reviewed_by": [], "sources": [], "license": "MIT"}
-"supersedes": []`;
-
-const STATEMENT_REQUIREMENT = `problem.statement is required and contains the complete learner-facing problem statement in Markdown, not a summary. Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters. Do not use raw HTML, scripts, answer keys, or implementation details that reveal the solution.`;
+/**
+ * Algorithm-agnostic generation instruction. It constrains only the GEWU
+ * contract shape; every algorithm decision (domain, strategy, signatures,
+ * complexity, patterns, projections) must be inferred from the author's input.
+ */
+export const GENERIC_INSTRUCTION = `Create a GEWU AlgorithmUnit for the following algorithm problem. Infer its domain, category, prerequisites, implementation strategies, complexity, assumptions, tests, patterns, relationships, and all selected practice projections from the problem itself; never assume a fixed algorithm, data structure, function signature, or naming beyond the requested implementation language. The problem.statement field is required and must contain the complete learner-facing problem statement in Markdown, not a summary. Preserve formulas with $...$, $$...$$, \\(...\\), or \\[...\\] delimiters; do not use raw HTML, scripts, answer keys, or solution-leaking implementation details. The manifest id must be a dotted lowercase identifier with at least one dot, such as array.two-sum; never use a bare hyphenated id. Every code_recall item must declare one requested layout. full_recall reconstructs the complete canonical implementation. cloze and comment_guided use reviewed structured slots; comment_to_code presents ordered algorithm comments while the learner reconstructs the complete implementation. Keep layout separate from optional assistance. Every code recall item must declare a nonempty scaffold when assistance is not "none", and an empty scaffold when assistance is "none". Every provenance source must declare role one of "primary", "synthesis", or "lead". Preserve the exact contract fields and pending lifecycle claims. Return only the structured artifact requested by the schema; do not invent unknown fields. Implementation keys and language identifiers must be lowercase slugs: lowercase ASCII letters and digits separated by single hyphens, with no leading, trailing, or repeated hyphens, for example python-teaching and python. Every implementation reference inside practice.shadow_typing and practice.code_recall must exactly equal one implementations[].key. Use exactly code/python.py as the implementation source and tests/python_test.py in test_references, and return both files in sources. Each implementation normalization must use line_endings "lf" and whitespace "strict". tests/python_test.py must load the implementation with importlib.util.spec_from_file_location from the unit root; never use "from code.python import ..." because the Python standard library "code" module shadows the local package. When the requested implementation variant count is greater than one, generate exactly that many distinct implementation variants with their own lowercase-slug keys and strategies, and bind every practice projection to a declared variant.`;
 
 export const OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
@@ -171,150 +144,179 @@ export function practicePropertySchema(): Record<string, unknown> {
   return practice;
 }
 
-type GeneratedTemplate = {
-  readonly manifest: Record<string, unknown>;
-  readonly sources: Record<string, unknown>;
-};
-
-export const task: DraftTask = {
-  taskId: "algorithm-unit-topological-sort-kahn",
-  taskVersion: "3",
-  selectedInputHash: `sha256:${createHash("sha256").update(FIXED_INPUT).digest("hex")}`,
-  instruction: `${FIXED_INPUT}
-
-Return exactly one JSON object with this shape:
-{
-  "manifest": <complete AlgorithmUnit manifest>,
-  "sources": {"code/python.py": <complete Python source string>, "tests/python_test.py": <complete pytest source string>}
-}
-
-The manifest must be schema_version "2", status "draft", and use only these enum values:
-confidence low|medium|high; relationship type depends_on|influences|analogous_to|contrasts_with|composes_with|generalizes|specializes|supersedes;
-code recall layout full_recall|comment_guided|comment_to_code|cloze; code recall assistance skeleton|comments|keywords|cloze|none; reasoning aspect mechanism|invariant|trade_off|boundary|failure_condition;
-validation checks pending. Use a single implementation with key "python-teaching", language "python",
-source "code/python.py", purpose "teaching", strategy/complexity/assumptions metadata,
-test reference "tests/python_test.py", and strict LF/strict-whitespace normalization.
-Include shadow typing, at least three flow recall steps, one comments-assisted code recall, one no-hints
-code recall, one reasoning recall, one declared pattern and one transfer practice referencing that pattern.
-Set provenance.generated_by to provider/model/task_version/generated_at and leave review checks pending.
-Do not include markdown fences, explanatory prose, or unknown fields. All IDs and tags must be lowercase slugs;
-the unit id must be a dotted lowercase id such as "graph.topological-sort".
-
-${REQUIRED_PRACTICE_SHAPE}
-
-${REQUIRED_MANIFEST_FIELDS}
-
-${STATEMENT_REQUIREMENT}`,
-  outputSchema: OUTPUT_SCHEMA,
-  profile: {
-    practice_modes: ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"],
-    code_recall_assistance: ["comments", "none"],
-    code_recall_layouts: ["full_recall"],
-    implementation_languages: ["python"],
-    implementation_variants: 1,
-  } satisfies GenerationProfile,
-};
-
-export function assertGeneratedTemplate(value: unknown): asserts value is GeneratedTemplate {
-  if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) {
-    throw new Error("draft must contain manifest and sources objects");
-  }
-  const manifest = value.manifest;
-  const required = [
-    "schema_version", "id", "revision", "status", "title", "tags", "position", "problem",
-    "understanding", "implementations", "patterns", "relationships", "practice", "validation",
-    "provenance", "supersedes",
-  ];
-  for (const key of required) {
-    if (!(key in manifest)) throw new Error(`manifest is missing required field ${key}`);
-  }
-  if (manifest.schema_version !== "2" || manifest.status !== "draft") {
-    throw new Error("manifest must remain schema version 1 and draft status");
-  }
-  if (typeof manifest.id !== "string" || !/^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(manifest.id)) {
-    throw new Error("manifest.id must be a dotted lowercase identifier");
-  }
-  if (!Array.isArray(manifest.implementations) || manifest.implementations.length === 0) {
-    throw new Error("manifest must declare at least one implementation");
-  }
-  if (manifest.implementations.length !== 1) {
-    throw new Error("this fixed task must declare exactly one implementation");
-  }
-  if (!isRecord(manifest.problem) || typeof manifest.problem.statement !== "string" || manifest.problem.statement.trim().length < 20) {
-    throw new Error("manifest.problem.statement must contain the complete Markdown problem statement");
-  }
-  const expectedImplementation = manifest.implementations[0];
-  if (!isRecord(expectedImplementation)
-    || expectedImplementation.key !== "python-teaching"
-    || expectedImplementation.language !== "python"
-    || expectedImplementation.source !== "code/python.py"
-    || expectedImplementation.purpose !== "teaching"
-    || typeof expectedImplementation.strategy !== "string"
-    || !isRecord(expectedImplementation.complexity)
-    || !Array.isArray(expectedImplementation.assumptions)
-    || !Array.isArray(expectedImplementation.test_references)
-    || !expectedImplementation.test_references.includes("tests/python_test.py")) {
-    throw new Error("this fixed task must use the declared Python teaching implementation");
-  }
-  const sourcePaths = new Set<string>();
-  for (const [source, content] of Object.entries(value.sources)) {
-    if (!source || source.includes("\\") || source.startsWith("/") || source.split("/").includes("..")) {
-      throw new Error(`source path is not portable or contained: ${source}`);
-    }
-    if (typeof content !== "string" || content.trim().length === 0) {
-      throw new Error(`source content is empty: ${source}`);
-    }
-    sourcePaths.add(source);
-  }
-  for (const implementation of manifest.implementations) {
-    if (!isRecord(implementation) || typeof implementation.source !== "string") {
-      throw new Error("each implementation must declare a source path");
-    }
-    if (!sourcePaths.has(implementation.source)) {
-      throw new Error(`implementation source is not returned: ${implementation.source}`);
-    }
-    if (Array.isArray(implementation.test_references)) {
-      for (const reference of implementation.test_references) {
-        if (typeof reference !== "string" || !sourcePaths.has(reference))
-          throw new Error(`implementation test reference is not returned: ${String(reference)}`);
-      }
-    }
-  }
-  const practice = manifest.practice;
-  if (!isRecord(practice) || !Array.isArray(practice.shadow_typing) || practice.shadow_typing.length === 0) {
-    throw new Error("manifest must declare shadow typing practice");
-  }
-  if (!isRecord(manifest.validation)
-    || manifest.validation.schema !== "pending"
-    || manifest.validation.code !== "pending"
-    || manifest.validation.content_review !== "pending"
-    || manifest.validation.transfer_review !== "pending") {
-    throw new Error("generated drafts must leave every validation check pending");
-  }
-  if (!isRecord(manifest.provenance)) {
-    throw new Error("generated drafts must include a provenance object");
-  }
-}
-
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function runChecked(command: string, args: string[], cwd: string): void {
-  const result = spawnSync(command, args, { cwd, encoding: "utf8" });
-  if (result.status !== 0) {
-    throw new Error(`${command} validation failed:\n${result.stderr || result.stdout}`);
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const IMPLEMENTATION_PURPOSES = new Set(["teaching", "concise", "iterative", "recursive", "optimized"]);
+
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function assertSlug(value: unknown, path: string): asserts value is string {
+  if (typeof value !== "string" || !SLUG.test(value)) throw new Error(`${path} must be a lowercase slug`);
+}
+
+/**
+ * Pre-flights the Rust contract rules that LLM output most often violates, so the
+ * generator can repair before writing. Algorithm-agnostic: it validates shape
+ * only, never a specific algorithm's requirements.
+ */
+export function validateGeneratedShape(value: unknown): void {
+  if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("artifact must contain manifest and sources objects");
+  const manifest = value.manifest;
+  if (manifest.schema_version !== "2" || manifest.status !== "draft") throw new Error("manifest must declare schema_version 2 and draft status");
+  if (typeof manifest.id !== "string" || !/^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(manifest.id)) throw new Error("manifest.id must be a dotted lowercase identifier");
+  if (!isRecord(manifest.problem) || typeof manifest.problem.statement !== "string" || manifest.problem.statement.trim().length < 20) {
+    throw new Error("problem.statement is required and must contain the complete learner-facing Markdown problem statement");
+  }
+  if (!Array.isArray(manifest.implementations) || manifest.implementations.length === 0) throw new Error("at least one implementation is required");
+  const keys = new Set<string>();
+  for (const [index, implementation] of manifest.implementations.entries()) {
+    if (!isRecord(implementation)) throw new Error(`implementations[${index}] must be an object`);
+    assertSlug(implementation.key, `implementations[${index}].key`);
+    assertSlug(implementation.language, `implementations[${index}].language`);
+    if (typeof implementation.purpose !== "string" || !IMPLEMENTATION_PURPOSES.has(implementation.purpose)) {
+      throw new Error(`implementations[${index}].purpose must be one of teaching, concise, iterative, recursive, optimized`);
+    }
+    if (implementation.source !== "code/python.py") throw new Error("implementation source must be code/python.py");
+    if (!Array.isArray(implementation.test_references) || !implementation.test_references.includes("tests/python_test.py")) {
+      throw new Error("implementation test_references must include tests/python_test.py");
+    }
+    if (!isRecord(implementation.normalization) || implementation.normalization.line_endings !== "lf" || implementation.normalization.whitespace !== "strict") {
+      throw new Error(`implementations[${index}].normalization must use line_endings "lf" and whitespace "strict"`);
+    }
+    if (keys.has(implementation.key)) throw new Error(`implementations[${index}].key duplicates ${implementation.key}`);
+    keys.add(implementation.key);
+  }
+  const practice = isRecord(manifest.practice) ? manifest.practice : {};
+  for (const field of ["shadow_typing", "code_recall"]) {
+    const items = practice[field];
+    if (!Array.isArray(items)) continue;
+    for (const [index, item] of items.entries()) {
+      if (!isRecord(item)) throw new Error(`practice.${field}[${index}] must be an object`);
+      assertSlug(item.implementation, `practice.${field}[${index}].implementation`);
+      if (!keys.has(item.implementation)) throw new Error(`practice.${field}[${index}].implementation must exactly match an implementations[].key`);
+    }
+  }
+  if (isRecord(practice.flow_recall) && Array.isArray(practice.flow_recall.steps)) {
+    const flowIds = new Set<string>();
+    for (const [index, step] of practice.flow_recall.steps.entries()) {
+      if (!isRecord(step) || typeof step.id !== "string" || !SLUG.test(step.id)) throw new Error(`practice.flow_recall.steps[${index}].id must be a lowercase slug`);
+      if (flowIds.has(step.id)) throw new Error(`practice.flow_recall.steps[${index}].id duplicates ${step.id}`);
+      flowIds.add(step.id);
+      if (typeof step.prompt !== "string" || step.prompt.trim() === "") throw new Error(`practice.flow_recall.steps[${index}].prompt must be nonempty`);
+      step.concepts = Array.isArray(step.concepts)
+        ? step.concepts.map((concept) => typeof concept === "string" ? slugify(concept) : "").filter((concept) => concept !== "")
+        : [];
+      if (step.concepts.length === 0) throw new Error(`practice.flow_recall.steps[${index}].concepts must be nonempty lowercase slugs`);
+    }
+  }
+  for (const [index, item] of (Array.isArray(practice.reasoning_recall) ? practice.reasoning_recall : []).entries()) {
+    if (!isRecord(item)) throw new Error(`practice.reasoning_recall[${index}] must be an object`);
+    assertSlug(item.id, `practice.reasoning_recall[${index}].id`);
+    if (typeof item.aspect !== "string" || !["mechanism", "invariant", "trade_off", "boundary", "failure_condition"].includes(item.aspect)) {
+      throw new Error(`practice.reasoning_recall[${index}].aspect is not supported`);
+    }
+    if (typeof item.prompt !== "string" || item.prompt.trim() === "") throw new Error(`practice.reasoning_recall[${index}].prompt must be nonempty`);
+    item.concepts = Array.isArray(item.concepts)
+      ? item.concepts.map((concept) => typeof concept === "string" ? slugify(concept) : "").filter((concept) => concept !== "")
+      : [];
+    if (item.concepts.length === 0) throw new Error(`practice.reasoning_recall[${index}].concepts must be nonempty lowercase slugs`);
+  }
+  for (const required of ["code/python.py", "tests/python_test.py"]) {
+    if (typeof value.sources[required] !== "string" || (value.sources[required] as string).trim() === "") {
+      throw new Error(`source is missing or empty: ${required}`);
+    }
   }
 }
 
-const KAHN_SEMANTIC_CHECK = `import importlib.util, pathlib, sys
-path = pathlib.Path(sys.argv[1])
-spec = importlib.util.spec_from_file_location("generated_topological_sort", path)
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
-assert module.topological_order([[1, 2], [3], [3], []]) == [0, 1, 2, 3]
-assert module.topological_order([[1], [2], [0]]) == []
-assert module.topological_order([]) == []`;
+const SLOT_MARKER = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Derives code_recall source templates from the canonical implementation instead of trusting the
+ * model's copy. Markers replace exactly the declared slot expectations, which makes the Rust
+ * reconstructability check deterministic and keeps the repair loop focused on slot selection.
+ */
+export function materializeSourceTemplates(manifest: Record<string, unknown>, sources: Record<string, unknown>): void {
+  const code = sources["code/python.py"];
+  if (typeof code !== "string") return;
+  const practice = isRecord(manifest.practice) ? manifest.practice : undefined;
+  const items = practice?.code_recall;
+  if (!Array.isArray(items)) return;
+  const seenItemIds = new Set<string>();
+  for (const [index, item] of items.entries()) {
+    if (!isRecord(item)) continue;
+    let itemId = typeof item.id === "string" && SLOT_MARKER.test(item.id) ? item.id : `recall-${index + 1}`;
+    while (seenItemIds.has(itemId)) itemId = `${itemId}-${index + 1}`;
+    item.id = itemId;
+    seenItemIds.add(itemId);
+    if ((item.layout === "comment_guided" || item.layout === "comment_to_code") && item.assistance !== "comments") {
+      throw new Error(`practice.code_recall[${index}] must use assistance "comments" for layout ${String(item.layout)}`);
+    }
+    if (item.assistance === "none") {
+      item.scaffold = [];
+    } else if (item.layout === "comment_guided") {
+      // Cues are the scaffold; never let a redundant model scaffold duplicate the code.
+      delete item.scaffold;
+    } else if (!Array.isArray(item.scaffold) || item.scaffold.length === 0) {
+      if (item.layout === "cloze") {
+        item.scaffold = ["Fill in each marked decision with the exact code."];
+      } else if (item.layout !== "comment_guided") {
+        throw new Error(`practice.code_recall[${index}] scaffold must contain at least one nonempty item when assistance is enabled`);
+      }
+    } else if (item.scaffold.some((entry) => typeof entry !== "string" || entry.trim() === "")) {
+      item.scaffold = item.scaffold.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
+      if (item.scaffold.length === 0) {
+        if (item.layout === "cloze") {
+          item.scaffold = ["Fill in each marked decision with the exact code."];
+        } else if (item.layout === "comment_guided") {
+          // Derived from slot cues after the slot loop below.
+        } else if (item.layout === "full_recall") {
+          item.scaffold = ["Reconstruct the implementation, guided by the visible comments."];
+        } else {
+          throw new Error(`practice.code_recall[${index}] scaffold must contain at least one nonempty item for comment_to_code`);
+        }
+      }
+    }
+    if (item.layout !== "cloze" && item.layout !== "comment_guided") {
+      delete item.source_template;
+      item.slots = [];
+      continue;
+    }
+    if (!Array.isArray(item.slots) || item.slots.length === 0) {
+      throw new Error(`practice.code_recall[${index}].slots must be nonempty for layout ${String(item.layout)}`);
+    }
+    let template = code;
+    const seenSlotIds = new Set<string>();
+    for (const [slotIndex, slot] of item.slots.entries()) {
+      if (!isRecord(slot)) throw new Error(`practice.code_recall[${index}] slot must be an object`);
+      let slotId = typeof slot.id === "string" && SLOT_MARKER.test(slot.id) ? slot.id : `slot-${slotIndex + 1}`;
+      while (seenSlotIds.has(slotId)) slotId = `${slotId}-${slotIndex + 2}`;
+      slot.id = slotId;
+      seenSlotIds.add(slotId);
+      const expected = slot.expected;
+      if (typeof expected !== "string" || expected.length === 0) {
+        throw new Error(`practice.code_recall[${index}] slot ${slotId} must declare expected code`);
+      }
+      if (item.layout === "comment_guided" && (typeof slot.cue !== "string" || slot.cue.trim() === "")) {
+        throw new Error(`practice.code_recall[${index}] slot ${slotId} must declare a nonempty cue for comment_guided`);
+      }
+      if (typeof slot.cue === "string" && slot.cue.trim() === "") delete slot.cue;
+      if (!template.includes(expected)) {
+        throw new Error(`practice.code_recall[${index}] slot ${slotId} expected code does not appear verbatim in code/python.py`);
+      }
+      template = template.replace(expected, `{{${slotId}}}`);
+    }
+    item.source_template = template;
+    if (item.layout === "comment_guided" && (!Array.isArray(item.scaffold) || item.scaffold.length === 0)) {
+      item.scaffold = item.slots.map((slot: any) => String(slot.cue ?? "").trim()).filter(Boolean);
+      if (item.scaffold.length === 0) throw new Error(`practice.code_recall[${index}] comment_guided cues must be nonempty to derive scaffold`);
+    }
+  }
+}
 
 export function applyTrustedProvenance(
   manifest: Record<string, unknown>,
@@ -352,8 +354,36 @@ export function applyTrustedDraftState(manifest: Record<string, unknown>): Recor
   };
 }
 
-export async function generateTemplateDraft(): Promise<void> {
+function runChecked(command: string, args: string[], cwd: string): void {
+  const result = spawnSync(command, args, { cwd, encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error(`${command} validation failed:\n${result.stderr || result.stdout}`);
+  }
+}
+
+export async function generateTemplateDraft(problem: string): Promise<void> {
   const generator = new PiGenerator(optionsFromEnvironment());
+  const profile: GenerationProfile = {
+    practice_modes: ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"],
+    code_recall_assistance: ["comments", "cloze"],
+    code_recall_layouts: ["full_recall", "comment_guided", "comment_to_code", "cloze"],
+    implementation_languages: ["python"],
+    implementation_variants: 1,
+  };
+  const task: DraftTask = {
+    taskId: "algorithm-unit-v2",
+    taskVersion: "1",
+    selectedInputHash: `sha256:${createHash("sha256").update(problem).digest("hex")}`,
+    instruction: `${GENERIC_INSTRUCTION}\n\nAlgorithm problem:\n${problem}`,
+    outputSchema: OUTPUT_SCHEMA,
+    profile,
+    validate: (parsed: unknown) => {
+      validateGeneratedShape(parsed);
+      if (isRecord(parsed) && isRecord(parsed.manifest) && isRecord(parsed.sources)) {
+        materializeSourceTemplates(parsed.manifest, parsed.sources);
+      }
+    },
+  };
   const artifact = await generator.generate(task);
   if (!isRecord(artifact.manifest.manifest)) {
     throw new Error("draft manifest must be an object");
@@ -366,14 +396,15 @@ export async function generateTemplateDraft(): Promise<void> {
     artifact.taskVersion,
     generatedAt,
   );
-  const trustedDraft = { ...artifact.manifest, manifest: trustedManifest };
-  assertGeneratedTemplate(trustedDraft);
+  if (!isRecord(artifact.manifest.sources)) throw new Error("draft sources must be an object");
+  const trustedDraft = { ...artifact.manifest, manifest: trustedManifest } as { manifest: Record<string, unknown>; sources: Record<string, unknown> };
+  materializeSourceTemplates(trustedManifest, trustedDraft.sources);
 
   const here = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(here, "../..", "..");
   const draftsRoot = resolve(here, "../drafts");
   const suffix = generatedAt.replaceAll(/[-:.TZ]/g, "");
-  const finalRoot = join(draftsRoot, `topological-sort-kahn-r1-${suffix}`);
+  const finalRoot = join(draftsRoot, `generated-${suffix}`);
   const stagingRoot = join(draftsRoot, `.staging-${randomUUID()}`);
   await mkdir(stagingRoot, { recursive: true });
   try {
@@ -404,7 +435,6 @@ export async function generateTemplateDraft(): Promise<void> {
 
     const sourcePath = join(stagingRoot, "code/python.py");
     runChecked("python3", ["-c", "import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], 'exec')", sourcePath], repoRoot);
-    runChecked("python3", ["-c", KAHN_SEMANTIC_CHECK, sourcePath], repoRoot);
     runChecked(
       "cargo",
       ["run", "--quiet", "--manifest-path", join(repoRoot, "Cargo.toml"), "-p", "gewu-template", "--bin", "validate", "--", manifestPath],
@@ -431,7 +461,8 @@ export async function generateTemplateDraft(): Promise<void> {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  generateTemplateDraft().catch((error: unknown) => {
+  const problem = process.argv[2] ?? "Given a weighted directed graph and a source vertex, return the shortest distances to every reachable vertex using a single-source shortest path algorithm.";
+  generateTemplateDraft(problem).catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   });

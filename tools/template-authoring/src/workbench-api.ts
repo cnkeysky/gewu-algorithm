@@ -10,13 +10,12 @@ import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { PiGenerator, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
 import { reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
-import { applyTrustedDraftState, applyTrustedProvenance } from "./generate-template.js";
+import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
 import {
   STAGE_SPECS,
   assertVariantCoverage,
   buildStageTask,
   coreStageInstruction,
-  materializeSourceTemplates,
   mergeStage,
   stageContextFromCore,
   validateCoreStage,

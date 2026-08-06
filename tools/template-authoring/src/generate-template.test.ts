@@ -3,8 +3,7 @@ import test from "node:test";
 import {
   applyTrustedDraftState,
   applyTrustedProvenance,
-  assertGeneratedTemplate,
-  task,
+  GENERIC_INSTRUCTION,
 } from "./generate-template.js";
 import { validateGenerationProfile } from "./pi-generator.js";
 
@@ -49,12 +48,12 @@ function validDraft(): Record<string, unknown> {
   };
 }
 
-test("fixed task uses a stable selected-input hash and a non-fixture algorithm", () => {
-  assert.match(task.selectedInputHash, /^sha256:[0-9a-f]{64}$/);
-  assert.match(task.instruction, /Kahn's topological sorting/);
-  assert.match(task.instruction, /list\[list\[int\]\]/);
-  assert.doesNotMatch(task.instruction, /Breadth-First Search/);
-  assert.doesNotThrow(() => validateGenerationProfile(task.profile!));
+test("generic instruction is algorithm-agnostic", () => {
+  assert.doesNotMatch(GENERIC_INSTRUCTION, /Kahn|binary search|topological_order|breadth-?first|shortest path|sorting algorithm/i);
+  assert.match(GENERIC_INSTRUCTION, /infer .* from the problem/i);
+  assert.match(GENERIC_INSTRUCTION, /lowercase slugs/);
+  assert.match(GENERIC_INSTRUCTION, /code\/python\.py/);
+  assert.match(GENERIC_INSTRUCTION, /importlib\.util\.spec_from_file_location/);
 });
 
 test("generation profile rejects assistance without code recall", () => {
@@ -65,24 +64,6 @@ test("generation profile rejects assistance without code recall", () => {
     implementation_languages: ["python"],
     implementation_variants: 1,
   }), /code recall assistance/);
-});
-
-test("local validator accepts a contained pending draft", () => {
-  assert.doesNotThrow(() => assertGeneratedTemplate(validDraft()));
-});
-
-test("local validator rejects a source path that traverses outside the draft", () => {
-  const draft = validDraft();
-  const sources = draft.sources as Record<string, unknown>;
-  sources["../outside.py"] = "print('unsafe')";
-  assert.throws(() => assertGeneratedTemplate(draft), /not portable or contained/);
-});
-
-test("local validator rejects the legacy generic practice array shape", () => {
-  const draft = validDraft();
-  const manifest = draft.manifest as Record<string, unknown>;
-  manifest.practice = [];
-  assert.throws(() => assertGeneratedTemplate(draft), /shadow typing practice/);
 });
 
 test("adapter overwrites model supplied provenance", () => {

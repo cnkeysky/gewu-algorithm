@@ -59,13 +59,13 @@ authoring workbench is documented in
 
 ## End-to-end draft generation
 
-The fixed DeepSeek integration task generates a new Kahn topological-sort unit.
-It is deliberately different from the checked-in BFS and binary-search fixtures.
-It writes only to a timestamped ignored `drafts/topological-sort-kahn-r1-*/`
-directory and always remains `pending` for human review.
+The DeepSeek integration task generates a new algorithm unit from the problem
+text you supply, using one algorithm-agnostic generation prompt. It writes only
+to a timestamped ignored `drafts/generated-*/` directory and always remains
+`pending` for human review.
 
 ```sh
-npm run generate-template:local
+npm run generate-template:local -- "Given an array of integers, return the indices of the two numbers that add up to a target."
 ```
 
 The command requires the ignored `.env.local` file to contain `DEEPSEEK_API_KEY`.

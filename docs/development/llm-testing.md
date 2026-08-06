@@ -51,19 +51,20 @@ draft whose statement is summarized, mismatched, unsafe, or solution-leaking.
 
 ## DeepSeek Draft Fixture
 
-Run `npm run generate-template:local` from `tools/template-authoring/` to
-exercise Layers 2 through 4 for a fixed Kahn topological-sort task. The command
-uses `deepseek/deepseek-v4-flash`, writes only to the ignored
-`tools/template-authoring/drafts/topological-sort-kahn-r1-*/` directory, and
-leaves the manifest lifecycle state and all validation fields as `pending`.
+Run `npm run generate-template:local -- "problem statement"` from
+`tools/template-authoring/` to exercise Layers 2 through 4 with an
+algorithm-agnostic generation prompt. The prompt constrains only the GEWU
+contract shape; every algorithm decision is inferred from the provided problem
+text. The command uses `deepseek/deepseek-v4-flash`, writes only to the ignored
+`tools/template-authoring/drafts/generated-*/` directory, and leaves the
+manifest lifecycle state and all validation fields as `pending`.
 
 The command performs a local response-shape and source-containment check,
-compiles the generated Python source in memory, verifies a deterministic DAG,
-a cycle, and an empty graph, and invokes:
+compiles the generated Python source in memory, and invokes:
 
 ```sh
 cargo run --quiet -p gewu-template --bin validate -- \
-  tools/template-authoring/drafts/topological-sort-kahn-r1/unit.json
+  tools/template-authoring/drafts/generated-*/unit.json
 ```
 
 The final human review must examine the generated manifest and source before
