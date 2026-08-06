@@ -193,6 +193,7 @@ export function mountShadowEditor(
       // line/column. Only restoration or an external state change needs a
       // deterministic cursor position.
       if (replaceModel) editor.setPosition(model.getPositionAt(value.length));
+      else if (responseMatchesInFlight && model.getValue() === value) editor.setPosition(model.getPositionAt(value.length));
       syncing = false;
       if (!readOnlyNext && model.getValue() !== value && !responseMatchesInFlight) enqueue();
     },

@@ -130,6 +130,24 @@ fn insertion_rejects_a_mismatch_atomically_then_completes() {
 }
 
 #[test]
+fn accepts_enter_after_the_bfs_import_line() {
+    let mut session = started("from collections import deque\n\n\nimport deque");
+    assert_eq!(
+        session.apply(timed(
+            ShadowTypingEvent::InsertText("from collections import deque".to_owned()),
+            1,
+            1,
+        )),
+        Ok(TransitionOutcome::Accepted)
+    );
+    assert_eq!(
+        session.apply(timed(ShadowTypingEvent::InsertText("\n".to_owned()), 2, 2)),
+        Ok(TransitionOutcome::Accepted)
+    );
+    assert_eq!(session.accepted_text(), "from collections import deque\n");
+}
+
+#[test]
 fn exact_multi_character_paste_is_one_atomic_completion() {
     let mut session = started("界🙂");
 
