@@ -103,18 +103,19 @@ pub struct ReviewDecision {
     pub choice: UserChoice,
 }
 
+/// Groups terminal attempts by their practice identity.
+type AttemptKey = (
+    UnitId,
+    Revision,
+    PracticeMode,
+    Option<String>,
+    Option<String>,
+);
+type AttemptGroups<'a> = BTreeMap<AttemptKey, Vec<&'a AttemptFact>>;
+
 /// Derives one stable recommendation per unit/revision/mode from terminal attempts.
 pub fn recommend(attempts: &[AttemptFact]) -> Vec<ReviewRecommendation> {
-    let mut groups: BTreeMap<
-        (
-            UnitId,
-            Revision,
-            PracticeMode,
-            Option<String>,
-            Option<String>,
-        ),
-        Vec<&AttemptFact>,
-    > = BTreeMap::new();
+    let mut groups: AttemptGroups = BTreeMap::new();
     for attempt in attempts {
         groups
             .entry((
