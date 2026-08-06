@@ -100,6 +100,7 @@ It is not initially a problem judge, a complete spaced-repetition platform, a so
 - **NFR-005 Security:** Remote text, generated content, and template files shall be treated as untrusted input.
 - **NFR-006 Compatibility:** Public schemas and client protocols shall be versioned and have documented compatibility rules.
 - **NFR-007 Maintainability:** Core domain crates shall not depend on editor APIs or concrete LLM providers.
+- **NFR-007a Cascade Integrity:** A contract change shall update or explicitly reject every dependent layer, client, persisted representation, fixture, test, and documentation reference in one reviewed change; partial local updates are not acceptable.
 - **NFR-008 Accessibility:** Required actions shall be keyboard operable, and status shall not be communicated by color alone.
 - **NFR-009 Portability:** Persistent paths and protocol messages shall not assume one operating system.
 - **NFR-010 Observability:** Logs shall use levels and structured context while redacting secrets and user content by default.

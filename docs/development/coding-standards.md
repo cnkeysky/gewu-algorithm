@@ -88,6 +88,32 @@ Any exception requires an ADR.
 - Removing, renaming, or changing semantics requires a version change, migration plan, and ADR.
 - Protocol stdout contains protocol frames only.
 
+## Cascading Change Requirement
+
+A contract change is a repository-wide change, not a change to the file where
+the new field or behavior is first noticed. Before editing, identify the
+canonical owner and enumerate every consumer and persisted representation:
+
+- domain model and invariants;
+- schema loader, pack builder, migration, and valid/invalid fixtures;
+- core use cases, every session mode, restart, checkpoint, attempt, review, and
+  recommendation path;
+- protocol DTOs, handshake version/range, golden messages, CLI host, and all
+  clients (Web, VS Code, and future adapters);
+- authoring schemas, LLM prompts, validators, review rubrics, generated drafts,
+  and publication paths;
+- persistence formats, history displays, recovery matching, and deletion keys;
+- automated tests, manual verification steps, architecture/requirements docs,
+  release notes, and examples.
+
+For each consumer, make an explicit decision: update, reject as unsupported, or
+document why it is unaffected. Do not leave a consumer relying on an old field,
+title lookup, default value, or compatibility fallback by accident. Search for
+the old identifier after implementation and review the complete diff. A
+breaking change must update its schema/protocol/rubric version, negative
+fixtures, migration or rejection behavior, and compatibility documentation in
+the same change.
+
 ## Tests with Code Changes
 
 - A bug fix includes a failing regression test before or with the fix.

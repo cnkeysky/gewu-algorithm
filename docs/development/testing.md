@@ -83,6 +83,16 @@ Generated content quality needs human review fixtures and executable checks; sna
 
 ## Quality Gates
 
+### Contract Change Cascade Check
+
+When a domain field, enum, schema, protocol message, session identity, or
+persistence record changes, the test plan must include a propagation matrix.
+At minimum, verify the value through creation, validation, core transition,
+restart, checkpoint save/resume/discard, terminal attempt, review/recommendation
+lookup, serialization, and each supported client surface. Include one test that
+proves an old or incomplete representation is rejected when compatibility is
+not supported. A test that passes only at the edited layer is insufficient.
+
 Every pull request should eventually run:
 
 ```text
