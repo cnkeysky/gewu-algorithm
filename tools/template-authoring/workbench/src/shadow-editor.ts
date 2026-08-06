@@ -5,7 +5,7 @@ export type ShadowEdit = { start: number; end: number; text: string };
 export type ShadowEditResult = { acceptedText: string };
 
 export type ShadowEditorController = {
-  update: (acceptedText: string, targetText: string, language: string, readOnly: boolean, force?: boolean, resetActivation?: boolean) => void;
+  update: (acceptedText: string, targetText: string, language: string, readOnly: boolean, showGuidance: boolean, force?: boolean, resetActivation?: boolean) => void;
   flush: () => Promise<void>;
   focus: () => void;
   dispose: () => void;
@@ -17,6 +17,7 @@ export function mountShadowEditor(
   targetText: string,
   language: string,
   readOnly: boolean,
+  showGuidance: boolean,
   onEdit: (edit: ShadowEdit) => Promise<ShadowEditResult>,
 ): ShadowEditorController {
   const languageId = language.toLowerCase() === "python" ? "python" : "plaintext";
@@ -86,6 +87,7 @@ export function mountShadowEditor(
   let generation = 0;
   let localText = acceptedText;
   let confirmedText = acceptedText;
+  let guidanceEnabled = showGuidance;
   let activated = false;
   const pending: PendingTransaction[] = [];
   let inFlight: PendingTransaction | undefined;
@@ -102,6 +104,7 @@ export function mountShadowEditor(
   };
   editor.addContentWidget(guidanceWidget);
   const guidanceFor = (value: string): string => {
+    if (!guidanceEnabled) return "";
     if (!targetText.startsWith(value)) return "";
     const remaining = Array.from(targetText).slice(Array.from(value).length).join("");
     const nextLine = remaining.split("\n", 1)[0] ?? "";
@@ -237,7 +240,7 @@ export function mountShadowEditor(
   });
   paintGhost(acceptedText);
   return {
-    update: (value, target, nextLanguage, readOnlyNext, force = false, resetActivation = false) => {
+    update: (value, target, nextLanguage, readOnlyNext, showGuidanceNext, force = false, resetActivation = false) => {
       if (resetActivation) {
         activated = false;
         generation += 1;
@@ -256,6 +259,7 @@ export function mountShadowEditor(
       monaco.editor.setModelLanguage(model, nextLanguage.toLowerCase() === "python" ? "python" : "plaintext");
       languageBadge.textContent = nextLanguage;
       locked = readOnlyNext;
+      guidanceEnabled = showGuidanceNext;
       editor.updateOptions({ readOnly: locked || !activated });
       targetText = target;
       paintGhost(model.getValue());

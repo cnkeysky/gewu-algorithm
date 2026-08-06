@@ -99,6 +99,26 @@ test("active session shows template language and keeps the editor scrollbar avai
   await expect.poll(() => page.locator("#session-editor .view-lines").evaluate((node) => getComputedStyle(node).fontSize)).not.toBe(fontSizeBefore);
 });
 
+test("code recall reuses the editor with explicit prompt and scaffold controls", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("code_recall");
+  await page.locator("#practice-id").selectOption("bfs-comments");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+
+  await expect(page.locator("#session-editor .monaco-editor")).toBeVisible();
+  await expect(page.locator(".gewu-shadow-guidance")).toHaveText("");
+  await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
+  await expect(page.locator("#session-reveal")).toHaveText("Reveal prompt");
+  await page.locator("#session-reveal").click();
+  await expect(page.locator("#session-prompt")).toHaveText("Reconstruct the traversal from the reviewed operation comments.");
+  await page.locator("#reveal-scaffold").click();
+  await expect(page.locator("#session-scaffold li")).toHaveCount(1);
+  await expect(page.locator("#session-meta")).toContainText("hints 1");
+});
+
 test("practice list cards keep natural height inside equal sections", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();

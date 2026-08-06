@@ -111,8 +111,8 @@ root.innerHTML = `
         </form>
         <section class="practice-session" id="practice-session" hidden>
           <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3></div><div class="session-heading-meta"><span class="session-language" id="session-language">Template language</span><span class="valid-badge" id="session-status">Active</span></div></div>
-          <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><pre id="session-target" class="session-target" data-text-layout></pre>
-          <div id="session-editor" class="shadow-editor" aria-label="Shadow Typing code editor" hidden></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
+          <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-target" class="session-target" data-text-layout></pre>
+          <div id="session-editor" class="shadow-editor" aria-label="Practice code editor" hidden></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
           <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button danger" type="button" id="session-stop">Stop practice</button></div>
           <div class="session-meta" id="session-meta"></div>
         </section>
@@ -165,9 +165,10 @@ let shadowAcceptedText = "";
 let shadowTargetText = "";
 let shadowLanguage = "plaintext";
 let flowPromptRevealed = false;
+let codePromptRevealed = false;
 type PracticeOption = { id: string; label: string; language: string; mode: PracticeMode; selector: "implementation" | "practice_id" };
 type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[]; practice_options: PracticeOption[] };
-type PracticeSession = { session_id: string; unit_title: string; mode: PracticeMode; language: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number };
+type PracticeSession = { session_id: string; unit_title: string; mode: PracticeMode; language: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
 type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
 type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
 type Attempt = { id: string; unit_id: string; mode: PracticeMode; implementation?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
@@ -201,40 +202,48 @@ function renderPracticeSession(session: PracticeSession): void {
   const prompt = document.querySelector<HTMLElement>("#session-prompt")!;
   const reveal = document.querySelector<HTMLButtonElement>("#session-reveal")!;
   const restart = document.querySelector<HTMLButtonElement>("#session-restart")!;
+  const scaffold = document.querySelector<HTMLElement>("#session-scaffold")!;
   document.querySelector<HTMLElement>("#session-language")!.textContent = session.language;
   const isShadow = session.mode === "shadow_typing";
   const isFlow = session.mode === "flow_recall";
+  const isCode = session.mode === "code_recall";
   progress.hidden = !isFlow;
   progress.textContent = isFlow ? `Step ${Math.min(session.completed_steps + 1, session.total_steps)} of ${session.total_steps}` : "";
   completed.hidden = !isFlow;
   completed.innerHTML = isFlow && session.completed_prompts.length > 0
     ? `<strong>Completed flow</strong><ol>${session.completed_prompts.map((item) => `<li><span aria-hidden="true">&#10003;</span>${escapeHtml(item)}</li>`).join("")}</ol>`
     : "";
-  prompt.textContent = isFlow ? (flowPromptRevealed ? session.current_prompt ?? "No reviewed prompt is available." : "Prompt hidden until Reveal") : session.current_prompt ?? "";
-  prompt.classList.toggle("is-hidden", isFlow && !flowPromptRevealed);
-  reveal.hidden = !isFlow || session.status !== "active";
-  reveal.textContent = flowPromptRevealed ? "Hide" : "Reveal";
-  restart.hidden = !isFlow;
+  const promptVisible = isFlow ? flowPromptRevealed : isCode ? codePromptRevealed : true;
+  prompt.textContent = (isFlow || isCode) ? (promptVisible ? session.current_prompt ?? "No reviewed prompt is available." : "Prompt hidden until Reveal") : session.current_prompt ?? "";
+  prompt.classList.toggle("is-hidden", (isFlow || isCode) && !promptVisible);
+  reveal.hidden = (!isFlow && !isCode) || session.status !== "active";
+  reveal.textContent = isCode ? (codePromptRevealed ? "Hide prompt" : "Reveal prompt") : (flowPromptRevealed ? "Hide" : "Reveal");
+  restart.hidden = !isFlow && !isCode;
+  scaffold.hidden = !isCode;
+  scaffold.innerHTML = isCode ? `<div class="scaffold-heading"><span>${session.code_assistance ?? "Code assistance"}</span><button class="inline-action" type="button" id="reveal-scaffold" ${session.status !== "active" || (session.scaffold_count ?? 0) <= (session.revealed_scaffold_indices?.length ?? 0) ? "disabled" : ""}>Reveal next hint</button></div><ul>${(session.visible_scaffold ?? []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
   const target = document.querySelector<HTMLElement>("#session-target")!;
   const editorContainer = document.querySelector<HTMLElement>("#session-editor")!;
   const answer = document.querySelector<HTMLTextAreaElement>("#session-answer")!;
   const submit = document.querySelector<HTMLButtonElement>("#session-submit")!;
   target.hidden = isShadow;
-  editorContainer.hidden = !isShadow;
-  answer.hidden = isShadow;
-  submit.hidden = isShadow;
-  submit.textContent = isFlow ? "Submit answer" : "Submit event";
-  if (isShadow) {
+  const isCodeEditor = isShadow || isCode;
+  editorContainer.hidden = !isCodeEditor;
+  answer.hidden = isCodeEditor;
+  submit.hidden = isCodeEditor;
+  submit.textContent = isFlow || isCode ? "Submit answer" : "Submit event";
+  if (isCodeEditor) {
     shadowAcceptedText = session.accepted_text;
     shadowTargetText = session.target_text;
     shadowLanguage = session.language;
-    void updateShadowEditor(editorContainer, session, sessionChanged);
+    void updateShadowEditor(editorContainer, session, sessionChanged, isShadow);
   }
   target.textContent = session.target_text || session.accepted_text || "Awaiting the next response.";
   observeTextElement(document.querySelector<HTMLElement>("#session-prompt")!);
   observeTextElement(document.querySelector<HTMLElement>("#session-target")!);
   document.querySelector<HTMLElement>("#session-meta")!.textContent = session.mode === "shadow_typing"
     ? `shadow typing · progress ${Array.from(session.accepted_text).length}/${Array.from(session.target_text).length} · accepted inputs ${session.accepted_input_count} · rejected inputs ${session.rejected_input_count} · corrections ${session.correction_count}`
+    : session.mode === "code_recall"
+    ? `code recall · progress ${Array.from(session.accepted_text).length}/${Array.from(session.target_text).length} · ${session.code_assistance ?? "no hints"} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count} · hints ${session.scaffold_reveal_count}`
     : `${session.mode.replaceAll("_", " ")} · completed ${session.accepted_input_count} steps · rejected ${session.rejected_input_count} answers · prompts ${session.prompt_count}`;
   if (session.status !== "active") {
     document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = true;
@@ -246,7 +255,7 @@ function renderPracticeSession(session: PracticeSession): void {
     restart.disabled = false;
   }
 }
-async function updateShadowEditor(container: HTMLElement, session: PracticeSession, sessionChanged = false): Promise<void> {
+async function updateShadowEditor(container: HTMLElement, session: PracticeSession, sessionChanged = false, showGuidance = true): Promise<void> {
   if (!shadowEditor && !shadowEditorLoading) {
     container.addEventListener("pointerdown", () => {
       if (shadowEditor) shadowEditor.focus();
@@ -254,14 +263,14 @@ async function updateShadowEditor(container: HTMLElement, session: PracticeSessi
     }, { once: true });
   }
   if (shadowEditor) {
-    shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", sessionChanged, sessionChanged);
+    shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
     return;
   }
   if (!shadowEditorLoading) {
-    shadowEditorLoading = import("./shadow-editor").then(({ mountShadowEditor }) => mountShadowEditor(container, shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", applyShadowEdit));
+    shadowEditorLoading = import("./shadow-editor").then(({ mountShadowEditor }) => mountShadowEditor(container, shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", showGuidance, applyShadowEdit));
   }
   shadowEditor = await shadowEditorLoading;
-  shadowEditor.update(shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", sessionChanged, sessionChanged);
+  shadowEditor.update(shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
   if (shadowEditorPendingFocus) {
     shadowEditorPendingFocus = false;
     shadowEditor.focus();
@@ -279,7 +288,7 @@ async function applyShadowEdit(edit: { start: number; end: number; text: string 
   } catch (error) {
     if (activePracticeSession?.session_id !== requestSessionId) throw error;
     practiceMessage(error instanceof Error ? error.message : "Input rejected", true);
-    shadowEditor?.update(shadowAcceptedText, shadowTargetText, shadowLanguage, false, true);
+    shadowEditor?.update(shadowAcceptedText, shadowTargetText, shadowLanguage, false, true, true);
     throw error;
   }
 }
@@ -644,8 +653,9 @@ document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", (
 document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    if (activePracticeSession?.mode === "shadow_typing") await shadowEditor?.flush();
+    if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
     flowPromptRevealed = false;
+    codePromptRevealed = false;
     const practiceOption = document.querySelector<HTMLSelectElement>("#practice-id")!;
     const selectedOption = practiceOption.value || undefined;
     const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")!.value;
@@ -677,23 +687,31 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to start practice", true); }
 });
 document.querySelector<HTMLButtonElement>("#session-reveal")!.addEventListener("click", async () => {
-  if (!activePracticeSession || activePracticeSession.mode !== "flow_recall") return;
-  if (flowPromptRevealed) {
+  if (!activePracticeSession || (activePracticeSession.mode !== "flow_recall" && activePracticeSession.mode !== "code_recall")) return;
+  const isCode = activePracticeSession.mode === "code_recall";
+  if (isCode && codePromptRevealed) {
+    codePromptRevealed = false;
+    if (activePracticeSnapshot) renderPracticeSession(activePracticeSnapshot);
+    return;
+  }
+  if (!isCode && flowPromptRevealed) {
     flowPromptRevealed = false;
     if (activePracticeSnapshot) renderPracticeSession(activePracticeSnapshot);
     return;
   }
   try {
     const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: activePracticeSession.session_id, event: { type: "reveal_prompt" }, elapsed: { active_ms: 1000, wall_ms: 1000 } });
-    flowPromptRevealed = true;
+    if (isCode) codePromptRevealed = true;
+    else flowPromptRevealed = true;
     renderPracticeSession(result.session);
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to reveal prompt", true); }
 });
 document.querySelector<HTMLButtonElement>("#session-restart")!.addEventListener("click", async () => {
-  if (!activePracticeSession || activePracticeSession.mode !== "flow_recall") return;
+  if (!activePracticeSession || (activePracticeSession.mode !== "flow_recall" && activePracticeSession.mode !== "code_recall")) return;
   try {
     const result = await practiceRpc<PracticeSession>("gewu/restartSession", { session_id: activePracticeSession.session_id });
     flowPromptRevealed = false;
+    codePromptRevealed = false;
     renderPracticeSession(result);
     await refreshPracticeData();
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to restart practice", true); }
@@ -713,7 +731,7 @@ document.querySelector<HTMLButtonElement>("#session-submit")!.addEventListener("
 document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("click", async () => {
   if (!activePracticeSession) return;
   try {
-    if (activePracticeSession.mode === "shadow_typing") await shadowEditor?.flush();
+    if (activePracticeSession.mode === "shadow_typing" || activePracticeSession.mode === "code_recall") await shadowEditor?.flush();
     const result = await practiceRpc<{ session: PracticeSession }>("gewu/stopSession", { session_id: activePracticeSession.session_id, elapsed: { active_ms: 1000, wall_ms: 1000 } });
     renderPracticeSession(result.session);
     activePracticeSession = undefined;
@@ -742,11 +760,21 @@ document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click",
   }
   const resume = target.closest<HTMLButtonElement>("[data-resume-checkpoint]");
   const discard = target.closest<HTMLButtonElement>("[data-discard-checkpoint]");
+  const revealScaffold = target.closest<HTMLButtonElement>("#reveal-scaffold");
   try {
+    if (revealScaffold && activePracticeSession?.mode === "code_recall" && activePracticeSnapshot) {
+      const revealed = activePracticeSnapshot.revealed_scaffold_indices ?? [];
+      const nextIndex = Array.from({ length: activePracticeSnapshot.scaffold_count ?? 0 }, (_, index) => index).find((index) => !revealed.includes(index));
+      if (nextIndex !== undefined) {
+        const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: activePracticeSession.session_id, event: { type: "reveal_scaffold", index: nextIndex }, elapsed: { active_ms: 1000, wall_ms: 1000 } });
+        renderPracticeSession(result.session);
+      }
+      return;
+    }
     if (resume) {
-      if (activePracticeSession?.mode === "shadow_typing") await shadowEditor?.flush();
+      if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
       const result = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: resume.dataset.resumeCheckpoint });
-      if (result.session) { flowPromptRevealed = false; activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
+      if (result.session) { flowPromptRevealed = false; codePromptRevealed = false; activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
     }
     if (discard) await practiceRpc("gewu/discardCheckpoint", { checkpoint_id: discard.dataset.discardCheckpoint });
     await refreshPracticeData();

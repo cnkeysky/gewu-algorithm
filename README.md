@@ -45,17 +45,16 @@ The local MVP provides:
 - local, versioned `AlgorithmUnit` content;
 - exact-match shadow typing for one supported editor;
 - deterministic progress and error feedback;
-- serialized `shadow_typing` and `flow_recall` practice modes;
+- serialized `shadow_typing`, `flow_recall`, and progressive `code_recall` practice modes;
 - local practice history;
 - a Rust core with a versioned client protocol;
 - a VS Code extension as the first complete editor integration.
 
 Zed integration remains a later compatibility target because its extension surface does not yet provide all interaction capabilities needed by the planned practice experience.
 
-The next core stages add progressive Code Recall, Reasoning Recall, Transfer
-Practice, typed template generation, and retention-oriented review. Their state
-machines and scoring rules remain usable without VS Code, Zed, or a network
-connection.
+Reasoning Recall, Transfer Practice, typed template generation, and
+retention-oriented review remain platform-independent. Their state machines and
+scoring rules remain usable without VS Code, Zed, or a network connection.
 
 ## Repository Layout
 
