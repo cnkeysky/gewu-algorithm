@@ -156,9 +156,16 @@ export function mountShadowEditor(
     editor.setPosition(currentModel.getPositionAt(startOffset + 1));
     editor.pushUndoStop();
   };
-  // Register at Monaco's command layer so the default Enter command cannot
-  // move the cursor back to the previous line after this edit.
-  editor.addCommand(monaco.KeyCode.Enter, insertNewline);
+  // Intercept the DOM event in capture phase. Monaco's built-in `Enter`
+  // command is registered at the editor layer and can otherwise win the
+  // keybinding race, especially for a held key that repeats rapidly.
+  const captureEnter = (event: KeyboardEvent) => {
+    if (event.key !== "Enter" || event.isComposing || syncing || locked || !activated) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    insertNewline();
+  };
+  container.addEventListener("keydown", captureEnter, true);
   const activationSubscription = editor.onMouseDown(() => {
     if (locked || activated) return;
     activated = true;
@@ -190,6 +197,6 @@ export function mountShadowEditor(
       if (!readOnlyNext && model.getValue() !== value && !responseMatchesInFlight) enqueue();
     },
     focus: () => editor.focus(),
-    dispose: () => { subscription.dispose(); activationSubscription.dispose(); focusSubscription.dispose(); if (flushTimer !== undefined) window.clearTimeout(flushTimer); editor.removeContentWidget(guidanceWidget); editor.dispose(); model.dispose(); },
+    dispose: () => { subscription.dispose(); activationSubscription.dispose(); focusSubscription.dispose(); container.removeEventListener("keydown", captureEnter, true); if (flushTimer !== undefined) window.clearTimeout(flushTimer); editor.removeContentWidget(guidanceWidget); editor.dispose(); model.dispose(); },
   };
 }
