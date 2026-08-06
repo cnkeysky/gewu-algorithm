@@ -21,3 +21,6 @@ Statuses are `proposed`, `accepted`, `deprecated`, and `superseded`.
 | [0013](0013-reasoning-transfer-core-boundary.md) | Keep reasoning and transfer completion deterministic and reviewable | Accepted |
 | [0014](0014-provider-neutral-llm-boundary.md) | Keep provider protocols and GEWU generation tasks independent | Accepted |
 | [0015](0015-llm-generation-and-review-boundary.md) | Keep LLM generation and review behind deterministic gates | Accepted |
+| [0016](0016-template-authoring-workbench.md) | Use a first-party TypeScript/Vite authoring workbench | Accepted |
+| [0017](0017-content-pack-lifecycle-and-split.md) | Keep content packs in the monorepo with checksummed manifests | Accepted |
+| [0018](0018-code-recall-layouts.md) | Keep Code Recall as one mode with structured layouts | Accepted |

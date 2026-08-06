@@ -201,3 +201,24 @@ VS Code, Zed, and synchronization are intentionally deferred until the
 first-party client has validated the shared protocol and interaction model.
 - treat client-specific interaction polish as adapter work rather than a blocker
   for platform-independent core development.
+
+## Stage 11: Structured Code Recall Layouts
+
+Status: planned. See [the layout architecture](architecture/code-recall-layouts.md)
+and [ADR 0018](decisions/0018-code-recall-layouts.md).
+
+- define reviewed `full_recall`, `comment_guided`, `comment_to_code`, and
+  `cloze` layouts under the existing `code_recall` mode;
+- separate layout semantics from assistance and prompt-reveal policies;
+- implement a Core-owned fixed-region/editable-slot state machine with
+  deterministic replay, checkpoint, restart, stop, and attempt facts;
+- expose layout and editable-slot state through the protocol;
+- implement Web support in the order `cloze`, `comment_guided`,
+  `comment_to_code`;
+- add fixtures and tests for deletion, replacement, paste, fixed-region edits,
+  Unicode, CRLF, reveals, interruptions, and mode/variant binding;
+- defer VS Code and Zed layout adapters until the Core contract is stable.
+
+Exit when all three new layouts can be replayed offline through Core tests and
+the Web client can complete a representative fixture without client-owned
+scoring.

@@ -73,6 +73,12 @@ event state machine and scoring behavior.
 The learner reconstructs reviewed ordered execution steps. Stable step IDs are
 machine identity, not required answer text. Prompts, concepts, and accepted
 aliases belong to content; revealing a prompt is recorded as assistance.
+Flow Recall must not require one exact sentence or exact tone. Deterministic
+acceptance is based on the ordered step plus reviewed aliases and required
+concepts. Variations in connective words, tense, or natural-language style are
+accepted when the declared concepts are covered. A response that needs
+interpretation remains eligible for human or optional model feedback, not an
+invented deterministic score.
 
 ## Reasoning Recall
 
