@@ -109,6 +109,13 @@ an explicit human action. `POST /api/drafts/:id/rollback` clears the current
 artifact, keeps prior reports immutable, and returns the draft to
 `revision_requested` so it can be generated again.
 
+Human approval also publishes a validated copy under
+`drafts/.workbench/published/` by default. Set `GEWU_PUBLISHED_ROOT` to point at
+the content root used by `gewu-cli`; the published directory contains only
+Core-readable unit files. A generated artifact can be edited in the Artifact
+inspector and saved through `PUT /api/drafts/:id/artifact`; the Rust validator
+must pass again and previous LLM reviews are cleared before another review.
+
 Existing drafts can be revised with `PATCH /api/drafts/:id`. A revision keeps
 the draft identity, clears its current artifact pointer, returns it to
 `queued`, and writes future generations into a new artifact directory; older

@@ -132,6 +132,7 @@ footer { display: flex; justify-content: space-between; margin-top: auto; paddin
 .inspector-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
 .artifact-inspector h4 { margin: 0 0 9px; font-size: 12px; }
 .artifact-inspector pre { max-height: 360px; overflow: auto; margin: 0; padding: 13px; border: 1px solid var(--line); background: #fff; color: #33423b; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.artifact-editor { width: 100%; min-height: 210px; box-sizing: border-box; padding: 13px; border: 1px solid var(--line); border-radius: 0; background: #fff; color: #33423b; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; }
 .artifact-file { margin-bottom: 8px; border: 1px solid var(--line); background: #fff; }
 .artifact-file summary { padding: 9px 11px; cursor: pointer; color: var(--green); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .artifact-file pre { max-height: 240px; border-width: 1px 0 0; }
@@ -139,6 +140,7 @@ footer { display: flex; justify-content: space-between; margin-top: auto; paddin
 .review-feedback strong { display: block; margin-bottom: 8px; font-size: 12px; text-transform: capitalize; }
 .review-feedback p { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .review-feedback p small { display: block; margin-top: 3px; color: #718078; }
+.history-row:has(.inline-action) { grid-template-columns: 25px minmax(0, 1fr) auto auto; }
 .session-problem { margin: 18px 0 12px; padding: 12px 14px; border-left: 3px solid var(--green); background: #f2f8f4; }
 .session-problem > span { display: block; margin-bottom: 5px; color: var(--green); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .session-question { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.55; }

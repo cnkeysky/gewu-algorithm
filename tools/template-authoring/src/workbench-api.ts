@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,20 +17,24 @@ const storageRoot = resolve(here, "../drafts/.workbench");
 const databasePath = join(storageRoot, "authoring.sqlite");
 mkdirSync(storageRoot, { recursive: true });
 const database = new DatabaseSync(databasePath);
+const publishedRoot = resolve(process.env.GEWU_PUBLISHED_ROOT ?? join(storageRoot, "published"));
 const modelCatalog = builtinModels();
 database.exec(`
   CREATE TABLE IF NOT EXISTS drafts (
     id TEXT PRIMARY KEY, task_id TEXT, title TEXT NOT NULL, problem TEXT NOT NULL,
     provider TEXT NOT NULL, model TEXT NOT NULL, language TEXT NOT NULL, variants INTEGER NOT NULL,
     modes_json TEXT NOT NULL, assistance_json TEXT NOT NULL, status TEXT NOT NULL,
-    created_at TEXT NOT NULL, artifact_path TEXT
+    created_at TEXT NOT NULL, artifact_path TEXT, published_path TEXT
   );
   CREATE TABLE IF NOT EXISTS reviews (
     id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, role TEXT NOT NULL, verdict TEXT NOT NULL,
     artifact_hash TEXT, report_path TEXT, created_at TEXT NOT NULL, FOREIGN KEY (draft_id) REFERENCES drafts(id)
   );
 `);
+try { database.exec("ALTER TABLE drafts ADD COLUMN published_path TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE reviews ADD COLUMN report_path TEXT"); } catch { /* Existing database already has the column. */ }
+database.exec("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+database.prepare("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)").run("authoring_schema", "2");
 
 type DraftStatus = "draft" | "queued" | "generated" | "validated" | "llm_reviewed" | "needs_revision" | "revision_requested" | "accepted";
 type DraftRecord = {
@@ -47,6 +51,7 @@ type DraftRecord = {
   status: DraftStatus;
   createdAt: string;
   artifactPath?: string;
+  publishedPath?: string;
 };
 type ReviewRecord = {
   id: string;
@@ -83,10 +88,10 @@ class DraftInputError extends Error {
 }
 
 function loadState(): State {
-  const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path FROM drafts ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
+  const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path, published_path FROM drafts ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
   const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, created_at FROM reviews ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
   return {
-    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), artifactPath: row.artifact_path ? String(row.artifact_path) : undefined })),
+    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined })),
     reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, reportPath: row.report_path ? String(row.report_path) : undefined, createdAt: String(row.created_at) })),
   };
 }
@@ -95,8 +100,8 @@ function saveState(state: State): void {
   database.exec("BEGIN");
   try {
     database.exec("DELETE FROM reviews; DELETE FROM drafts;");
-    const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.artifactPath ?? null);
+    const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, artifact_path, published_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.artifactPath ?? null, draft.publishedPath ?? null);
     const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
     for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.reportPath ?? null, review.createdAt);
     database.exec("COMMIT");
@@ -160,7 +165,7 @@ async function generateDraft(draft: DraftRecord): Promise<{ provider: string; mo
 }
 
 const execFileAsync = promisify(execFile);
-async function validateArtifactWithRust(artifactPath: string): Promise<void> {
+async function validateArtifactWithRust(artifactPath: string, cleanupOnFailure = true): Promise<void> {
   const repoRoot = resolve(here, "../..", "..");
   const validator = join(repoRoot, "target/debug/validate");
   try {
@@ -171,7 +176,7 @@ async function validateArtifactWithRust(artifactPath: string): Promise<void> {
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    await rm(artifactPath, { recursive: true, force: true });
+    if (cleanupOnFailure) await rm(artifactPath, { recursive: true, force: true });
     throw new Error(`Rust template validation failed: ${detail}`);
   }
 }
@@ -207,13 +212,30 @@ async function readArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Promis
   return { draft, files, reviews: reports };
 }
 
+async function publishArtifact(draft: DraftRecord): Promise<string> {
+  if (!publishedRoot) throw new Error("publishing is not configured; set GEWU_PUBLISHED_ROOT");
+  const source = artifactAbsolutePath(draft);
+  const manifest = JSON.parse(await readFile(join(source, "unit.json"), "utf8")) as Record<string, unknown>;
+  const id = typeof manifest.id === "string" ? manifest.id : undefined;
+  const revision = Number.isInteger(manifest.revision) ? Number(manifest.revision) : undefined;
+  if (!id || !revision || !/^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(id)) throw new Error("published artifact has no valid unit identity");
+  const destination = resolve(publishedRoot, id, `r${revision}`);
+  if (!destination.startsWith(`${publishedRoot}/`)) throw new Error("published artifact path escaped configured root");
+  await mkdir(publishedRoot, { recursive: true });
+  await rm(destination, { recursive: true, force: true });
+  await cp(source, destination, { recursive: true, filter: (path) => !path.includes(`${resolve(source, "reviews")}`) });
+  return relative(resolve(here, "../..", ".."), destination);
+}
+
+const REVIEW_ROLES = new Set(["algorithm_correctness", "learning_design", "provenance_safety"]);
+
 function send(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
     "access-control-allow-origin": "http://127.0.0.1:5173",
     "access-control-allow-headers": "content-type",
-    "access-control-allow-methods": "GET,POST,PATCH,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PATCH,PUT,OPTIONS",
   });
   response.end(JSON.stringify(body));
 }
@@ -290,6 +312,7 @@ const server = createServer(async (request, response) => {
       updated.createdAt = draft.createdAt;
       updated.status = "queued";
       updated.artifactPath = undefined;
+      updated.publishedPath = undefined;
       validatePersistedDraft(updated);
       state.drafts = state.drafts.map((item) => item.id === draft.id ? updated : item);
       state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
@@ -314,7 +337,7 @@ const server = createServer(async (request, response) => {
       if (!draft.artifactPath || !["generated", "revision_requested", "needs_revision"].includes(draft.status)) return send(response, 409, { error: "generate the draft before deterministic validation" });
       const errors = validateDraft(draft);
       if (errors.length > 0) return send(response, 422, { status: "failed", errors });
-      try { await validateArtifactWithRust(artifactAbsolutePath(draft)); } catch (error) { return send(response, 422, { status: "failed", errors: [error instanceof Error ? error.message : String(error)] }); }
+      try { await validateArtifactWithRust(artifactAbsolutePath(draft), false); } catch (error) { return send(response, 422, { status: "failed", errors: [error instanceof Error ? error.message : String(error)] }); }
       draft.status = "validated";
       await saveState(state);
       return send(response, 200, { status: "passed", draft });
@@ -326,14 +349,17 @@ const server = createServer(async (request, response) => {
       if (draft.status !== "llm_reviewed") return send(response, 409, { error: "LLM pre-review must pass before human acceptance" });
       const passedReview = state.reviews.some((review) => review.draftId === draft.id && review.verdict === "pass" && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
       if (!passedReview) return send(response, 409, { error: "a passing LLM pre-review for the current artifact is required before human acceptance" });
+      const publishedPath = await publishArtifact(draft);
       draft.status = "accepted";
+      draft.publishedPath = publishedPath;
       await saveState(state);
-      return send(response, 200, { status: "accepted", draft });
+      return send(response, 200, { status: "accepted", draft, publishedPath });
     }
     const reviewMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/reviews$/);
     if (request.method === "POST" && reviewMatch) {
       const payload = await body(request);
       if (!isRecord(payload) || typeof payload.role !== "string") throw new Error("review role is required");
+      if (!REVIEW_ROLES.has(payload.role)) return send(response, 422, { error: "review role is not registered" });
       const draft = state.drafts.find((item) => item.id === reviewMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
       if (draft.status !== "validated" || !draft.artifactPath) return send(response, 409, { error: "validate the generated draft before requesting review" });
@@ -357,6 +383,33 @@ const server = createServer(async (request, response) => {
       if (!draft.artifactPath) return send(response, 409, { error: "draft has no current artifact" });
       return send(response, 200, await readArtifact(draft, state.reviews));
     }
+    if (request.method === "PUT" && artifactMatch) {
+      const draft = state.drafts.find((item) => item.id === artifactMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      if (!draft.artifactPath || !["generated", "validated", "needs_revision", "llm_reviewed"].includes(draft.status)) return send(response, 409, { error: "only a generated draft can be edited" });
+      const payload = await body(request);
+      if (!isRecord(payload) || !isRecord(payload.files) || typeof payload.files["unit.json"] !== "string") return send(response, 422, { error: "files must include unit.json" });
+      const root = artifactAbsolutePath(draft);
+      const staging = `${root}.edit-${crypto.randomUUID()}`;
+      await cp(root, staging, { recursive: true });
+      for (const [path, content] of Object.entries(payload.files)) {
+        if (!path || path.includes("\\") || path.startsWith("/") || path.split("/").includes("..") || path === "generation.json" || path.startsWith("reviews/")) { await rm(staging, { recursive: true, force: true }); return send(response, 422, { error: `invalid editable artifact path: ${path}` }); }
+        if (typeof content !== "string" || content.length > 1_000_000) { await rm(staging, { recursive: true, force: true }); return send(response, 422, { error: `invalid artifact content: ${path}` }); }
+        const destination = resolve(staging, path);
+        if (!destination.startsWith(`${staging}/`)) { await rm(staging, { recursive: true, force: true }); return send(response, 422, { error: "artifact path escaped its root" }); }
+        await mkdir(dirname(destination), { recursive: true });
+        await writeFile(destination, content, "utf8");
+      }
+      try { await validateArtifactWithRust(staging, false); } catch (error) { await rm(staging, { recursive: true, force: true }); return send(response, 422, { status: "failed", errors: [error instanceof Error ? error.message : String(error)] }); }
+      await rm(join(staging, "reviews"), { recursive: true, force: true });
+      await rm(root, { recursive: true, force: true });
+      await rename(staging, root);
+      state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
+      draft.status = "generated";
+      draft.publishedPath = undefined;
+      await saveState(state);
+      return send(response, 200, { status: "generated", draft });
+    }
     const rollbackMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/rollback$/);
     if (request.method === "POST" && rollbackMatch) {
       const draft = state.drafts.find((item) => item.id === rollbackMatch[1]);
@@ -364,6 +417,7 @@ const server = createServer(async (request, response) => {
       if (draft.status === "queued" || draft.status === "draft") return send(response, 409, { error: "draft is already awaiting generation" });
       draft.status = "revision_requested";
       draft.artifactPath = undefined;
+      draft.publishedPath = undefined;
       await saveState(state);
       return send(response, 200, { status: "revision_requested", draft });
     }

@@ -127,7 +127,7 @@ root.innerHTML = `
     <section id="drafts-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
       <div class="draft-list" id="draft-list"></div>
-      <section class="artifact-inspector" id="artifact-inspector" hidden><div class="panel-heading"><div><p class="eyebrow">Artifact inspection</p><h3 id="artifact-title">Generated template</h3></div><button class="inline-action" type="button" id="close-artifact">Close</button></div><p class="inspector-meta" id="artifact-meta"></p><div class="inspector-grid"><div><h4>Manifest</h4><pre id="artifact-manifest"></pre></div><div><h4>Source and tests</h4><div id="artifact-files"></div></div></div><div><h4>LLM pre-review feedback</h4><div id="artifact-reviews"></div></div></section>
+      <section class="artifact-inspector" id="artifact-inspector" hidden><div class="panel-heading"><div><p class="eyebrow">Artifact inspection</p><h3 id="artifact-title">Generated template</h3></div><span><button class="inline-action approval-action" type="button" id="save-artifact">Save revision</button> <button class="inline-action" type="button" id="close-artifact">Close</button></span></div><p class="inspector-meta" id="artifact-meta"></p><div class="inspector-grid"><div><h4>Manifest</h4><textarea id="artifact-manifest" class="artifact-editor" spellcheck="false"></textarea></div><div><h4>Source and tests</h4><div id="artifact-files"></div></div></div><div><h4>LLM pre-review feedback</h4><div id="artifact-reviews"></div></div></section>
       <p class="view-note">Generated artifacts and LLM pre-review reports remain inspectable; only Human approve promotes a draft.</p>
     </section>
     <section id="history-view" class="app-view panel page-panel" hidden>
@@ -453,6 +453,7 @@ interface DraftRecord {
   status: "draft" | "queued" | "generated" | "validated" | "llm_reviewed" | "needs_revision" | "revision_requested" | "accepted";
   createdAt: string;
   artifactPath?: string;
+  publishedPath?: string;
 }
 interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; reportPath?: string; createdAt: string; }
 interface ArtifactPayload { draft: DraftRecord; files: Record<string, string>; reviews: Array<ReviewRecord & { report?: { verdict?: string; findings?: Array<{ rule_id: string; severity: string; path: string; problem: string; evidence: string; suggested_change: string }> } }> }
@@ -555,7 +556,7 @@ function markDraftDirty(): void {
 function renderHistory(): void {
   const drafts = readDrafts();
   const reviews = readReviews();
-  historyList.innerHTML = reviews.length ? reviews.map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status">${review.verdict}</span></div>`; }).join("") : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
+  historyList.innerHTML = reviews.length ? reviews.map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View feedback</button>` : ""; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status">${review.verdict}</span>${inspect}</div>`; }).join("") : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
 }
 
 async function inspectArtifact(id: string): Promise<void> {
@@ -563,16 +564,32 @@ async function inspectArtifact(id: string): Promise<void> {
   const payload = await response.json() as ArtifactPayload & { error?: string };
   if (!response.ok) throw new Error(payload.error ?? "Unable to load artifact");
   artifactInspector.hidden = false;
+  artifactInspector.dataset.draftId = id;
   document.querySelector<HTMLElement>("#artifact-title")!.textContent = payload.draft.title;
-  document.querySelector<HTMLElement>("#artifact-meta")!.textContent = `${statusLabel(payload.draft.status)} · ${payload.draft.provider} / ${payload.draft.model}`;
+  document.querySelector<HTMLElement>("#artifact-meta")!.textContent = `${statusLabel(payload.draft.status)} · ${payload.draft.provider} / ${payload.draft.model}${payload.draft.publishedPath ? " · Published to Core content" : ""}`;
   const manifest = payload.files["unit.json"];
   try { document.querySelector<HTMLElement>("#artifact-manifest")!.textContent = manifest ? JSON.stringify(JSON.parse(manifest) as unknown, null, 2) : "Manifest unavailable"; }
   catch { document.querySelector<HTMLElement>("#artifact-manifest")!.textContent = manifest ?? "Manifest unavailable"; }
-  document.querySelector<HTMLElement>("#artifact-files")!.innerHTML = Object.entries(payload.files).filter(([path]) => path !== "unit.json" && path !== "generation.json").map(([path, content]) => `<details class="artifact-file"><summary>${escapeHtml(path)}</summary><pre>${escapeHtml(content)}</pre></details>`).join("") || "<p class='compact-empty'>No source files.</p>";
+  document.querySelector<HTMLElement>("#artifact-files")!.innerHTML = Object.entries(payload.files).filter(([path]) => path !== "unit.json" && path !== "generation.json" && !path.startsWith("reviews/")).map(([path, content]) => `<details class="artifact-file" open><summary>${escapeHtml(path)}</summary><textarea class="artifact-editor" data-artifact-file="${escapeHtml(path)}" spellcheck="false">${escapeHtml(content)}</textarea></details>`).join("") || "<p class='compact-empty'>No source files.</p>";
   document.querySelector<HTMLElement>("#artifact-reviews")!.innerHTML = payload.reviews.length ? payload.reviews.map((review) => `<article class="review-feedback"><strong>${escapeHtml(review.role.replaceAll("_", " "))} · ${escapeHtml(review.verdict)}</strong>${review.report?.findings?.map((finding) => `<p><b>${escapeHtml(finding.severity)} · ${escapeHtml(finding.rule_id)}</b> ${escapeHtml(finding.problem)}<small>${escapeHtml(finding.evidence)}</small></p>`).join("") ?? "<p>No findings were returned.</p>"}</article>`).join("") : "<p class='compact-empty'>No LLM pre-review report yet.</p>";
   artifactInspector.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 document.querySelector<HTMLButtonElement>("#close-artifact")!.addEventListener("click", () => { artifactInspector.hidden = true; });
+document.querySelector<HTMLButtonElement>("#save-artifact")!.addEventListener("click", async () => {
+  const id = artifactInspector.dataset.draftId;
+  if (!id) return;
+  const files: Record<string, string> = { "unit.json": document.querySelector<HTMLTextAreaElement>("#artifact-manifest")!.value };
+  document.querySelectorAll<HTMLTextAreaElement>("[data-artifact-file]").forEach((field) => { if (field.dataset.artifactFile) files[field.dataset.artifactFile] = field.value; });
+  try {
+    const response = await fetch(`/api/drafts/${id}/artifact`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ files }) });
+    const payload = await response.json() as { error?: string; errors?: string[] };
+    if (!response.ok) throw new Error(payload.error ?? payload.errors?.join("; ") ?? "Artifact revision failed");
+    message.textContent = "Revision saved and Rust contract validated. Run LLM pre-review again.";
+    message.className = "form-message success";
+    await syncFromApi();
+    await inspectArtifact(id);
+  } catch (error) { message.textContent = error instanceof Error ? error.message : "Artifact revision failed"; message.className = "form-message error"; }
+});
 
 function showView(view: string): void {
   renderDrafts();
