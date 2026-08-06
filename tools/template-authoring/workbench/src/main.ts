@@ -229,7 +229,12 @@ function renderPracticeSession(session: PracticeSession): void {
   const editorContainer = document.querySelector<HTMLElement>("#session-editor")!;
   const answer = document.querySelector<HTMLTextAreaElement>("#session-answer")!;
   const submit = document.querySelector<HTMLButtonElement>("#session-submit")!;
-  target.hidden = !isShadow && !isCode;
+  target.hidden = true;
+  answer.placeholder = isReasoning
+    ? "Explain the reasoning for this step."
+    : isTransfer
+      ? "Describe how the algorithm transfers to this variation."
+      : "Enter your answer or the next code segment.";
   const isCodeEditor = isShadow || isCode;
   editorContainer.hidden = !isCodeEditor;
   answer.hidden = isCodeEditor;
