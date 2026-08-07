@@ -133,7 +133,7 @@ function checkPrerequisites() {
   log("[1/5] Checking prerequisites (node, npm, cargo, python3, git)");
   const probes = [["node", "--version"], [npm, "--version"], [cargo, "--version"], ["git", "--version"]];
   for (const [tool, flag] of probes) {
-    const probe = spawnSync(tool, [flag], { stdio: "ignore" });
+    const probe = spawnSync(tool, [flag], { stdio: "ignore", shell: isWin });
     if (probe.status !== 0) die(`missing required tool: ${tool}`);
   }
   const python = ["python3", "python"].find((candidate) => spawnSync(candidate, ["--version"], { stdio: "ignore" }).status === 0);
@@ -457,8 +457,8 @@ function startOne(name, list, options) {
 }
 
 async function prepare() {
-  const config = await collectConfig(false);
   checkPrerequisites();
+  const config = await collectConfig(false);
   log("[2/5] Installing npm dependencies");
   await npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
   await npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
@@ -556,8 +556,8 @@ process.on("SIGTERM", () => {
 async function doStart() {
   log("GEWU dev setup plan:");
   log("  collect: prerequisites/deps/LLM/ports -> then run: deps -> core -> config -> services");
-  const config = await collectConfig(true);
   checkPrerequisites();
+  const config = await collectConfig(true);
   log("[2/5] Installing npm dependencies");
   await npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
   await npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);

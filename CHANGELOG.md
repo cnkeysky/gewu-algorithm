@@ -16,6 +16,9 @@ allowed only with explicit migration notes (see
   (keep or change) and ports (keep or change) before installing, building,
   reading the API key, and starting services; non-interactive runs skip the
   prompts.
+- Prerequisite probes and the setup order are fixed for Windows non-interactive
+  runs (`npm.cmd` is spawned through the shell; prerequisites are checked before
+  any prompt).
 
 ### Changed
 
