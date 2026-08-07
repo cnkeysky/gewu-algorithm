@@ -3,10 +3,11 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
+  closeSync,
   copyFileSync,
-  createWriteStream,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -28,7 +29,7 @@ const npm = isWin ? "npm.cmd" : "npm";
 const isTTY = Boolean(process.stdin.isTTY);
 
 const args = process.argv.slice(2);
-let command = "start";
+let command;
 let corePort = process.env.GEWU_CORE_PORT ?? "4175";
 let apiPort = process.env.GEWU_WORKBENCH_PORT ?? "4174";
 let webPort = process.env.GEWU_WEB_PORT ?? "5173";
@@ -63,9 +64,11 @@ function usage() {
 
 commands:
   prepare   install dependencies, build the core, and ensure .env.local/key
-  start     prepare (as needed) and start core + authoring API + web client
+  start     ensure core + authoring API + web client are running (background)
   stop      stop all started processes
+  status    show which services are running and healthy
   restart   stop then start
+  menu      interactive action chooser (default when run without arguments)
   help      show this help
 
 flags:
@@ -86,7 +89,7 @@ key environment variable (for example DEEPSEEK_API_KEY) before running.`);
 
 for (let i = 0; i < args.length; i += 1) {
   const arg = args[i];
-  if (["prepare", "start", "stop", "restart", "help"].includes(arg)) command = arg;
+  if (["prepare", "start", "stop", "restart", "status", "menu", "help"].includes(arg)) command = arg;
   else if (arg === "--core-port") corePort = args[++i];
   else if (arg === "--api-port") apiPort = args[++i];
   else if (arg === "--web-port") webPort = args[++i];
@@ -97,6 +100,7 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--model") selectedModel = args[++i];
   else die(`unknown argument: ${arg} (run with 'help')`);
 }
+if (!command) command = isTTY ? "menu" : "start";
 
 function runSync(name, list, options = {}) {
   const result = spawnSync(name, list, { stdio: "inherit", ...options });
@@ -365,16 +369,16 @@ function startOne(name, list, options) {
   mkdirSync(logDir, { recursive: true });
   mkdirSync(pidDir, { recursive: true });
   const logPath = join(logDir, `${name}.log`);
+  const logFd = openSync(logPath, "a");
   const child = spawn(list[0], list.slice(1), {
     cwd: repo,
     detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", logFd, logFd],
     ...options,
   });
-  const stream = createWriteStream(logPath, { flags: "a" });
-  child.stdout.pipe(stream);
-  child.stderr.pipe(stream);
+  closeSync(logFd);
   writeFileSync(join(pidDir, `${name}.pid`), String(child.pid));
+  child.unref();
   log(`started ${name} (pid ${child.pid}) -> ${logPath}`);
   return child.pid;
 }
@@ -400,6 +404,82 @@ async function prepare() {
   log("[5/5] Setup complete");
 }
 
+function pidOf(name) {
+  const path = join(pidDir, `${name}.pid`);
+  return existsSync(path) ? Number(readFileSync(path, "utf8")) : 0;
+}
+
+async function fetchOk(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function statusServices() {
+  const urls = {
+    core: `http://127.0.0.1:${corePort}/health`,
+    api: `http://127.0.0.1:${apiPort}/api/drafts`,
+    web: `http://127.0.0.1:${webPort}`,
+  };
+  const states = {};
+  for (const name of ["core", "api", "web"]) {
+    const pid = pidOf(name);
+    states[name] = {
+      name,
+      url: urls[name],
+      pid,
+      alive: pid > 0 && alive(pid),
+      healthy: await fetchOk(urls[name]),
+    };
+  }
+  return states;
+}
+
+function printStatus(states) {
+  for (const name of ["core", "api", "web"]) {
+    const state = states[name];
+    const managed = state.pid > 0 ? (state.alive ? `pid ${state.pid}` : "stale pid") : "not started";
+    log(`${name.padEnd(4)} ${state.healthy ? "healthy" : "down"}   ${managed}   ${state.url}`);
+  }
+}
+
+function startService(name, { core, api, web }) {
+  if (name === "core") {
+    return startOne("core", [
+      "cargo", "run", "-p", "gewu-cli", "--", "serve",
+      "--port", core,
+      "--content-root", "fixtures/algorithm-units/valid",
+      "--content-root", "tools/template-authoring/drafts/.workbench/published",
+      "--data-root", join(devDir, "data"),
+    ], { cwd: repo });
+  }
+  if (name === "api") {
+    return startOne("api", [npm, "run", "workbench:api:local"], {
+      cwd: join(repo, "tools", "template-authoring"),
+      shell: isWin,
+      env: { ...process.env, GEWU_WORKBENCH_PORT: api },
+    });
+  }
+  return startOne("web", [npm, "run", "dev", "--", "--host", "127.0.0.1", "--port", web], {
+    cwd: join(repo, "tools", "template-authoring", "workbench"),
+    shell: isWin,
+    env: { ...process.env, GEWU_CORE_PORT: core, GEWU_AUTHORING_PORT: api },
+  });
+}
+
+let startupComplete = false;
+process.on("SIGINT", () => {
+  if (!startupComplete) stopAll();
+  process.exit(130);
+});
+process.on("SIGTERM", () => {
+  if (!startupComplete) stopAll();
+  process.exit(143);
+});
+
 async function doStart() {
   log("GEWU dev setup plan:");
   log("  collect: prerequisites/deps/LLM/ports -> then run: deps -> core -> config -> services");
@@ -416,68 +496,58 @@ async function doStart() {
   if (config.keyMode === "new" && !key) die("API key cannot be empty");
   if (resolved) log(`API key read from ${resolved.source}; it is not echoed or logged`);
   writeConfig({ ...config, key });
-  log("[5/5] Starting services");
+  log("[5/5] Ensuring services are running");
   const { corePort: core, apiPort: api, webPort: web } = config;
   mkdirSync(join(devDir, "data"), { recursive: true });
-  stopAll();
 
-  startOne("core", [
-    "cargo", "run", "-p", "gewu-cli", "--", "serve",
-    "--port", core,
-    "--content-root", "fixtures/algorithm-units/valid",
-    "--content-root", "tools/template-authoring/drafts/.workbench/published",
-    "--data-root", join(devDir, "data"),
-  ], { cwd: repo });
+  const before = await statusServices();
+  const toStart = ["core", "api", "web"].filter((name) => !before[name].healthy);
+  for (const name of ["core", "api", "web"]) {
+    if (before[name].healthy) log(`${name} already healthy (${before[name].url})`);
+    else startService(name, { core, api, web });
+  }
+  for (const name of toStart.length ? toStart : ["core", "api", "web"]) {
+    await waitFor(before[name].url, name, pidOf(name));
+  }
+  startupComplete = true;
 
-  startOne("api", [npm, "run", "workbench:api:local"], {
-    cwd: join(repo, "tools", "template-authoring"),
-    shell: isWin,
-    env: { ...process.env, GEWU_WORKBENCH_PORT: api },
-  });
-
-  startOne("web", [npm, "run", "dev", "--", "--host", "127.0.0.1", "--port", web], {
-    cwd: join(repo, "tools", "template-authoring", "workbench"),
-    shell: isWin,
-    env: { ...process.env, GEWU_CORE_PORT: core, GEWU_AUTHORING_PORT: api },
-  });
-
-  await waitFor(`http://127.0.0.1:${core}/health`, "core", Number(readFileSync(join(pidDir, "core.pid"), "utf8")));
-  await waitFor(`http://127.0.0.1:${api}/api/drafts`, "authoring api", Number(readFileSync(join(pidDir, "api.pid"), "utf8")));
-  await waitFor(`http://127.0.0.1:${web}`, "web client", Number(readFileSync(join(pidDir, "web.pid"), "utf8")));
-
-  console.log(`\n\x1b[32mGEWU dev stack is up:\x1b[0m
-  core  http://127.0.0.1:${core}
-  api   http://127.0.0.1:${api}
-  web   http://127.0.0.1:${web}
-Stop with Ctrl+C, or run npm run dev:stop from another terminal.`);
+  const after = await statusServices();
+  console.log("\n\x1b[32mGEWU dev stack:\x1b[0m");
+  printStatus(after);
+  console.log("Services run in the background. Run the script again and choose 2) Stop, or use: npm run dev:stop");
 }
 
-function keepAlive() {
-  process.on("SIGINT", () => {
-    stopAll();
-    process.exit(0);
-  });
-  process.on("SIGTERM", () => {
-    stopAll();
-    process.exit(0);
-  });
-  process.on("exit", stopAll);
+async function runMenu() {
+  for (;;) {
+    const choice = await ask("\nGEWU dev — choose an action:\n  1) Start services\n  2) Stop services\n  3) Status\n  4) Prepare (install + LLM config)\n  5) Restart services\n  0) Exit\nChoice: ", "0");
+    if (choice === "1") await doStart();
+    else if (choice === "2") stopAll();
+    else if (choice === "3") printStatus(await statusServices());
+    else if (choice === "4") await prepare();
+    else if (choice === "5") {
+      stopAll();
+      await doStart();
+    } else if (choice === "0" || choice === "") {
+      return;
+    } else {
+      log(`unknown choice: ${choice}`);
+    }
+  }
 }
 
 if (command === "help") {
   usage();
+} else if (command === "menu") {
+  await runMenu();
+} else if (command === "status") {
+  printStatus(await statusServices());
 } else if (command === "prepare") {
   await prepare();
 } else if (command === "stop") {
   stopAll();
-} else if (command === "restart" || command === "start") {
-  keepAlive();
+} else if (command === "restart") {
+  stopAll();
   await doStart();
-  if (isTTY) {
-    await ask("\nPress Enter to stop all GEWU services...", "");
-    stopAll();
-    process.exit(0);
-  } else {
-    await new Promise(() => {});
-  }
+} else if (command === "start") {
+  await doStart();
 }

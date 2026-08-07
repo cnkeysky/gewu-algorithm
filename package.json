@@ -7,6 +7,7 @@
     "dev": "node scripts/gewu-dev.mjs start",
     "dev:prepare": "node scripts/gewu-dev.mjs prepare",
     "dev:stop": "node scripts/gewu-dev.mjs stop",
-    "dev:restart": "node scripts/gewu-dev.mjs restart"
+    "dev:restart": "node scripts/gewu-dev.mjs restart",
+    "dev:status": "node scripts/gewu-dev.mjs status"
   }
 }

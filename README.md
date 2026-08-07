@@ -72,9 +72,15 @@ The script walks you through these steps:
    the API key with hidden input after the install/build steps, just before
    services start.
 6. Confirms the ports, starts core + authoring API + web client, waits for
-   each health check, and prints the URLs.
-7. Stops everything when you press Enter in the interactive terminal, with
-   Ctrl+C, or with `npm run dev:stop` from another terminal.
+   each health check, prints the URLs, and exits. Services keep running in the
+   background (logs and pid files under `.gewu-dev/`).
+7. To stop, run the script again and choose `2) Stop`, or use `npm run
+   dev:stop`; `npm run dev:status` shows what is running. `start` first checks
+   for existing services and only starts the ones that are missing.
+
+Running the script without a command opens a menu: `1) Start`, `2) Stop`,
+`3) Status`, `4) Prepare`, `5) Restart`, `0) Exit` — pick an action each time
+you run it.
 
 The same setup can run non-interactively (no prompts):
 

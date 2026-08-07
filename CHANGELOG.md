@@ -4,6 +4,16 @@ All notable changes are documented here. Before `1.0`, incompatible changes are
 allowed only with explicit migration notes (see
 [`docs/development/release.md`](docs/development/release.md)).
 
+## [Unreleased]
+
+### Changed
+
+- Dev runner services now run in the background and the script exits after
+  starting them. Running the script without a command opens an action menu
+  (`1` start, `2` stop, `3` status, `4` prepare, `5` restart, `0` exit);
+  `start` probes existing services and only starts the missing ones; a new
+  `dev:status` script shows what is running and healthy.
+
 ## [0.1.1] - 2026-08-07
 
 Tooling, CI, and security release. No protocol, schema, or practice-mode
