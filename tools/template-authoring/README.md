@@ -112,12 +112,15 @@ artifact, keeps prior reports immutable, and returns the draft to
 Paginated lists (Drafts, Interrupted, Spaced review, Recent attempts) show an
 entry range (`Showing 1–6 of 24`) and numbered page buttons with previous/next.
 A go-to-page input (press Enter to jump) appears only when there are many pages,
-and the pagination bar is hidden when everything fits on one page. Drafts
-pagination is pinned below a fixed-height list (no inner scrollbar, sized to
-exactly six rows), so page content changes do not move it and the page does not
-shift. Unpublished drafts can be deleted from the row actions (accepted drafts
-are published and immutable); deletion also removes the draft's artifact and
-review reports.
+and the pagination controls are hidden when everything fits on one page while
+the strip keeps its height, so the layout never shifts. Drafts and Review
+history also offer status/verdict filter pills with live counts (Drafts: All /
+Needs attention / In progress / Published; History: All / Pass / Needs
+revision / Reject). Drafts pagination is pinned below a fixed-height list (no
+inner scrollbar, sized to exactly six rows), so page content changes do not
+move it and the page does not shift. Unpublished drafts can be deleted from the
+row actions (accepted drafts are published and immutable); deletion also
+removes the draft's artifact and review reports.
 
 Human approval also publishes a validated copy under
 `drafts/.workbench/published/` by default. Set `GEWU_PUBLISHED_ROOT` to point at
@@ -126,6 +129,8 @@ Core-readable unit files. A generated artifact can be edited in the Artifact
 inspector modal (opened from Drafts or Review history) and saved through
 `PUT /api/drafts/:id/artifact`; the Rust validator must pass again and
 previous LLM reviews are cleared before another review.
+The edited artifact can then be approved directly (a `human_revision` review is
+recorded) or sent through the LLM pre-review again.
 Each approval also rebuilds `pack.json` with the Rust pack tool. Start Core
 against the same directory to practice the accepted units:
 

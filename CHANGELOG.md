@@ -6,6 +6,42 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-07
+
+### Changed
+
+- Artifact inspection is now a modal opened from Drafts or Review history
+  (the Review history "View feedback" action works again). The manifest gets
+  its own full-width, taller editor; binary cache files (`.pyc` /
+  `__pycache__`) are hidden from Source and tests; and LLM pre-review findings
+  render as severity-colored cards with pagination and role verdict chips.
+- Review history is paginated like the other lists, and a draft blocked by
+  `needs_revision` gets an explicit "Open artifact to revise" action in the
+  workflow gate.
+- Human-edited artifacts can be published directly: saving a revision records
+  a `human_revision` pass review and moves the draft to `validated`, where both
+  "Human approve" and "LLM pre-review" are offered. Running the LLM pre-review
+  again after a human edit is supported and reports the real outcome instead of
+  always claiming all roles passed.
+- `needs_revision` drafts get a prominent "Revise artifact" action and a
+  workflow "Open artifact to revise" button; LLM pre-review findings are
+  paginated with the standard "Showing X–Y of Z" control inside a fixed-height
+  container, and audit trail verdicts are color-coded (pass green,
+  needs_revision/reject red) with readable labels.
+- Draft actions show a global toast so feedback is visible from the Drafts
+  page (the old inline message lived in the hidden authoring form); actions
+  refresh the list in place without resetting the page or scroll position;
+  list ordering is deterministic (created_at + insertion tiebreaker); the
+  accepted-draft action is renamed "Extend unit" to match what it does.
+- Drafts and Review history gain status/verdict filter pills with live counts
+  (Drafts: All / Needs attention / In progress / Published; History: All /
+  Pass / Needs revision / Reject). Filters slice before pagination, reset to
+  page one, and show targeted empty states. The pagination strip reserves its
+  space on single-page and empty lists, so switching filters no longer moves
+  the surrounding layout; the Review history empty state fills the same fixed
+  height as its list so verdict filters with no matches do not collapse the
+  view.
+
 ## [0.1.4] - 2026-08-07
 
 ### Changed
@@ -39,37 +75,6 @@ allowed only with explicit migration notes (see
   other pages.
 - The workbench dev server polls for file changes so WSL2 and atomic-save
   editors do not leave the browser tab on stale modules.
-- Artifact inspection is now a modal opened from Drafts or Review history
-  (the Review history "View feedback" action works again). The manifest gets
-  its own full-width, taller editor; binary cache files (`.pyc` /
-  `__pycache__`) are hidden from Source and tests; and LLM pre-review findings
-  render as severity-colored cards with pagination and role verdict chips.
-- Review history is paginated like the other lists, and a draft blocked by
-  `needs_revision` gets an explicit "Open artifact to revise" action in the
-  workflow gate.
-- Human-edited artifacts can be published directly: saving a revision records
-  a `human_revision` pass review and moves the draft to `validated`, where both
-  "Human approve" and "LLM pre-review" are offered. Running the LLM pre-review
-  again after a human edit is supported and reports the real outcome instead of
-  always claiming all roles passed.
-- `needs_revision` drafts get a prominent "Revise artifact" action and a
-  workflow "Open artifact to revise" button; LLM pre-review findings are
-  paginated with the standard "Showing X–Y of Z" control inside a fixed-height
-  container, and audit trail verdicts are color-coded (pass green,
-  needs_revision/reject red) with readable labels.
-- Draft actions show a global toast so feedback is visible from the Drafts
-  page (the old inline message lived in the hidden authoring form); actions
-  refresh the list in place without resetting the page or scroll position;
-  list ordering is deterministic (created_at + insertion tiebreaker); the
-  accepted-draft action is renamed "Extend unit" to match what it does.
-- Drafts and Review history gain status/verdict filter pills with live counts
-  (Drafts: All / Needs attention / In progress / Published; History: All /
-  Pass / Needs revision / Reject). Filters slice before pagination, reset to
-  page one, and show targeted empty states. The pagination strip reserves its
-  space on single-page and empty lists, so switching filters no longer moves
-  the surrounding layout; the Review history empty state fills the same fixed
-  height as its list so verdict filters with no matches do not collapse the
-  view.
 
 ### Docs
 
