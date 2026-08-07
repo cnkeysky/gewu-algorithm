@@ -21,10 +21,10 @@ test("existing BFS import checkpoint resumes after reload and accepts one Enter"
   const editor = page.locator("#session-editor .monaco-editor");
   const meta = page.locator("#session-meta");
   await expect(editor).toBeVisible();
-  await expect(meta).toContainText("progress 0/403");
+  await expect(meta).toContainText("progress 0%");
   await editor.click({ position: { x: 220, y: 30 } });
   await page.keyboard.type("from collections import deque");
-  await expect(meta).toContainText("progress 29/403");
+  await expect(meta).toContainText("progress 7%");
 
   // Interrupt by reloading so the host persists the checkpoint.
   await page.reload();
@@ -34,13 +34,13 @@ test("existing BFS import checkpoint resumes after reload and accepts one Enter"
   await page.locator("#practice-mode").selectOption("shadow_typing");
   await page.locator("#refresh-checkpoints").click();
   await page.locator("#practice-checkpoints [data-resume-checkpoint]").first().click();
-  await expect(meta).toContainText("progress 29/403");
+  await expect(meta).toContainText("progress 7%");
 
   await editor.click({ position: { x: 220, y: 30 } });
   const cursor = editor.locator(".cursor").first();
   const before = await cursor.boundingBox();
   expect(before).not.toBeNull();
   await page.keyboard.press("Enter");
-  await expect(meta).toContainText("progress 30/403");
+  await expect(meta).toContainText("progress 7%");
   await expect.poll(async () => (await cursor.boundingBox())?.y ?? 0).toBeGreaterThan((before?.y ?? 0) + 10);
 });

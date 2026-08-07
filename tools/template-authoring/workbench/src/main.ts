@@ -115,7 +115,8 @@ root.innerHTML = `
         </section>
         <div class="session-column">
         <section class="practice-session" id="practice-session" hidden>
-          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p><p class="session-meta" id="session-meta"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span><button class="button danger" type="button" id="session-stop">Stop practice</button></div></div>
+          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span><button class="button danger" type="button" id="session-stop">Stop practice</button></div></div>
+          <p class="session-meta" id="session-meta"></p>
           <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-cloze-template" class="session-cloze-template" hidden data-text-layout></pre><pre id="session-target" class="session-target" data-text-layout></pre>
           <div id="session-editor-shell" class="practice-editor-shell" hidden><div class="practice-editor-toolbar"><span class="session-language" id="session-language">Template language</span><label>Font size <select id="editor-font-size"><option value="12">12</option><option value="13" selected>13</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option></select></label></div><div id="session-editor" class="shadow-editor" aria-label="Practice code editor"></div></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
           <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button></div>
@@ -320,11 +321,22 @@ async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> 
   }
 }
 function practiceMessage(text: string, error = false): void { const target = document.querySelector<HTMLParagraphElement>("#practice-message")!; target.textContent = text; target.className = `form-message ${error ? "error" : "success"}`; }
+function syncProblemPaneHeight(): void {
+  const pane = document.querySelector<HTMLElement>(".problem-pane");
+  const column = document.querySelector<HTMLElement>(".session-column");
+  if (!pane || !column || pane.hidden || window.matchMedia("(max-width: 940px)").matches) return;
+  pane.style.height = `${Math.max(0, Math.round(column.scrollHeight))}px`;
+}
+if (typeof ResizeObserver !== "undefined") {
+  const column = document.querySelector<HTMLElement>(".session-column");
+  if (column) new ResizeObserver(() => syncProblemPaneHeight()).observe(column);
+}
 function renderPracticeSession(session: PracticeSession): void {
   const sessionChanged = activePracticeSnapshot?.session_id !== session.session_id;
   activePracticeSnapshot = session;
   document.querySelector<HTMLElement>(".problem-pane")!.hidden = false;
   document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
+  syncProblemPaneHeight();
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
   document.querySelector<HTMLElement>("#session-question")!.innerHTML = renderProblemStatement(session.problem_statement);
   const sessionBindings = [
@@ -358,6 +370,7 @@ function renderPracticeSession(session: PracticeSession): void {
     ? `<strong>Completed flow</strong><ol>${session.completed_prompts.map((item) => `<li><span aria-hidden="true">&#10003;</span>${escapeHtml(item)}</li>`).join("")}</ol>`
     : "";
   prompt.textContent = requiresPromptReveal ? (promptVisible ? session.current_prompt ?? "No reviewed prompt is available." : "Prompt hidden until Reveal") : session.current_prompt ?? "";
+  prompt.hidden = !prompt.textContent.trim();
   prompt.classList.toggle("is-hidden", requiresPromptReveal && !promptVisible);
   reveal.hidden = !requiresPromptReveal || session.status !== "active";
   reveal.textContent = promptVisible ? "Hide prompt" : "Reveal prompt";
@@ -396,13 +409,16 @@ function renderPracticeSession(session: PracticeSession): void {
   target.textContent = session.target_text || session.accepted_text || "Awaiting the next response.";
   observeTextElement(document.querySelector<HTMLElement>("#session-prompt")!);
   observeTextElement(document.querySelector<HTMLElement>("#session-target")!);
+  const acceptedChars = Array.from(session.accepted_text).length;
+  const targetChars = Array.from(session.target_text).length;
   document.querySelector<HTMLElement>("#session-meta")!.textContent = session.mode === "shadow_typing"
-    ? `shadow typing · progress ${Array.from(session.accepted_text).length}/${Array.from(session.target_text).length} · accepted inputs ${session.accepted_input_count} · rejected inputs ${session.rejected_input_count} · corrections ${session.correction_count}`
+    ? `progress ${progressPercent(acceptedChars, targetChars)}% · accepted inputs ${session.accepted_input_count} · rejected inputs ${session.rejected_input_count} · corrections ${session.correction_count}`
     : session.mode === "code_recall" && !isStructuredCode
-    ? `code recall · progress ${Array.from(session.accepted_text).length}/${Array.from(session.target_text).length} · ${session.code_assistance ?? "no hints"} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count} · hints ${session.scaffold_reveal_count}`
+    ? `progress ${progressPercent(acceptedChars, targetChars)}% · ${session.code_assistance ?? "no hints"} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count} · hints ${session.scaffold_reveal_count}`
     : session.mode === "code_recall"
-    ? `${session.code_layout?.replaceAll("_", " ") ?? "structured code recall"} · slot ${session.completed_steps}/${session.total_steps} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count}`
-    : `${session.mode.replaceAll("_", " ")} · completed ${session.accepted_input_count} steps · rejected ${session.rejected_input_count} answers · prompts ${session.prompt_count}`;
+    ? `slot ${session.completed_steps}/${session.total_steps} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count}`
+    : `completed ${session.accepted_input_count} steps · rejected ${session.rejected_input_count} answers · prompts ${session.prompt_count}`;
+  syncProblemPaneHeight();
   if (session.status !== "active") {
     document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = true;
     reveal.disabled = true;
@@ -512,7 +528,8 @@ function renderPagedPracticeList<T>(name: PracticeListName, targetId: string, it
     : `<div class="compact-empty">${emptyText}</div>`;
 }
 function renderPracticeLists(): void {
-  renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
+  const activeCheckpointId = activePracticeSession ? `checkpoint-${activePracticeSession.session_id}` : null;
+  renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); const isActive = checkpoint.id === activeCheckpointId; return `<div class="compact-row practice-record${isActive ? " is-active" : ""}"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}${isActive ? " · in progress" : ""}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
   renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : `Due ${dueDate}`; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><time title="${dueLabel}">${dueLabel}</time><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
   renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id} · r${item.revision}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span></div><div class="record-footer"><time title="${created}">${created}</time><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
 }

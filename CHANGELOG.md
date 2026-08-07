@@ -6,6 +6,8 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-07
+
 ### Changed
 
 - Pagination redesigned: hidden when a list fits on one page, numbered page
@@ -24,7 +26,9 @@ allowed only with explicit migration notes (see
 - The session header now carries the live status line (progress, accepted,
   rejected, corrections) and the Stop practice action, so the bottom of the
   session no longer ends with a loose status row; spacing between the session
-  heading and the editor is tightened.
+  heading and the editor is tightened. Progress is shown as a percentage, and
+  the active session's recovery checkpoint is marked "in progress" in the
+  Interrupted list.
 - Practice side panels (Interrupted, Spaced review, Recent attempts) form one
   padded card with symmetric column spacing; each record keeps title, mode and
   variant, and progress on separate lines, long titles wrap to two lines, and
@@ -33,6 +37,8 @@ allowed only with explicit migration notes (see
   (hidden on a single page). The workspace shell is slightly wider
   (max-width 1360px), and the practice view matches the horizontal inset of the
   other pages.
+- The workbench dev server polls for file changes so WSL2 and atomic-save
+  editors do not leave the browser tab on stale modules.
 
 ### Docs
 
