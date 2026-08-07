@@ -4,7 +4,7 @@ All notable changes are documented here. Before `1.0`, incompatible changes are
 allowed only with explicit migration notes (see
 [`docs/development/release.md`](docs/development/release.md)).
 
-## [Unreleased]
+## [0.1.2] - 2026-08-07
 
 ### Changed
 

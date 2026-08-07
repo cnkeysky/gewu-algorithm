@@ -22,7 +22,7 @@ Validation, Revision, and Review
 
 ## Status
 
-The project is at an **internal v0.1.0** level. The Rust Core, the Web
+The project is at an **internal v0.1.2** level. The Rust Core, the Web
 workbench (authoring and practice), and the VS Code adapter are implemented and
 covered by automated tests. Template authoring uses staged LLM generation with
 deterministic contract validation and a reviewed publication gate.
@@ -169,6 +169,8 @@ npm run test:e2e                  # auto-starts a fresh Core and Vite
   [`docs/development/release-v0.1.0.md`](docs/development/release-v0.1.0.md).
 - `v0.1.1` (tooling/CI/security patch) is tagged; see
   [`docs/development/release-v0.1.1.md`](docs/development/release-v0.1.1.md).
+- `v0.1.2` (dev runner, CI, web UI, docs patch) is tagged; see
+  [`docs/development/release-v0.1.2.md`](docs/development/release-v0.1.2.md).
 - CI runs Rust gates, TypeScript/Web/VS Code tests, and Playwright e2e on every
   push and pull request, and smoke-tests the one-command dev runner on Linux,
   macOS, and Windows (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
