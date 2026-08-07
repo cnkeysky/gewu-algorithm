@@ -4,24 +4,41 @@ All notable changes are documented here. Before `1.0`, incompatible changes are
 allowed only with explicit migration notes (see
 [`docs/development/release.md`](docs/development/release.md)).
 
-## [Unreleased]
+## [0.1.1] - 2026-08-07
+
+Tooling, CI, and security release. No protocol, schema, or practice-mode
+behavior changes since v0.1.0.
 
 ### Added
 
 - One-command development stack: a single cross-platform Node runner
   (`scripts/gewu-dev.mjs`) exposed through root npm scripts (`npm run dev`,
   `dev:prepare`, `dev:stop`, `dev:restart`) installs dependencies, builds the
-  core, and walks through provider/model selection with a hidden API-key
-  prompt or the provider key environment variable (never a CLI argument), then
-  starts core + authoring API + web client with configurable ports and process
-  cleanup on Linux, macOS, and Windows. The setup is guided step by step
-  (prerequisites, dependencies, core build, LLM provider wizard, services),
-  confirms before slow installs, confirms ports before starting, and stops on
-  Enter/Ctrl+C or `npm run dev:stop`. Model info is expected to be prepared by
-  the user up front, and the API key is read after the install/build steps so
-  it is not held across long-running work and never appears in process
-  arguments, shell history, or dev logs.
+  core, and starts core + authoring API + web client with configurable ports
+  and process cleanup on Linux, macOS, and Windows. The setup is guided step by
+  step (prerequisites, dependencies, core build, LLM provider/model wizard,
+  services), confirms before slow installs, confirms ports before starting,
+  and stops on Enter/Ctrl+C or `npm run dev:stop`.
 - `cargo-audit` gate in the Rust CI job.
+
+### Changed
+
+- Model info is prepared by the user up front; the API key is read after the
+  install/build steps so it is not held across long-running work.
+- GitHub Actions upgraded to v5; Playwright e2e runs with retries and larger
+  timeouts, and the e2e specs were made deterministic.
+
+### Security
+
+- API keys are never accepted as CLI arguments. They are read from the hidden
+  interactive prompt or the provider key environment variable, stored only in
+  the git-ignored `.env.local` (mode 600 on POSIX), and never echoed or logged.
+
+### Docs
+
+- README quickstart now offers Option A (one-command, with a full walkthrough)
+  and Option B (manual three terminals); release records and checksums live in
+  `docs/development/release-v0.1.1.md`.
 
 ## [0.1.0] - 2026-08-07
 
