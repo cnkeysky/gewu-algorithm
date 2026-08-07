@@ -328,13 +328,65 @@ function killTree(pid) {
   }
 }
 
-function stopAll() {
+function listenersOnPort(port) {
+  const pids = [];
+  if (isWin) {
+    const out = spawnSync("netstat", ["-ano"], { encoding: "utf8" });
+    for (const line of (out.stdout ?? "").split(/\r?\n/)) {
+      const match = line.match(new RegExp(`TCP\\s+[^:]+:${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)`, "i"));
+      if (match) pids.push(Number(match[1]));
+    }
+    return pids;
+  }
+  let out = spawnSync("ss", ["-ltnp"], { encoding: "utf8" });
+  for (const line of (out.stdout ?? "").split("\n")) {
+    if (!line.includes(`:${port}`)) continue;
+    const match = line.match(/pid=(\d+)/);
+    if (match) pids.push(Number(match[1]));
+  }
+  if (pids.length) return pids;
+  out = spawnSync("lsof", ["-tiTCP:" + port, "-sTCP:LISTEN"], { encoding: "utf8" });
+  for (const line of (out.stdout ?? "").split(/\s+/)) {
+    const pid = Number(line);
+    if (Number.isInteger(pid) && pid > 0) pids.push(pid);
+  }
+  return pids;
+}
+
+function stopAllSync() {
   log("Stopping GEWU dev processes");
-  if (!existsSync(pidDir)) return;
-  for (const name of readdirSync(pidDir)) {
-    const pid = Number(readFileSync(join(pidDir, name), "utf8"));
-    if (Number.isInteger(pid) && pid > 0) killTree(pid);
-    rmSync(join(pidDir, name), { force: true });
+  const targets = new Set();
+  if (existsSync(pidDir)) {
+    for (const name of readdirSync(pidDir)) {
+      const pid = Number(readFileSync(join(pidDir, name), "utf8"));
+      if (Number.isInteger(pid) && pid > 0) {
+        targets.add(pid);
+        killTree(pid);
+      }
+      rmSync(join(pidDir, name), { force: true });
+    }
+  }
+  for (const port of [corePort, apiPort, webPort]) {
+    for (const pid of listenersOnPort(port)) {
+      if (targets.has(pid)) continue;
+      log(`stopping process ${pid} listening on port ${port}`);
+      targets.add(pid);
+      killTree(pid);
+    }
+  }
+}
+
+async function stopAll() {
+  stopAllSync();
+  await new Promise((resolveWait) => setTimeout(resolveWait, 1500));
+  for (const port of [corePort, apiPort, webPort]) {
+    for (const pid of listenersOnPort(port)) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    }
   }
 }
 
@@ -441,7 +493,7 @@ async function statusServices() {
 function printStatus(states) {
   for (const name of ["core", "api", "web"]) {
     const state = states[name];
-    const managed = state.pid > 0 ? (state.alive ? `pid ${state.pid}` : "stale pid") : "not started";
+    const managed = state.pid > 0 ? (state.alive ? `pid ${state.pid}` : "stale pid") : state.healthy ? "external process" : "not started";
     log(`${name.padEnd(4)} ${state.healthy ? "healthy" : "down"}   ${managed}   ${state.url}`);
   }
 }
@@ -472,11 +524,11 @@ function startService(name, { core, api, web }) {
 
 let startupComplete = false;
 process.on("SIGINT", () => {
-  if (!startupComplete) stopAll();
+  if (!startupComplete) stopAllSync();
   process.exit(130);
 });
 process.on("SIGTERM", () => {
-  if (!startupComplete) stopAll();
+  if (!startupComplete) stopAllSync();
   process.exit(143);
 });
 
@@ -530,11 +582,11 @@ async function runMenu() {
       "0",
     );
     if (choice === "1") await doStart();
-    else if (choice === "2") stopAll();
+    else if (choice === "2") await stopAll();
     else if (choice === "3") printStatus(await statusServices());
     else if (choice === "4") await prepare();
     else if (choice === "5") {
-      stopAll();
+      await stopAll();
       await doStart();
     } else if (choice === "0" || choice === "") {
       return;
@@ -553,9 +605,9 @@ if (command === "help") {
 } else if (command === "prepare") {
   await prepare();
 } else if (command === "stop") {
-  stopAll();
+  await stopAll();
 } else if (command === "restart") {
-  stopAll();
+  await stopAll();
   await doStart();
 } else if (command === "start") {
   await doStart();

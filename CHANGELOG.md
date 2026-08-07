@@ -18,6 +18,9 @@ allowed only with explicit migration notes (see
   now show an entry range and current page (`Showing 1–6 of 24 · Page 1 / 4`),
   a jump-to-page input, and pinned pagination that does not move with content;
   draft workflow labels are separated with `›` so they no longer run together.
+- `dev:stop` now terminates every process listening on the configured ports,
+  including leftover grandchildren from older script versions and external
+  processes, with a SIGKILL fallback after a grace period.
 
 ## [0.1.1] - 2026-08-07
 
