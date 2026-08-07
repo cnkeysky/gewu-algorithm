@@ -110,14 +110,17 @@ root.innerHTML = `
           <button class="button primary" type="submit">Start practice <span aria-hidden="true">&#8594;</span></button>
           <p class="form-message" id="practice-message" role="status"></p>
         </form>
-        <section class="practice-session" id="practice-session" hidden>
-          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span></div></div>
+        <section class="problem-pane" hidden>
           <div class="session-problem"><span>Problem</span><div class="session-question" id="session-question"></div></div>
+        </section>
+        <div class="session-column">
+        <section class="practice-session" id="practice-session" hidden>
+          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p><p class="session-meta" id="session-meta"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span><button class="button danger" type="button" id="session-stop">Stop practice</button></div></div>
           <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-cloze-template" class="session-cloze-template" hidden data-text-layout></pre><pre id="session-target" class="session-target" data-text-layout></pre>
           <div id="session-editor-shell" class="practice-editor-shell" hidden><div class="practice-editor-toolbar"><span class="session-language" id="session-language">Template language</span><label>Font size <select id="editor-font-size"><option value="12">12</option><option value="13" selected>13</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option></select></label></div><div id="session-editor" class="shadow-editor" aria-label="Practice code editor"></div></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
-          <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button><button class="button danger" type="button" id="session-stop">Stop practice</button></div>
-          <div class="session-meta" id="session-meta"></div>
+          <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button></div>
         </section>
+        </div>
         <aside class="practice-side">
           <section><div class="panel-heading"><h3>Interrupted</h3><button class="inline-action" type="button" id="refresh-checkpoints">Refresh</button></div><div id="practice-checkpoints" class="compact-list"></div></section>
           <section><div class="panel-heading"><h3>Spaced review</h3></div><div id="practice-recommendations" class="compact-list"></div></section>
@@ -138,6 +141,16 @@ root.innerHTML = `
     </section>
   </main>
   <footer><span>GEWU / deliberate algorithm practice</span><span>Local by design.</span></footer>
+  <div class="modal-overlay" id="confirm-dialog" hidden>
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <h3 id="confirm-title">Confirm</h3>
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button class="button secondary" type="button" id="confirm-cancel">Cancel</button>
+        <button class="button danger" type="button" id="confirm-ok">Confirm</button>
+      </div>
+    </div>
+  </div>
 `;
 
 const form = document.querySelector<HTMLFormElement>("#draft-form")!;
@@ -228,6 +241,30 @@ function setPaginationKindPage(kind: PaginationKind, page: number): void {
 function renderPaginationKind(kind: PaginationKind): void {
   if (kind === "drafts") renderDrafts(); else renderPracticeLists();
 }
+
+let confirmResolve: ((value: boolean) => void) | null = null;
+function openConfirm(title: string, message: string, confirmLabel = "Confirm"): Promise<boolean> {
+  const overlay = document.querySelector<HTMLElement>("#confirm-dialog")!;
+  document.querySelector<HTMLElement>("#confirm-title")!.textContent = title;
+  document.querySelector<HTMLElement>("#confirm-message")!.textContent = message;
+  document.querySelector<HTMLButtonElement>("#confirm-ok")!.textContent = confirmLabel;
+  overlay.hidden = false;
+  document.querySelector<HTMLButtonElement>("#confirm-cancel")!.focus();
+  return new Promise((resolve) => { confirmResolve = resolve; });
+}
+function closeConfirm(result: boolean): void {
+  confirmResolve?.(result);
+  confirmResolve = null;
+  document.querySelector<HTMLElement>("#confirm-dialog")!.hidden = true;
+}
+document.querySelector<HTMLButtonElement>("#confirm-ok")!.addEventListener("click", () => closeConfirm(true));
+document.querySelector<HTMLButtonElement>("#confirm-cancel")!.addEventListener("click", () => closeConfirm(false));
+document.querySelector<HTMLElement>("#confirm-dialog")!.addEventListener("click", (event) => {
+  if ((event.target as HTMLElement).id === "confirm-dialog") closeConfirm(false);
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !document.querySelector<HTMLElement>("#confirm-dialog")!.hidden) closeConfirm(false);
+});
 let checkpointItems: Checkpoint[] = [];
 let recommendationItems: Recommendation[] = [];
 let attemptItems: Attempt[] = [];
@@ -286,6 +323,7 @@ function practiceMessage(text: string, error = false): void { const target = doc
 function renderPracticeSession(session: PracticeSession): void {
   const sessionChanged = activePracticeSnapshot?.session_id !== session.session_id;
   activePracticeSnapshot = session;
+  document.querySelector<HTMLElement>(".problem-pane")!.hidden = false;
   document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
   document.querySelector<HTMLElement>("#session-question")!.innerHTML = renderProblemStatement(session.problem_statement);
@@ -590,6 +628,7 @@ function renderDrafts(): void {
     const canAccept = draft.status === "llm_reviewed" || draft.status === "needs_revision";
     const canRollback = ["generated", "validated", "llm_reviewed", "needs_revision"].includes(draft.status);
     const canFork = draft.status === "accepted";
+    const canDelete = draft.status !== "accepted";
     const stage = draftStage(draft.status);
     const actions = [
       draft.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">${draft.status === "needs_revision" ? "Edit artifact" : "View artifact"}</button>` : "",
@@ -599,6 +638,7 @@ function renderDrafts(): void {
       canAccept ? `<button class="inline-action approval-action" type="button" data-accept-id="${draft.id}">Human approve</button>` : "",
       canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}">Request revision</button>` : "",
       canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}">New revision</button>` : "",
+      canDelete ? `<button class="inline-action danger-action" type="button" data-delete-id="${draft.id}">Delete</button>` : "",
     ].filter(Boolean).join("");
     const pipeline = (label: string, active: boolean) => `<b class="${active ? "active" : ""}">${label}</b>`;
     const separator = `<span class="pipeline-sep" aria-hidden="true">&#8250;</span>`;
@@ -797,6 +837,32 @@ document.addEventListener("click", (event) => {
       message.className = "form-message success";
       showView("new");
     }).catch((error) => { message.textContent = error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
+    return;
+  }
+  const deleteButton = target.closest<HTMLButtonElement>("[data-delete-id]");
+  if (deleteButton) {
+    event.stopPropagation();
+    const id = deleteButton.dataset.deleteId;
+    void (async () => {
+      const confirmed = await openConfirm("Delete draft?", "Its artifact and review reports will be removed. Accepted drafts cannot be deleted.", "Delete");
+      if (!confirmed) return;
+      try {
+        const response = await fetch(`/api/drafts/${id}`, { method: "DELETE" });
+        const payload = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(payload.error ?? "delete failed");
+        message.textContent = "Draft deleted.";
+        message.className = "form-message success";
+        if (editingDraftId === id) {
+          editingDraftId = undefined;
+          submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`;
+        }
+        await syncFromApi();
+        showView("drafts");
+      } catch (error) {
+        message.textContent = error instanceof Error ? `Delete failed: ${error.message}` : "Authoring API is unavailable.";
+        message.className = "form-message error";
+      }
+    })();
     return;
   }
   const draftButton = target.closest<HTMLButtonElement>("[data-edit-id]") ?? target.closest<HTMLButtonElement>("[data-draft-id]");

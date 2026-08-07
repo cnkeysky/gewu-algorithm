@@ -589,6 +589,24 @@ const server = createServer(async (request, response) => {
       await saveState(state);
       return send(response, 200, { status: "revision_requested", draft });
     }
+    const deleteMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)$/);
+    if (request.method === "DELETE" && deleteMatch) {
+      const draft = state.drafts.find((item) => item.id === deleteMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
+      if (draft.status === "accepted") return send(response, 409, { error: "an accepted draft is published and cannot be deleted" });
+      if (draft.artifactPath) {
+        try {
+          const absolute = artifactAbsolutePath(draft);
+          await rm(absolute, { recursive: true, force: true });
+        } catch {
+          // The artifact directory may already be gone; deletion still proceeds.
+        }
+      }
+      state.drafts = state.drafts.filter((item) => item.id !== draft.id);
+      state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
+      await saveState(state);
+      return send(response, 200, { status: "deleted", id: draft.id });
+    }
     return send(response, 404, { error: "route not found" });
   } catch (error) {
     if (error instanceof DraftInputError) return send(response, 422, { status: "failed", errors: error.errors });

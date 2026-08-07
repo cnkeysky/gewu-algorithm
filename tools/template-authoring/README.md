@@ -113,8 +113,11 @@ Paginated lists (Drafts, Interrupted, Spaced review, Recent attempts) show an
 entry range (`Showing 1–6 of 24`) and numbered page buttons with previous/next.
 A go-to-page input (press Enter to jump) appears only when there are many pages,
 and the pagination bar is hidden when everything fits on one page. Drafts
-pagination is pinned below a fixed-height list (no inner scrollbar), so page
-content changes do not move it and the page does not shift.
+pagination is pinned below a fixed-height list (no inner scrollbar, sized to
+exactly six rows), so page content changes do not move it and the page does not
+shift. Unpublished drafts can be deleted from the row actions (accepted drafts
+are published and immutable); deletion also removes the draft's artifact and
+review reports.
 
 Human approval also publishes a validated copy under
 `drafts/.workbench/published/` by default. Set `GEWU_PUBLISHED_ROOT` to point at
@@ -152,6 +155,10 @@ npm run workbench:dev
 Open `http://127.0.0.1:5173/`, select `Practice`, and use the unit/mode
 picker. Vite proxies `/core/rpc` to the Rust adapter; scoring, checkpoint
 recovery, attempts, and review recommendations remain Rust-owned.
+The workspace lays out the unit/mode picker across the top, the problem
+statement on the left and the live session on the right (stacked below 940px),
+with Interrupted, Spaced review, and Recent attempts in a card below. The
+problem pane appears once a practice starts.
 
 Generation uses one algorithm-agnostic task in the TypeScript task registry.
 `GET /api/tasks` returns its id and version. The task owns the contract prompt,

@@ -13,6 +13,26 @@ allowed only with explicit migration notes (see
   many pages; the standalone Go button is removed.
 - Drafts list uses a fixed-height area without an inner scrollbar, so the
   drafts view no longer shifts with content.
+- Drafts list height is sized to exactly six rows from real measured layout,
+  and unpublished drafts can be deleted from the row actions with cascading
+  cleanup (artifact directory and review reports); accepted drafts stay
+  immutable and cannot be deleted.
+- Practice workspace: controls span the full width, then the problem statement
+  and the active session sit side by side (LeetCode-style) on desktop and stack
+  on narrow screens; the problem pane appears only after a practice starts and
+  fills the column height above the side panels.
+- The session header now carries the live status line (progress, accepted,
+  rejected, corrections) and the Stop practice action, so the bottom of the
+  session no longer ends with a loose status row; spacing between the session
+  heading and the editor is tightened.
+- Practice side panels (Interrupted, Spaced review, Recent attempts) form one
+  padded card with symmetric column spacing; each record keeps title, mode and
+  variant, and progress on separate lines, long titles wrap to two lines, and
+  entries have comfortable vertical gaps.
+- Paginated practice lists use the same numbered-page pagination as Drafts
+  (hidden on a single page). The workspace shell is slightly wider
+  (max-width 1360px), and the practice view matches the horizontal inset of the
+  other pages.
 
 ### Docs
 
