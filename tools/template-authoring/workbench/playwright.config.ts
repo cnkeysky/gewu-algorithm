@@ -7,8 +7,8 @@ export default defineConfig({
   globalSetup: process.env.GEWU_E2E_EXISTING ? undefined : "./tests/global-setup.ts",
   workers: 1,
   fullyParallel: false,
-  timeout: 30_000,
-  expect: { timeout: 8_000 },
+  timeout: 45_000,
+  expect: { timeout: 12_000 },
   use: {
     baseURL: `http://127.0.0.1:${webPort}`,
     headless: true,

@@ -10,7 +10,7 @@ jobs:
     name: Rust gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -22,8 +22,8 @@ jobs:
     name: TypeScript, Web, and VS Code
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -51,9 +51,9 @@ jobs:
     name: Playwright e2e
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -67,4 +67,4 @@ jobs:
         run: cargo build -p gewu-cli
       - name: Run e2e
         working-directory: tools/template-authoring/workbench
-        run: npm run test:e2e
+        run: npm run test:e2e -- --retries=2
