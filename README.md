@@ -52,18 +52,21 @@ cd editors/vscode && npm ci && npm test
 The quickest path is the one-command script:
 
 ```sh
-scripts/gewu-dev.sh start --core-port 4175 --api-port 4174 --web-port 5173
+npm run dev -- --core-port 4175 --api-port 4174 --web-port 5173
 ```
 
-On Windows use `scripts\gewu-dev.cmd start ...` (or `node
-scripts/gewu-dev.mjs start ...` anywhere). The runner is a cross-platform Node
-script, so Linux, macOS, and Windows behave the same.
+The runner is one cross-platform Node script
+(`scripts/gewu-dev.mjs`), so Linux, macOS, and Windows behave the same.
+`npm run dev` is the uniform entry on every platform; other commands are
+`npm run dev:prepare`, `npm run dev:stop`, and `npm run dev:restart`. Flags can
+also be passed directly as `node scripts/gewu-dev.mjs start --core-port 4175`.
 
 The first run installs npm dependencies, builds the Rust core, copies
 `tools/template-authoring/.env.example` to `.env.local`, and prompts for
 `DEEPSEEK_API_KEY` with hidden input. Commands: `prepare`, `start`, `stop`,
 `restart`; flags: `--force-install`, `--e2e`, `--key`. Ports can also be set
-with `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`.
+with `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`. Stop the
+foreground stack with Ctrl+C (or run `npm run dev:stop` from another terminal).
 
 The equivalent manual three-terminal stack:
 

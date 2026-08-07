@@ -8,11 +8,12 @@ allowed only with explicit migration notes (see
 
 ### Added
 
-- One-command development stack: the cross-platform Node runner
-  `scripts/gewu-dev.mjs` (with `gewu-dev.sh`/`gewu-dev.cmd` wrappers) installs
-  dependencies, builds the core, prepares `.env.local` with a hidden
-  `DEEPSEEK_API_KEY` prompt, and starts core + authoring API + web client with
-  configurable ports and process cleanup on Linux, macOS, and Windows.
+- One-command development stack: a single cross-platform Node runner
+  (`scripts/gewu-dev.mjs`) exposed through root npm scripts (`npm run dev`,
+  `dev:prepare`, `dev:stop`, `dev:restart`) installs dependencies, builds the
+  core, prepares `.env.local` with a hidden `DEEPSEEK_API_KEY` prompt, and
+  starts core + authoring API + web client with configurable ports and process
+  cleanup on Linux, macOS, and Windows.
 - `cargo-audit` gate in the Rust CI job.
 
 ## [0.1.0] - 2026-08-07

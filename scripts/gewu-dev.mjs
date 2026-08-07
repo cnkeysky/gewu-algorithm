@@ -260,7 +260,7 @@ async function doStart() {
   core  http://127.0.0.1:${corePort}
   api   http://127.0.0.1:${apiPort}
   web   http://127.0.0.1:${webPort}
-Stop with: scripts/gewu-dev.sh stop  (or Ctrl+C)`);
+Stop the foreground stack with Ctrl+C, or run: npm run dev:stop`);
 }
 
 function keepAlive() {
