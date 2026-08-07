@@ -11,6 +11,8 @@ allowed only with explicit migration notes (see
 - Reorganized the root README Option A: `npm run dev` and the action menu
   first, then the guided start flow, then a separate non-interactive section
   with env/flag examples.
+- CI skips documentation-only changes (markdown or `docs/`) and supports
+  manual `workflow_dispatch` runs; schema and code changes still trigger it.
 
 ## [0.1.3] - 2026-08-07
 

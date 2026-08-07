@@ -177,6 +177,8 @@ npm run test:e2e                  # auto-starts a fresh Core and Vite
 - CI runs Rust gates, TypeScript/Web/VS Code tests, and Playwright e2e on every
   push and pull request, and smoke-tests the one-command dev runner on Linux,
   macOS, and Windows (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+  Documentation-only changes (markdown or `docs/`) skip the pipeline; use
+  `workflow_dispatch` to force a run.
 
 ## Project Boundaries
 
