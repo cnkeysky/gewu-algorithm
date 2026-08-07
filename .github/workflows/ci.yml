@@ -72,3 +72,22 @@ jobs:
       - name: Run e2e
         working-directory: tools/template-authoring/workbench
         run: npm run test:e2e -- --retries=2
+
+  dev-runner:
+    name: Dev runner smoke (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Run one-command prepare
+        shell: bash
+        env:
+          DEEPSEEK_API_KEY: ci-placeholder-1234567890
+        run: node scripts/gewu-dev.mjs prepare --provider deepseek --model deepseek-v4-flash --force-install

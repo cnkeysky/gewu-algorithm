@@ -175,7 +175,8 @@ npm run test:e2e                  # auto-starts a fresh Core and Vite
 - `v0.1.1` (tooling/CI/security patch) is tagged; see
   [`docs/development/release-v0.1.1.md`](docs/development/release-v0.1.1.md).
 - CI runs Rust gates, TypeScript/Web/VS Code tests, and Playwright e2e on every
-  push and pull request (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+  push and pull request, and smoke-tests the one-command dev runner on Linux,
+  macOS, and Windows (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ## Project Boundaries
 

@@ -26,6 +26,7 @@ const envFile = process.env.GEWU_DEV_ENV_FILE ?? join(repo, "tools", "template-a
 const envExample = join(repo, "tools", "template-authoring", ".env.example");
 const isWin = process.platform === "win32";
 const npm = isWin ? "npm.cmd" : "npm";
+const cargo = isWin ? "cargo.exe" : "cargo";
 const isTTY = Boolean(process.stdin.isTTY);
 
 const args = process.argv.slice(2);
@@ -130,7 +131,7 @@ async function npmInstall(cwd, force) {
 
 function checkPrerequisites() {
   log("[1/5] Checking prerequisites (node, npm, cargo, python3, git)");
-  const probes = [["node", "--version"], [npm, "--version"], ["cargo", "--version"], ["git", "--version"]];
+  const probes = [["node", "--version"], [npm, "--version"], [cargo, "--version"], ["git", "--version"]];
   for (const [tool, flag] of probes) {
     const probe = spawnSync(tool, [flag], { stdio: "ignore" });
     if (probe.status !== 0) die(`missing required tool: ${tool}`);
@@ -446,7 +447,7 @@ async function prepare() {
     runSync(npx(), ["playwright", "install", "chromium"], { cwd: join(repo, "tools", "template-authoring", "workbench"), shell: isWin });
   }
   log("[3/5] Building the Rust core");
-  runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
+  runSync(cargo, ["build", "-p", "gewu-cli"], { cwd: repo });
   log("[4/5] Writing LLM configuration");
   const resolved = config.keyMode === "new" ? resolveKey(config.provider) : null;
   const key = resolved ? resolved.key : config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
@@ -501,7 +502,7 @@ function printStatus(states) {
 function startService(name, { core, api, web }) {
   if (name === "core") {
     return startOne("core", [
-      "cargo", "run", "-p", "gewu-cli", "--", "serve",
+      cargo, "run", "-p", "gewu-cli", "--", "serve",
       "--port", core,
       "--content-root", "fixtures/algorithm-units/valid",
       "--content-root", "tools/template-authoring/drafts/.workbench/published",
@@ -541,7 +542,7 @@ async function doStart() {
   await npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
   await npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
   log("[3/5] Building the Rust core");
-  runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
+  runSync(cargo, ["build", "-p", "gewu-cli"], { cwd: repo });
   log("[4/5] Writing LLM configuration");
   const resolved = config.keyMode === "new" ? resolveKey(config.provider) : null;
   const key = resolved ? resolved.key : config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;

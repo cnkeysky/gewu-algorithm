@@ -21,6 +21,8 @@ allowed only with explicit migration notes (see
 - `dev:stop` now terminates every process listening on the configured ports,
   including leftover grandchildren from older script versions and external
   processes, with a SIGKILL fallback after a grace period.
+- The dev runner resolves `cargo.exe` on Windows (previously `cargo` was not
+  found), and CI smoke-tests the runner on Linux, macOS, and Windows.
 
 ## [0.1.1] - 2026-08-07
 
