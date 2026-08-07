@@ -35,10 +35,10 @@
 .practice-session { padding: 20px 0 0; border-top: 1px solid var(--line); }
 .session-heading { display: flex; align-items: start; justify-content: space-between; gap: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .session-heading h3 { margin: 0; font-size: 24px; line-height: 1.2; }
-.session-context { margin: 7px 0 0; color: var(--muted); font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: capitalize; }
-.session-meta { margin-top: 8px; color: var(--muted); font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.session-heading-meta { display: flex; min-width: 96px; flex-direction: column; align-items: flex-end; gap: 8px; }
-.session-heading-meta .button { min-height: 34px; padding: 0 14px; font-size: 11px; }
+.session-context { margin: 7px 0 0; color: #4d5f57; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: capitalize; }
+.session-meta { margin-top: 8px; color: #43524b; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.session-heading-meta { display: flex; min-width: 96px; flex-direction: column; align-items: flex-end; gap: 16px; }
+.session-heading-meta .button { min-height: 34px; padding: 0 14px; font-size: 11px; white-space: nowrap; }
 .session-language { display: inline-block; padding: 4px 7px; border: 1px solid var(--line); color: var(--muted); font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: lowercase; }
 .session-prompt { min-height: 30px; margin: 14px 0 10px; color: var(--muted); font-size: 14px; line-height: 1.5; }
 .session-prompt.is-hidden { color: #93a29a; font-style: italic; }
@@ -60,6 +60,7 @@
 .practice-editor-toolbar select { min-width: 54px; padding: 3px 5px; border: 1px solid var(--line); background: #fff; color: var(--ink); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .practice-editor-shell .shadow-editor { height: min(44vh, 400px); }
 .practice-session .form-actions { justify-content: start; margin-top: 18px; }
+.practice-session .form-actions[hidden] { display: none; }
 .practice-session .button.danger { border-color: #d39a79; background: #fff5ef; color: #a85126; }
 .practice-session .button.danger:hover { border-color: #a85126; background: #a85126; color: #fff; }
 .shadow-editor { position: relative; min-height: 0; overflow: hidden; border: 1px solid #c7d7cc; background: #fff; cursor: text; transition: border-color 120ms ease, box-shadow 120ms ease; }

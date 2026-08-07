@@ -386,6 +386,7 @@ function renderPracticeSession(session: PracticeSession): void {
   answer.hidden = isCodeEditor;
   submit.hidden = isCodeEditor;
   submit.textContent = isFlow || (isCode && !isStructuredCode) ? "Submit answer" : isStructuredCode ? "Submit code" : "Submit event";
+  document.querySelector<HTMLElement>("#practice-session .form-actions")!.hidden = submit.hidden && reveal.hidden && restart.hidden;
   if (isCodeEditor) {
     shadowAcceptedText = session.accepted_text;
     shadowTargetText = session.target_text;
