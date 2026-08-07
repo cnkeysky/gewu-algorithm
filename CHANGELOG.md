@@ -6,6 +6,8 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-07
+
 ### Changed
 
 - Shadow typing / code recall Enter handling is anchored to the accepted
