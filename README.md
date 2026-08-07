@@ -53,36 +53,7 @@ Choose one of the two options below.
 
 #### Option A — one command (recommended)
 
-Run `npm run dev` and pick an action from the menu. To start the stack, choose
-`1) Start` (or use `npm run dev:start` to go straight to the guided start):
-
-```sh
-npm run dev -- --core-port 4175 --api-port 4174 --web-port 5173
-```
-
-Choosing `1) Start` (or `npm run dev:start`) walks you through the setup
-step by step. Existing values are shown first and you can keep or change them;
-on a first run the API key is requested after the install/build steps:
-
-1. LLM configuration: confirms the current provider/model (or asks for a new
-   provider and model id you prepared).
-2. Ports: confirms `core` / `api` / `web` ports, or lets you enter new ones.
-3. Checks prerequisites (`node`, `npm`, `cargo`, `python3`, `git`).
-4. Installs npm dependencies (`npm ci` in `tools/template-authoring` and its
-   `workbench`) after asking for confirmation when a slow install is needed.
-5. Builds the Rust core (`cargo build -p gewu-cli`).
-6. Copies `tools/template-authoring/.env.example` to `.env.local`, then reads
-   the API key with hidden input after the install/build steps, just before
-   services start.
-7. Starts core + authoring API + web client, waits for each health check,
-   prints the URLs, and exits. Services keep running in the background (logs
-   and pid files under `.gewu-dev/`).
-8. To stop, run the script again and choose `2) Stop`, or use `npm run
-   dev:stop`; `npm run dev:status` shows what is running. `start` first checks
-   for existing services and only starts the ones that are missing.
-
-Running the script without a command opens a menu: `1) Start`, `2) Stop`,
-`3) Status`, `4) Prepare`, `5) Restart`, `0) Exit`, with one-line descriptions:
+Run `npm run dev` in a terminal. It opens an action menu:
 
 - `1) Start` — ensure core, API, and web are running (starts only what is missing)
 - `2) Stop` — stop all managed services
@@ -91,10 +62,32 @@ Running the script without a command opens a menu: `1) Start`, `2) Stop`,
 - `5) Restart` — stop everything, then start again
 - `0) Exit` — quit the menu
 
-Non-interactive runs (CI or piped input) skip the prompts and use the current
-configuration, flags, and environment variables.
+Choose `1) Start` (or run `npm run dev:start` directly) to start the stack.
+The start flow walks through the setup step by step; existing values are shown
+first and you can keep or change them:
 
-The same setup can run non-interactively (no prompts):
+1. LLM configuration — confirms the current provider/model, or asks for a new
+   provider and a model id you prepared.
+2. Ports — confirms `core` / `api` / `web` ports (defaults 4175 / 4174 / 5173),
+   or lets you enter new ones.
+3. Checks prerequisites (`node`, `npm`, `cargo`, `python3`, `git`).
+4. Installs npm dependencies (`npm ci` in `tools/template-authoring` and its
+   `workbench`) after asking for confirmation when a slow install is needed.
+5. Builds the Rust core (`cargo build -p gewu-cli`).
+6. Copies `tools/template-authoring/.env.example` to `.env.local`, then reads
+   the API key with hidden input, just before services start.
+7. Starts core + authoring API + web client, waits for each health check,
+   prints the URLs, and exits; services keep running in the background (logs
+   and pid files under `.gewu-dev/`).
+
+To stop, run `npm run dev` again and choose `2) Stop`, or use `npm run
+dev:stop`; `npm run dev:status` shows what is running. `start` checks for
+existing services and only starts the ones that are missing.
+
+##### Non-interactive runs
+
+CI or piped input skips the prompts and uses the current configuration, flags,
+and environment variables:
 
 ```sh
 # POSIX (Linux, macOS, WSL): set the variable first, then run
@@ -118,15 +111,17 @@ platform): `npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
 The `sk-...` above is a placeholder; for a real key, prefer the hidden prompt so
 the key is not recorded in shell history.
 
+Ports can also be preset with flags on any command, for example:
+`npm run dev:start -- --core-port 4175 --api-port 4174 --web-port 5173`
+(environment variables `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and
+`GEWU_WEB_PORT` work the same way).
+
 The runner is one cross-platform Node script (`scripts/gewu-dev.mjs`), so
 Linux, macOS, and Windows behave the same. `npm run dev` is the uniform entry
-on every platform; other commands are `npm run dev:prepare`, `npm run
-dev:stop`, and `npm run dev:restart`. Flags can also be passed directly as
+on every platform; other commands are `npm run dev:start`, `npm run
+dev:prepare`, `npm run dev:stop`, `npm run dev:restart`, and `npm run
+dev:status`. Flags can also be passed directly as
 `node scripts/gewu-dev.mjs start --core-port 4175`.
-
-Commands: `dev:start`, `dev:prepare`, `dev:stop`, `dev:restart`, `dev:status`;
-flags: `--force-install`, `--e2e`, `--key`, `--provider`, `--model`. Ports can
-also be set with `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`.
 
 Security: API keys are read from the hidden interactive prompt or from the
 provider key environment variable (e.g. `DEEPSEEK_API_KEY`), never from CLI

@@ -4,21 +4,34 @@ All notable changes are documented here. Before `1.0`, incompatible changes are
 allowed only with explicit migration notes (see
 [`docs/development/release.md`](docs/development/release.md)).
 
-## [0.1.2] - 2026-08-07
+## [Unreleased]
+
+### Docs
+
+- Reorganized the root README Option A: `npm run dev` and the action menu
+  first, then the guided start flow, then a separate non-interactive section
+  with env/flag examples.
 
 ## [0.1.3] - 2026-08-07
+
+Dev runner flow and cross-platform fixes. No protocol, schema, or
+practice-mode behavior changes since v0.1.2.
 
 ### Changed
 
 - `npm run dev` now opens the action menu (a bare `node scripts/gewu-dev.mjs`);
-  direct start moved to `npm run dev:start`. Root package version synced to
-  the released version. Choosing `1) Start` guides through LLM configuration
-  (keep or change) and ports (keep or change) before installing, building,
-  reading the API key, and starting services; non-interactive runs skip the
-  prompts.
+  direct start moved to `npm run dev:start`. Choosing `1) Start` guides through
+  LLM configuration (keep or change) and ports (keep or change) before
+  installing, building, reading the API key, and starting services;
+  non-interactive runs skip the prompts.
 - Prerequisite probes and the setup order are fixed for Windows non-interactive
   runs (`npm.cmd` is spawned through the shell; prerequisites are checked before
   any prompt).
+
+## [0.1.2] - 2026-08-07
+
+Dev runner, CI, web UI, and documentation. No protocol, schema, or
+practice-mode behavior changes since v0.1.1.
 
 ### Changed
 
