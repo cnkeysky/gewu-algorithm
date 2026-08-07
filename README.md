@@ -49,33 +49,44 @@ cd editors/vscode && npm ci && npm test
 
 ### Run the web workbench
 
-The quickest path is the one-command script:
+Choose one of the two options below.
+
+#### Option A — one command (recommended)
+
+Run the guided setup and start everything with one command:
 
 ```sh
 npm run dev -- --core-port 4175 --api-port 4174 --web-port 5173
 ```
 
-The runner is one cross-platform Node script
-(`scripts/gewu-dev.mjs`), so Linux, macOS, and Windows behave the same.
-`npm run dev` is the uniform entry on every platform; other commands are
-`npm run dev:prepare`, `npm run dev:stop`, and `npm run dev:restart`. Flags can
-also be passed directly as `node scripts/gewu-dev.mjs start --core-port 4175`.
+The script walks you through these steps:
 
-The first run installs npm dependencies, builds the Rust core, copies
-`tools/template-authoring/.env.example` to `.env.local`, and walks you through
-provider selection (deepseek, openai, moonshotai, xiaomi) and a model id you
-prepare ahead of time (the pi-ai catalog is listed when available). The API key
-is prompted with hidden input after the install/build steps, just before
-services start. The same setup can run non-interactively:
+1. Checks prerequisites (`node`, `npm`, `cargo`, `python3`, `git`).
+2. Installs npm dependencies (`npm ci` in `tools/template-authoring` and its
+   `workbench`) after asking for confirmation when a slow install is needed.
+3. Builds the Rust core (`cargo build -p gewu-cli`).
+4. Asks for the LLM provider (`deepseek`, `openai`, `moonshotai`, `xiaomi`)
+   and the model id you prepared ahead of time (the pi-ai catalog is listed
+   when available).
+5. Copies `tools/template-authoring/.env.example` to `.env.local`, then reads
+   the API key with hidden input after the install/build steps, just before
+   services start.
+6. Confirms the ports, starts core + authoring API + web client, waits for
+   each health check, and prints the URLs.
+7. Stops everything when you press Enter in the interactive terminal, with
+   Ctrl+C, or with `npm run dev:stop` from another terminal.
+
+The same setup can run non-interactively (no prompts):
 
 ```sh
 DEEPSEEK_API_KEY=sk-... npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
 ```
 
-The whole flow is guided step by step: prerequisites → npm dependencies →
-core build → LLM provider wizard → services. After the stack is up, press
-Enter to stop everything (interactive terminal), or use Ctrl+C; from another
-terminal run `npm run dev:stop`.
+The runner is one cross-platform Node script (`scripts/gewu-dev.mjs`), so
+Linux, macOS, and Windows behave the same. `npm run dev` is the uniform entry
+on every platform; other commands are `npm run dev:prepare`, `npm run
+dev:stop`, and `npm run dev:restart`. Flags can also be passed directly as
+`node scripts/gewu-dev.mjs start --core-port 4175`.
 
 Commands: `prepare`, `start`, `stop`, `restart`; flags: `--force-install`,
 `--e2e`, `--key`, `--provider`, `--model`. Ports can also be set with
@@ -86,7 +97,7 @@ provider key environment variable (e.g. `DEEPSEEK_API_KEY`), never from CLI
 arguments, and are stored only in the git-ignored `.env.local` (mode 600 on
 POSIX). Keys are not echoed or written to the dev logs.
 
-The equivalent manual three-terminal stack:
+#### Option B — manual three terminals
 
 Start three processes (each in its own terminal):
 
