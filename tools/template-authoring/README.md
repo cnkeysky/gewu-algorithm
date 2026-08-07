@@ -113,8 +113,8 @@ Paginated lists (Drafts, Interrupted, Spaced review, Recent attempts) show an
 entry range (`Showing 1–6 of 24`) and numbered page buttons with previous/next.
 A go-to-page input (press Enter to jump) appears only when there are many pages,
 and the pagination bar is hidden when everything fits on one page. Drafts
-pagination is pinned below a scrollable list, so page content changes do not
-move it.
+pagination is pinned below a fixed-height list (no inner scrollbar), so page
+content changes do not move it and the page does not shift.
 
 Human approval also publishes a validated copy under
 `drafts/.workbench/published/` by default. Set `GEWU_PUBLISHED_ROOT` to point at

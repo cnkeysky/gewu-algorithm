@@ -11,6 +11,8 @@ allowed only with explicit migration notes (see
 - Pagination redesigned: hidden when a list fits on one page, numbered page
   buttons with previous/next, and a go-to-page input (Enter to jump) only for
   many pages; the standalone Go button is removed.
+- Drafts list uses a fixed-height area without an inner scrollbar, so the
+  drafts view no longer shifts with content.
 
 ### Docs
 
