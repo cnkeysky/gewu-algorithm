@@ -12,7 +12,10 @@ allowed only with explicit migration notes (see
 
 - `npm run dev` now opens the action menu (a bare `node scripts/gewu-dev.mjs`);
   direct start moved to `npm run dev:start`. Root package version synced to
-  the released version.
+  the released version. Choosing `1) Start` guides through LLM configuration
+  (keep or change) and ports (keep or change) before installing, building,
+  reading the API key, and starting services; non-interactive runs skip the
+  prompts.
 
 ### Changed
 

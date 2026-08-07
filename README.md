@@ -60,22 +60,24 @@ Run `npm run dev` and pick an action from the menu. To start the stack, choose
 npm run dev -- --core-port 4175 --api-port 4174 --web-port 5173
 ```
 
-The script walks you through these steps:
+Choosing `1) Start` (or `npm run dev:start`) walks you through the setup
+step by step. Existing values are shown first and you can keep or change them;
+on a first run the API key is requested after the install/build steps:
 
-1. Checks prerequisites (`node`, `npm`, `cargo`, `python3`, `git`).
-2. Installs npm dependencies (`npm ci` in `tools/template-authoring` and its
+1. LLM configuration: confirms the current provider/model (or asks for a new
+   provider and model id you prepared).
+2. Ports: confirms `core` / `api` / `web` ports, or lets you enter new ones.
+3. Checks prerequisites (`node`, `npm`, `cargo`, `python3`, `git`).
+4. Installs npm dependencies (`npm ci` in `tools/template-authoring` and its
    `workbench`) after asking for confirmation when a slow install is needed.
-3. Builds the Rust core (`cargo build -p gewu-cli`).
-4. Asks for the LLM provider (`deepseek`, `openai`, `moonshotai`, `xiaomi`)
-   and the model id you prepared ahead of time (the pi-ai catalog is listed
-   when available).
-5. Copies `tools/template-authoring/.env.example` to `.env.local`, then reads
+5. Builds the Rust core (`cargo build -p gewu-cli`).
+6. Copies `tools/template-authoring/.env.example` to `.env.local`, then reads
    the API key with hidden input after the install/build steps, just before
    services start.
-6. Confirms the ports, starts core + authoring API + web client, waits for
-   each health check, prints the URLs, and exits. Services keep running in the
-   background (logs and pid files under `.gewu-dev/`).
-7. To stop, run the script again and choose `2) Stop`, or use `npm run
+7. Starts core + authoring API + web client, waits for each health check,
+   prints the URLs, and exits. Services keep running in the background (logs
+   and pid files under `.gewu-dev/`).
+8. To stop, run the script again and choose `2) Stop`, or use `npm run
    dev:stop`; `npm run dev:status` shows what is running. `start` first checks
    for existing services and only starts the ones that are missing.
 
@@ -88,6 +90,9 @@ Running the script without a command opens a menu: `1) Start`, `2) Stop`,
 - `4) Prepare` — install dependencies, build the core, configure the LLM provider
 - `5) Restart` — stop everything, then start again
 - `0) Exit` — quit the menu
+
+Non-interactive runs (CI or piped input) skip the prompts and use the current
+configuration, flags, and environment variables.
 
 The same setup can run non-interactively (no prompts):
 

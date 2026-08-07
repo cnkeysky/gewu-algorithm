@@ -244,14 +244,34 @@ async function collectConfig(starting) {
   let model;
   let keyMode;
 
-  if (!reconfigure && current.hasKey) {
+  if (!reconfigure && current.hasKey && isTTY) {
+    const keep = await confirmYes(`Keep LLM configuration (provider=${current.provider}, model=${current.model})`);
+    if (keep) {
+      provider = current.provider;
+      model = current.model;
+      keyMode = "existing";
+      log(`using existing configuration: provider=${current.provider} model=${current.model} (API key present)`);
+    } else {
+      log("Have your LLM provider and model id ready (e.g., deepseek / deepseek-v4-flash).");
+      provider = await ask(`Provider [${Object.keys(PROVIDER_ENV).join("|")}] (default ${current.provider}): `, current.provider);
+      if (!PROVIDER_ENV[provider]) die(`unsupported provider: ${provider}`);
+      const models = await loadModels(provider);
+      const question = models.length
+        ? `Model (${models.map((id, index) => `${index + 1}: ${id}`).join(", ")}; default ${current.model}): `
+        : `Model id (the id you prepared; default ${current.model}): `;
+      const answer = await ask(question, current.model);
+      const index = Number(answer);
+      model = Number.isInteger(index) && index >= 1 && index <= models.length ? models[index - 1] : answer;
+      keyMode = "new";
+    }
+  } else if (!reconfigure && current.hasKey) {
     provider = current.provider;
     model = current.model;
     keyMode = "existing";
     log(`using existing configuration: provider=${current.provider} model=${current.model} (API key present)`);
   } else {
     log("Have your LLM provider and model id ready (e.g., deepseek / deepseek-v4-flash).");
-    provider = selectedProvider ?? await ask(`Provider [${Object.keys(PROVIDER_ENV).join("|")}] (default ${current.provider}): `, current.provider);
+    provider = selectedProvider ?? (isTTY ? await ask(`Provider [${Object.keys(PROVIDER_ENV).join("|")}] (default ${current.provider}): `, current.provider) : current.provider);
     if (!PROVIDER_ENV[provider]) die(`unsupported provider: ${provider}`);
     if (selectedModel) {
       model = selectedModel;
@@ -260,7 +280,7 @@ async function collectConfig(starting) {
       const question = models.length
         ? `Model (${models.map((id, index) => `${index + 1}: ${id}`).join(", ")}; default ${current.model}): `
         : `Model id (the id you prepared; default ${current.model}): `;
-      const answer = await ask(question, current.model);
+      const answer = isTTY ? await ask(question, current.model) : current.model;
       const index = Number(answer);
       model = Number.isInteger(index) && index >= 1 && index <= models.length ? models[index - 1] : answer;
     }
@@ -277,7 +297,7 @@ async function collectConfig(starting) {
   let web = webPort;
   if (starting && isTTY) {
     for (;;) {
-      if (await confirmYes(`Start with core=${core} api=${api} web=${web}`)) break;
+      if (await confirmYes(`Use ports core=${core} api=${api} web=${web}`)) break;
       core = await ask("core port (default 4175): ", "4175");
       api = await ask("authoring API port (default 4174): ", "4174");
       web = await ask("web port (default 5173): ", "5173");
