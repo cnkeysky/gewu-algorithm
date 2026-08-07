@@ -62,11 +62,23 @@ The runner is one cross-platform Node script
 also be passed directly as `node scripts/gewu-dev.mjs start --core-port 4175`.
 
 The first run installs npm dependencies, builds the Rust core, copies
-`tools/template-authoring/.env.example` to `.env.local`, and prompts for
-`DEEPSEEK_API_KEY` with hidden input. Commands: `prepare`, `start`, `stop`,
-`restart`; flags: `--force-install`, `--e2e`, `--key`. Ports can also be set
-with `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`. Stop the
-foreground stack with Ctrl+C (or run `npm run dev:stop` from another terminal).
+`tools/template-authoring/.env.example` to `.env.local`, and walks you through
+provider selection (deepseek, openai, moonshotai, xiaomi), model selection
+(listed from the pi-ai catalog), and a hidden API-key prompt. The same setup
+can run non-interactively:
+
+```sh
+npm run dev:prepare -- --provider openai --model gpt-4o --api-key sk-...
+```
+
+The whole flow is guided step by step: prerequisites → npm dependencies →
+core build → LLM provider wizard → services. After the stack is up, press
+Enter to stop everything (interactive terminal), or use Ctrl+C; from another
+terminal run `npm run dev:stop`.
+
+Commands: `prepare`, `start`, `stop`, `restart`; flags: `--force-install`,
+`--e2e`, `--key`, `--provider`, `--model`, `--api-key`. Ports can also be set
+with `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`.
 
 The equivalent manual three-terminal stack:
 

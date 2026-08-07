@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import readline from "node:readline";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -21,10 +21,11 @@ const repo = resolve(here, "..");
 const devDir = join(repo, ".gewu-dev");
 const logDir = join(devDir, "logs");
 const pidDir = join(devDir, "pids");
-const envFile = join(repo, "tools", "template-authoring", ".env.local");
+const envFile = process.env.GEWU_DEV_ENV_FILE ?? join(repo, "tools", "template-authoring", ".env.local");
 const envExample = join(repo, "tools", "template-authoring", ".env.example");
 const isWin = process.platform === "win32";
 const npm = isWin ? "npm.cmd" : "npm";
+const isTTY = Boolean(process.stdin.isTTY);
 
 const args = process.argv.slice(2);
 let command = "start";
@@ -34,6 +35,23 @@ let webPort = process.env.GEWU_WEB_PORT ?? "5173";
 let forceInstall = false;
 let installE2e = false;
 let keyOverride = false;
+let selectedProvider;
+let selectedModel;
+let apiKeyValue;
+
+const PROVIDER_ENV = {
+  deepseek: "DEEPSEEK_API_KEY",
+  openai: "OPENAI_API_KEY",
+  moonshotai: "MOONSHOT_API_KEY",
+  xiaomi: "XIAOMI_API_KEY",
+};
+
+const FALLBACK_MODELS = {
+  deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
+  openai: ["gpt-4o", "gpt-4o-mini"],
+  moonshotai: ["moonshot-v1-8k", "moonshot-v1-32k"],
+  xiaomi: ["MiMo-7B-RL"],
+};
 
 const log = (message) => console.log(`\x1b[36m>>\x1b[0m ${message}`);
 const die = (message) => {
@@ -58,6 +76,9 @@ flags:
   --force-install reinstall npm dependencies even if node_modules exists
   --e2e           also install Playwright chromium (for the e2e suite)
   --key           re-prompt for DEEPSEEK_API_KEY even if already set
+  --provider ID   provider id (deepseek|openai|moonshotai|xiaomi)
+  --model ID      model id (used with --provider; must exist in the pi-ai catalog)
+  --api-key KEY   provider API key (used with --provider; hidden prompts otherwise)
 
 Cross-platform: POSIX ./scripts/gewu-dev.sh, Windows scripts\\gewu-dev.cmd.`);
 }
@@ -71,6 +92,9 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--force-install") forceInstall = true;
   else if (arg === "--e2e") installE2e = true;
   else if (arg === "--key") keyOverride = true;
+  else if (arg === "--provider") selectedProvider = args[++i];
+  else if (arg === "--model") selectedModel = args[++i];
+  else if (arg === "--api-key") apiKeyValue = args[++i];
   else die(`unknown argument: ${arg} (run with 'help')`);
 }
 
@@ -79,17 +103,26 @@ function runSync(name, list, options = {}) {
   if (result.status !== 0) die(`${name} exited with code ${result.status}`);
 }
 
-function npmInstall(cwd, force) {
+async function confirmYes(question) {
+  if (!isTTY) return true;
+  const answer = (await ask(`${question} [Y/n] `, "y")).toLowerCase();
+  return answer === "y" || answer === "";
+}
+
+async function npmInstall(cwd, force) {
   if (existsSync(join(cwd, "node_modules")) && !force) {
     log(`node_modules present in ${cwd}; skipping npm ci (--force-install to reinstall)`);
     return;
+  }
+  if (!(await confirmYes(`Install npm dependencies in ${cwd} (may take a while)`))) {
+    die("dependencies are required; rerun with --force-install or install manually");
   }
   log(`npm ci in ${cwd}`);
   runSync(npm, ["ci"], { cwd, shell: isWin });
 }
 
-function prepare() {
-  log("Checking prerequisites (node, npm, cargo, python3, git)");
+function checkPrerequisites() {
+  log("[1/5] Checking prerequisites (node, npm, cargo, python3, git)");
   const probes = [["node", "--version"], [npm, "--version"], ["cargo", "--version"], ["git", "--version"]];
   for (const [tool, flag] of probes) {
     const probe = spawnSync(tool, [flag], { stdio: "ignore" });
@@ -100,22 +133,68 @@ function prepare() {
   if (!isWin && python !== "python3") {
     log(`using ${python} as the Python interpreter`);
   }
+}
+
+async function prepare() {
+  checkPrerequisites();
+  log("[2/5] Installing npm dependencies");
   npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
   npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
   if (installE2e) {
     log("Installing Playwright chromium (for e2e)");
     runSync(npx(), ["playwright", "install", "chromium"], { cwd: join(repo, "tools", "template-authoring", "workbench"), shell: isWin });
   }
-  log("Building the Rust core");
+  log("[3/5] Building the Rust core");
   runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
+  log("[4/5] Configuring the LLM provider");
+  await ensureEnv();
+  log("[5/5] Setup complete");
 }
 
 function npx() {
   return isWin ? "npx.cmd" : "npx";
 }
 
-function askHidden(question) {
+let pipedLines = [];
+let pipedReady = false;
+
+async function pipedLine(fallback) {
+  if (!pipedReady) {
+    pipedReady = true;
+    const rl = readline.createInterface({ input: process.stdin, terminal: false });
+    for await (const line of rl) pipedLines.push(line);
+  }
+  const value = pipedLines.shift();
+  return value === undefined ? (fallback ?? "") : value;
+}
+
+function ask(question, fallback) {
+  if (!isTTY) {
+    process.stdout.write(question);
+    return pipedLine(fallback);
+  }
   return new Promise((resolvePrompt) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    let answered = false;
+    rl.question(question, (answer) => {
+      answered = true;
+      rl.close();
+      resolvePrompt(answer.trim() || fallback);
+    });
+    rl.on("SIGINT", () => process.exit(130));
+    rl.on("close", () => {
+      if (!answered) resolvePrompt(fallback ?? "");
+    });
+  });
+}
+
+async function askHidden(question) {
+  if (!isTTY) {
+    process.stdout.write(`${question}\n`);
+    return pipedLine("");
+  }
+  return new Promise((resolvePrompt) => {
+    let answered = false;
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
     let muted = false;
     rl._writeToOutput = (stringToWrite) => {
@@ -123,12 +202,34 @@ function askHidden(question) {
       else rl.output.write(stringToWrite);
     };
     rl.question(question, (answer) => {
+      answered = true;
       rl.close();
       resolvePrompt(answer.trim());
     });
     rl.on("SIGINT", () => process.exit(130));
+    rl.on("close", () => {
+      if (!answered) resolvePrompt("");
+    });
     muted = true;
   });
+}
+
+async function loadModels(provider) {
+  try {
+    const moduleUrl = pathToFileURL(join(repo, "tools", "template-authoring", "node_modules", "@earendil-works", "pi-ai", "dist", "providers", "all.js")).href;
+    const piAi = await import(moduleUrl);
+    const models = piAi.builtinModels()?.getModels?.(provider)?.map((model) => model.id) ?? [];
+    return models.length ? models : FALLBACK_MODELS[provider] ?? [];
+  } catch {
+    return FALLBACK_MODELS[provider] ?? [];
+  }
+}
+
+function writeEnvVar(content, name, value) {
+  if (new RegExp(`^#? *${name}=`, "m").test(content)) {
+    return content.replace(new RegExp(`^#? *${name}=.*$`, "m"), `${name}=${value}`);
+  }
+  return `${content.replace(/\n*$/, "\n")}${name}=${value}\n`;
 }
 
 async function ensureEnv() {
@@ -137,22 +238,46 @@ async function ensureEnv() {
     copyFileSync(envExample, envFile);
     log(`Created ${envFile} from .env.example`);
   }
-  const hasKey = /^DEEPSEEK_API_KEY=[^ \t]+/m.test(readFileSync(envFile, "utf8"));
-  if (!hasKey || keyOverride) {
-    const key = await askHidden("DEEPSEEK_API_KEY (input hidden): ");
-    if (!key) die("DEEPSEEK_API_KEY cannot be empty");
-    let content = readFileSync(envFile, "utf8");
-    if (/^#? *DEEPSEEK_API_KEY=/m.test(content)) {
-      content = content.replace(/^#? *DEEPSEEK_API_KEY=.*$/m, `DEEPSEEK_API_KEY=${key}`);
-    } else {
-      content += `\nDEEPSEEK_API_KEY=${key}\n`;
-    }
-    writeFileSync(envFile, content, { mode: 0o600 });
-    log("DEEPSEEK_API_KEY written to .env.local (mode 600)");
-  } else {
-    log("DEEPSEEK_API_KEY already present in .env.local");
+  let content = readFileSync(envFile, "utf8");
+  const currentProvider = /^GEWU_LLM_PROVIDER=(\S+)/m.exec(content)?.[1] ?? "deepseek";
+  const currentModel = /^GEWU_LLM_MODEL=(\S+)/m.exec(content)?.[1] ?? "deepseek-v4-flash";
+
+  if (selectedProvider && !PROVIDER_ENV[selectedProvider]) die(`unsupported provider: ${selectedProvider} (use one of: ${Object.keys(PROVIDER_ENV).join(", ")})`);
+
+  let provider = selectedProvider;
+  let model = selectedModel;
+  let key = apiKeyValue;
+  const interactive = !provider && !key;
+
+  if (interactive && !keyOverride && /^[A-Z_]+_API_KEY=[^ \t]+/m.test(content)) {
+    log(`already configured: provider=${currentProvider} model=${currentModel} (API key present). Use --key to reconfigure.`);
+    return;
   }
+
+  if (interactive) {
+    const providerAnswer = await ask(`Provider [${Object.keys(PROVIDER_ENV).join("|")}] (default ${currentProvider}): `, currentProvider);
+    provider = providerAnswer;
+    if (!PROVIDER_ENV[provider]) die(`unsupported provider: ${provider}`);
+    const models = await loadModels(provider);
+    const modelQuestion = models.length
+      ? `Model (${models.map((id, index) => `${index + 1}: ${id}`).join(", ")}; default ${currentModel}): `
+      : "Model id (pi-ai catalog unavailable; type an id): ";
+    const modelAnswer = await ask(modelQuestion, currentModel);
+    const modelIndex = Number(modelAnswer);
+    model = Number.isInteger(modelIndex) && modelIndex >= 1 && modelIndex <= models.length ? models[modelIndex - 1] : modelAnswer;
+    key = await askHidden(`${PROVIDER_ENV[provider]} (input hidden): `);
+  } else if (!key && (provider || selectedModel)) {
+    key = await askHidden(`${PROVIDER_ENV[provider ?? currentProvider]} (input hidden): `);
+  }
+
+  if (!key) die("API key cannot be empty");
+  const envVar = PROVIDER_ENV[provider ?? currentProvider];
+  content = writeEnvVar(content, "GEWU_LLM_PROVIDER", provider ?? currentProvider);
+  content = writeEnvVar(content, "GEWU_LLM_MODEL", model ?? currentModel);
+  content = writeEnvVar(content, envVar, key);
+  writeFileSync(envFile, content, { mode: 0o600 });
   if (!isWin) chmodSync(envFile, 0o600);
+  log(`${envVar} and GEWU_LLM_PROVIDER/MODEL written to .env.local (mode 600)`);
 }
 
 function killTree(pid) {
@@ -227,8 +352,26 @@ function startOne(name, list, options) {
 }
 
 async function doStart() {
-  prepare();
+  log("GEWU dev setup plan:");
+  log("  1/5 prerequisites -> 2/5 npm deps -> 3/5 core build -> 4/5 LLM config -> 5/5 start services");
+  checkPrerequisites();
+  log("[2/5] Installing npm dependencies");
+  await npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
+  await npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
+  log("[3/5] Building the Rust core");
+  runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
+  log("[4/5] Configuring the LLM provider");
   await ensureEnv();
+  log("[5/5] Starting services");
+  for (;;) {
+    if (await confirmYes(`Start with core=${corePort} api=${apiPort} web=${webPort}`)) break;
+    corePort = await ask("core port (default 4175): ", "4175");
+    apiPort = await ask("authoring API port (default 4174): ", "4174");
+    webPort = await ask("web port (default 5173): ", "5173");
+    for (const value of [corePort, apiPort, webPort]) {
+      if (!/^\d{1,5}$/.test(value)) die(`invalid port: ${value}`);
+    }
+  }
   mkdirSync(join(devDir, "data"), { recursive: true });
   stopAll();
 
@@ -260,7 +403,7 @@ async function doStart() {
   core  http://127.0.0.1:${corePort}
   api   http://127.0.0.1:${apiPort}
   web   http://127.0.0.1:${webPort}
-Stop the foreground stack with Ctrl+C, or run: npm run dev:stop`);
+Stop with Ctrl+C, or run npm run dev:stop from another terminal.`);
 }
 
 function keepAlive() {
@@ -278,13 +421,17 @@ function keepAlive() {
 if (command === "help") {
   usage();
 } else if (command === "prepare") {
-  prepare();
-  await ensureEnv();
-  log("prepare complete");
+  await prepare();
 } else if (command === "stop") {
   stopAll();
 } else if (command === "restart" || command === "start") {
   keepAlive();
   await doStart();
-  await new Promise(() => {});
+  if (isTTY) {
+    await ask("\nPress Enter to stop all GEWU services...", "");
+    stopAll();
+    process.exit(0);
+  } else {
+    await new Promise(() => {});
+  }
 }
