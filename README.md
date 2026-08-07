@@ -53,7 +53,8 @@ Choose one of the two options below.
 
 #### Option A — one command (recommended)
 
-Run the guided setup and start everything with one command:
+Run `npm run dev` and pick an action from the menu. To start the stack, choose
+`1) Start` (or use `npm run dev:start` to go straight to the guided start):
 
 ```sh
 npm run dev -- --core-port 4175 --api-port 4174 --web-port 5173
@@ -118,9 +119,9 @@ on every platform; other commands are `npm run dev:prepare`, `npm run
 dev:stop`, and `npm run dev:restart`. Flags can also be passed directly as
 `node scripts/gewu-dev.mjs start --core-port 4175`.
 
-Commands: `prepare`, `start`, `stop`, `restart`; flags: `--force-install`,
-`--e2e`, `--key`, `--provider`, `--model`. Ports can also be set with
-`GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`.
+Commands: `dev:start`, `dev:prepare`, `dev:stop`, `dev:restart`, `dev:status`;
+flags: `--force-install`, `--e2e`, `--key`, `--provider`, `--model`. Ports can
+also be set with `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`.
 
 Security: API keys are read from the hidden interactive prompt or from the
 provider key environment variable (e.g. `DEEPSEEK_API_KEY`), never from CLI

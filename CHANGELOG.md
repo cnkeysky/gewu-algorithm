@@ -6,6 +6,14 @@ allowed only with explicit migration notes (see
 
 ## [0.1.2] - 2026-08-07
 
+## [Unreleased]
+
+### Changed
+
+- `npm run dev` now opens the action menu (a bare `node scripts/gewu-dev.mjs`);
+  direct start moved to `npm run dev:start`. Root package version synced to
+  the released version.
+
 ### Changed
 
 - Dev runner services now run in the background and the script exits after
