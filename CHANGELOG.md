@@ -6,6 +6,18 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+### Changed
+
+- Shadow typing / code recall Enter handling is anchored to the accepted
+  boundary instead of the cursor, and newlines are validated locally against
+  the target before insertion. Enter only inserts when the target actually
+  expects a newline, so a held/repeated Enter is silently ignored instead of
+  stacking newlines that Core rejects and rolls back (the recurring "Enter
+  does not advance" issue). Applies to every code editor mode.
+- Spaced review only schedules material completed at least once:
+  interrupted-only history produces no recommendation (it stays in the
+  Interrupted panel); the `Inconclusive` recommendation kind is removed.
+
 ## [0.1.5] - 2026-08-07
 
 ### Changed

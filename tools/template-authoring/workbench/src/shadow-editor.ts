@@ -171,20 +171,27 @@ export function mountShadowEditor(
   });
   const insertNewline = () => {
     if (syncing || locked || !activated) return;
-    const selection = editor.getSelection();
     const currentModel = editor.getModel();
-    if (!selection || !currentModel || selection.isEmpty() === false) return;
-
-    const startOffset = currentModel.getOffsetAt(selection.getStartPosition());
+    if (!currentModel) return;
+    const value = currentModel.getValue();
+    // Local newline gate: only insert when the target actually expects a
+    // newline at the accepted boundary. A held/repeated Enter at a single
+    // marker is silently ignored instead of stacking newlines that Core would
+    // reject and roll back (which previously read as a broken Enter).
+    if (Array.from(targetText)[Array.from(value).length] !== "\n") return;
+    // Insert at the accepted boundary (end of the optimistic value) rather
+    // than at the cursor, so the model always stays a strict prefix extension
+    // of the target and the insert can never be rejected for positioning.
     editor.pushUndoStop();
+    const boundary = currentModel.getPositionAt(value.length);
     editor.executeEdits("gewu-shadow-enter", [{
-      range: selection,
+      range: new monaco.Range(boundary.lineNumber, boundary.column, boundary.lineNumber, boundary.column),
       text: "\n",
       forceMoveMarkers: true,
     }]);
     // Set the cursor after the model edit. This is deliberately local and
     // synchronous; Core confirmation must never be responsible for it.
-    editor.setPosition(currentModel.getPositionAt(startOffset + 1));
+    editor.setPosition(currentModel.getPositionAt(value.length + 1));
     editor.pushUndoStop();
   };
   // Intercept the DOM event in capture phase. Monaco's built-in `Enter`

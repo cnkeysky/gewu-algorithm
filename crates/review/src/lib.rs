@@ -39,7 +39,6 @@ pub enum TerminalReason {
 pub enum RecommendationKind {
     Review,
     Progress,
-    Inconclusive,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -113,7 +112,10 @@ type AttemptKey = (
 );
 type AttemptGroups<'a> = BTreeMap<AttemptKey, Vec<&'a AttemptFact>>;
 
-/// Derives one stable recommendation per unit/revision/mode from terminal attempts.
+/// Derives one stable recommendation per unit/revision/mode from terminal
+/// attempts. Only identities with at least one completed attempt are
+/// scheduled: interrupted-only history belongs to the Interrupted panel, and
+/// the review scheduler has nothing to space until material was completed.
 pub fn recommend(attempts: &[AttemptFact]) -> Vec<ReviewRecommendation> {
     let mut groups: AttemptGroups = BTreeMap::new();
     for attempt in attempts {
@@ -128,14 +130,14 @@ pub fn recommend(attempts: &[AttemptFact]) -> Vec<ReviewRecommendation> {
             .or_default()
             .push(attempt);
     }
-    groups.into_iter().map(|((unit_id, revision, mode, implementation, practice_id), mut values)| {
+    groups.into_iter().filter_map(|((unit_id, revision, mode, implementation, practice_id), mut values)| {
         values.sort_by(|left, right| left.id.cmp(&right.id));
         let source_attempt_ids = values.iter().map(|value| value.id.clone()).collect();
         let completed = values.iter().filter(|value| value.terminal_reason == TerminalReason::Completed).count();
-        let stopped = values.len() - completed;
         if completed == 0 {
-            return ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, implementation, practice_id, kind: RecommendationKind::Inconclusive, priority: RecommendationPriority::Low, reason: "Only interrupted attempts are available; no progression decision is made.".to_owned(), due_after_days: 0, due_at_ms: None, source_attempt_ids };
+            return None;
         }
+        let stopped = values.len() - completed;
         let rejected: u64 = values.iter().map(|value| value.rejected).sum();
         let dependence: u64 = values.iter().map(|value| value.prompts + value.scaffold_reveals).sum();
         let (kind, priority, due_after_days, reason) = if dependence > 0 || rejected > 0 {
@@ -145,7 +147,7 @@ pub fn recommend(attempts: &[AttemptFact]) -> Vec<ReviewRecommendation> {
         } else {
             (RecommendationKind::Review, RecommendationPriority::Normal, 3, "Schedule a delayed independent review to test retention.".to_owned())
         };
-        ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, implementation, practice_id, kind, priority, reason, due_after_days, due_at_ms: None, source_attempt_ids }
+        Some(ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, implementation, practice_id, kind, priority, reason, due_after_days, due_at_ms: None, source_attempt_ids })
     }).collect()
 }
 
@@ -251,7 +253,7 @@ mod tests {
     }
 
     #[test]
-    fn interrupted_only_history_is_inconclusive() {
+    fn interrupted_only_history_has_no_recommendation() {
         let result = recommend(&[fact(
             "a",
             PracticeMode::ShadowTyping,
@@ -259,8 +261,7 @@ mod tests {
             0,
             0,
         )]);
-        assert_eq!(result[0].kind, RecommendationKind::Inconclusive);
-        assert_eq!(result[0].source_attempt_ids, vec!["a"]);
+        assert!(result.is_empty());
     }
 
     #[test]

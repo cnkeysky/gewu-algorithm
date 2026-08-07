@@ -13,8 +13,9 @@ answers, editor metadata, and presentation details.
 
 ## Policy
 
-- Interrupted-only history is `inconclusive`; it cannot advance or schedule a
-  completed review.
+- Interrupted-only history produces no recommendation; only material completed
+  at least once enters the review schedule (interrupted work stays in the
+  Interrupted panel for resume or discard).
 - Any rejected answer or assistance use schedules a high-priority review after
   one day.
 - One clean completion schedules an independent delayed review after three

@@ -163,7 +163,8 @@ The platform-independent `gewu-review` policy now groups terminal attempt facts
 by unit, revision, and mode. Assistance dependence and rejected answers produce
 high-priority one-day reviews; a clean repeated history produces a seven-day
 progression recommendation; a single clean completion produces a three-day
-delayed review. Interrupted-only histories are explicitly inconclusive. The
+delayed review. Interrupted-only histories produce no recommendation; only
+completed material is scheduled. The
 policy consumes only decision-relevant facts, returns stable recommendations,
 and exposes user overrides as separate decisions without mutating attempt
 history. `gewu review` is the host-free CLI surface for the policy.

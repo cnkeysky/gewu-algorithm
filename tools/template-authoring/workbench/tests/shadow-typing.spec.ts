@@ -158,6 +158,33 @@ test("comment-to-code exposes reviewed comments and keeps the full-code editor",
   await expect(page.locator("#session-status")).toHaveText("completed");
 });
 
+test("code recall editor accepts Enter through the same strict prefix pipeline", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("code_recall");
+  await page.locator("#practice-id").selectOption("bfs-comments");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  const editor = page.locator("#session-editor .monaco-editor");
+  const meta = page.locator("#session-meta");
+  await expect(editor).toBeVisible();
+  await editor.click({ position: { x: 180, y: 30 } });
+  await page.keyboard.type("from collections import deque");
+  await expect(meta).toContainText("progress 7%");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(600);
+  await expect(meta).toContainText("progress 8%");
+  await expect(meta).toContainText("rejected inputs 0");
+  // The newline gate ignores further Enters once the marker is consumed.
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(400);
+  await expect(meta).toContainText("progress 8%");
+  await expect(meta).toContainText("rejected inputs 0");
+});
+
 test("code recall restart keeps the mode and variant bound", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
