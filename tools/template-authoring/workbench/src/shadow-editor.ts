@@ -161,16 +161,18 @@ export function mountShadowEditor(
   };
   const subscription = editor.onDidChangeModelContent(() => {
     if (syncing || locked) return;
-    // Repaint the guidance immediately from the local value so deletions and
-    // corrections never leave a stale or missing ghost while Core confirms.
-    paintGhost(model.getValue());
-    if (flushTimer !== undefined) return;
-    // Monaco updates locally immediately. A short batching window keeps
-    // sustained typing from turning every character into a disk checkpoint.
-    flushTimer = window.setTimeout(() => {
-      flushTimer = undefined;
-      enqueue();
-    }, 120);
+    // Repaint the guidance immediately from the local value while it is still
+    // a valid target prefix (deletions and corrections). A wrong character
+    // breaks the prefix, so the ghost keeps showing the correct hint instead
+    // of disappearing during the Core rejection roundtrip.
+    const value = model.getValue();
+    if (targetText.startsWith(value)) paintGhost(value);
+    // Enqueue every change immediately. Per-keystroke transactions keep each
+    // character isolated, so a wrong character is rejected on its own while
+    // the correctly typed prefix stays accepted; a large wrong paste is still
+    // one atomic rejection. Disk pressure is covered by Core's throttled
+    // checkpoint writes, so the old batching window is no longer needed.
+    enqueue();
   });
   const insertNewline = () => {
     if (syncing || locked || !activated) return;

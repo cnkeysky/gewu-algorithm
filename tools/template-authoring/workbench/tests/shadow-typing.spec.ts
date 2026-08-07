@@ -204,6 +204,26 @@ test("guidance repaints immediately after deleting characters", async ({ page })
   await expect(guidance).toHaveText("Enter");
 });
 
+test("wrong input does not clear the guidance ghost", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  const editor = page.locator("#session-editor .monaco-editor");
+  const guidance = page.locator("#session-editor .gewu-shadow-guidance");
+  await editor.click({ position: { x: 220, y: 30 } });
+  await page.keyboard.type("from collections import deque");
+  await expect(guidance).toHaveText("Enter");
+  // A wrong character must keep the hint visible (it is not a prefix, so the
+  // ghost stays on the correct next input instead of blanking out).
+  await page.keyboard.type("z");
+  await expect(guidance).toHaveText("Enter");
+  await expect(page.locator("#session-meta")).toContainText("rejected inputs 1");
+  await expect(guidance).toHaveText("Enter");
+});
+
 test("code recall restart keeps the mode and variant bound", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();

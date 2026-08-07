@@ -27,6 +27,11 @@ allowed only with explicit migration notes (see
 - Draft action buttons and practice start/stop ignore rapid repeated clicks
   (in-flight locks), and the code editor auto-activates on start/resume so
   Enter and typing work immediately without a click.
+- Shadow typing / code recall editors enqueue every content change instead of
+  batching: a wrong character is rejected on its own while the correctly typed
+  prefix stays accepted (fast typing no longer rolls back the whole batch),
+  and a large wrong paste is still one atomic rejection. The ghost hint keeps
+  showing the correct next input while a wrong character is pending.
 
 ## [0.1.5] - 2026-08-07
 
