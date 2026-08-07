@@ -662,13 +662,13 @@ function renderDrafts(): void {
     const canGenerate = ["queued", "revision_requested"].includes(draft.status);
     const canValidate = draft.status === "generated";
     const canReview = draft.status === "validated";
-    const canAccept = draft.status === "llm_reviewed" || draft.status === "needs_revision";
+    const canAccept = draft.status === "llm_reviewed" || draft.status === "needs_revision" || (draft.status === "validated" && readReviews().some((review) => review.draftId === draft.id && review.role === "human_revision"));
     const canRollback = ["generated", "validated", "llm_reviewed", "needs_revision"].includes(draft.status);
     const canFork = draft.status === "accepted";
     const canDelete = draft.status !== "accepted";
     const stage = draftStage(draft.status);
     const actions = [
-      draft.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">${draft.status === "needs_revision" ? "Edit artifact" : "View artifact"}</button>` : "",
+      draft.artifactPath ? `<button class="inline-action${draft.status === "needs_revision" ? " revision-action" : ""}" type="button" data-view-artifact-id="${draft.id}">${draft.status === "needs_revision" ? "Revise artifact" : "View artifact"}</button>` : "",
       canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">Generate template</button>` : "",
       canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}">LLM pre-review</button>` : "",
@@ -701,13 +701,16 @@ function renderWorkflow(): void {
   const contractValid = ["validated", "llm_reviewed", "accepted"].includes(draft.status);
   const readyToValidate = draft.status === "generated";
   setStatus(validation, contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : draft.status === "needs_revision" ? "Blocked by revision" : "Pending", contractValid ? "passed" : readyToValidate ? "ready" : draft.status === "needs_revision" ? "blocked" : "pending");
-  const roleReviews = draftPersistence === "local" ? [] : readReviews().filter((item) => item.draftId === draft.id);
+  const allDraftReviews = draftPersistence === "local" ? [] : readReviews().filter((item) => item.draftId === draft.id);
+  const roleReviews = allDraftReviews.filter((item) => item.role !== "human_revision");
+  const humanReviewed = allDraftReviews.some((item) => item.role === "human_revision" && item.verdict === "pass");
   const blockedReview = roleReviews.find((item) => item.verdict === "needs_revision" || item.verdict === "reject");
   const allRolesPassed = roleReviews.length === 3 && roleReviews.every((item) => item.verdict === "pass");
-  const reviewValue = allRolesPassed ? "All roles passed" : blockedReview ? "Needs revision" : draft.status === "validated" ? "Ready to run" : "Pending";
-  const reviewKind = allRolesPassed ? "passed" : blockedReview ? "blocked" : draft.status === "validated" ? "ready" : "pending";
+  const reviewValue = allRolesPassed ? "All roles passed" : humanReviewed ? "Human revision recorded" : blockedReview ? "Needs revision" : draft.status === "validated" ? "Ready to run" : "Pending";
+  const reviewKind = allRolesPassed ? "passed" : humanReviewed ? "passed" : blockedReview ? "blocked" : draft.status === "validated" ? "ready" : "pending";
   setStatus(review, reviewValue, reviewKind);
-  setStatus(acceptance, draft.status === "accepted" ? "Human approved" : draft.status === "llm_reviewed" ? "Ready for you" : "Pending", draft.status === "accepted" ? "passed" : draft.status === "llm_reviewed" ? "ready" : "pending");
+  const acceptanceReady = draft.status === "llm_reviewed" || draft.status === "needs_revision" || (draft.status === "validated" && humanReviewed);
+  setStatus(acceptance, draft.status === "accepted" ? "Human approved" : acceptanceReady ? "Ready for you" : "Pending", draft.status === "accepted" ? "passed" : acceptanceReady ? "ready" : "pending");
   const revise = document.querySelector<HTMLButtonElement>("#workflow-revise")!;
   revise.hidden = draft.status !== "needs_revision";
 }
@@ -720,7 +723,7 @@ function renderHistory(): void {
   const drafts = readDrafts();
   const reviews = readReviews();
   historyList.innerHTML = reviews.length
-    ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View feedback</button>` : ""; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status">${review.verdict}</span>${inspect}</div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
+    ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View feedback</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
     : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
 }
 
@@ -764,7 +767,12 @@ function renderArtifactReviews(): void {
     return "info";
   };
   const cards = page.map((finding) => `<article class="finding-card severity-${severity(finding.severity)}"><div class="finding-head"><span class="severity-chip">${escapeHtml(finding.severity)}</span><b>${escapeHtml(finding.rule_id)}</b><small>${escapeHtml(finding.role.replaceAll("_", " "))} · ${escapeHtml(finding.path)}</small></div><p>${escapeHtml(finding.problem)}</p><small class="finding-evidence">${escapeHtml(finding.evidence)}</small>${finding.suggested_change ? `<small class="finding-suggestion">Suggestion: ${escapeHtml(finding.suggested_change)}</small>` : ""}</article>`).join("");
-  const controls = totalPages > 1 ? `<div class="finding-pagination"><span>Finding ${artifactReviewPage * ARTIFACT_REVIEW_PAGE_SIZE + 1}–${Math.min((artifactReviewPage + 1) * ARTIFACT_REVIEW_PAGE_SIZE, findings.length)} of ${findings.length}</span><button class="page-button" type="button" data-review-page-prev aria-label="Previous page" ${artifactReviewPage === 0 ? "disabled" : ""}>&#8249;</button><span>${artifactReviewPage + 1} / ${totalPages}</span><button class="page-button" type="button" data-review-page-next aria-label="Next page" ${artifactReviewPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></div>` : "";
+  const start = artifactReviewPage * ARTIFACT_REVIEW_PAGE_SIZE + 1;
+  const end = Math.min((artifactReviewPage + 1) * ARTIFACT_REVIEW_PAGE_SIZE, findings.length);
+  const pagesHtml = pageNumberItems(artifactReviewPage, totalPages).map((item) => item === "…"
+    ? `<span class="page-ellipsis" aria-hidden="true">…</span>`
+    : `<button class="page-button page-number ${item === artifactReviewPage + 1 ? "active" : ""}" type="button" data-review-page-number data-review-page-value="${item}" aria-label="Page ${item}" ${item === artifactReviewPage + 1 ? 'aria-current="page"' : ""}>${item}</button>`).join("");
+  const controls = totalPages > 1 ? `<div class="list-pagination finding-pagination"><span class="pagination-info">Showing ${start}–${end} of ${findings.length}</span><span class="pagination-controls"><button class="page-button" type="button" data-review-page-prev aria-label="Previous page" ${artifactReviewPage === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-review-page-next aria-label="Next page" ${artifactReviewPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : "";
   container.innerHTML = `<div class="role-verdicts">${roleSummary}</div><div class="finding-grid">${cards}</div>${controls}`;
 }
 document.querySelector<HTMLButtonElement>("#close-artifact")!.addEventListener("click", () => { artifactInspector.hidden = true; });
@@ -780,7 +788,7 @@ document.querySelector<HTMLButtonElement>("#save-artifact")!.addEventListener("c
     const response = await fetch(`/api/drafts/${id}/artifact`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ files }) });
     const payload = await response.json() as { error?: string; errors?: string[] };
     if (!response.ok) throw new Error(payload.error ?? payload.errors?.join("; ") ?? "Artifact revision failed");
-    message.textContent = "Revision saved and Rust contract validated. Run LLM pre-review again.";
+    message.textContent = "Revision saved and contract validated. Approve it directly or run LLM pre-review again.";
     message.className = "form-message success";
     await syncFromApi();
     await inspectArtifact(id);
@@ -800,8 +808,12 @@ document.addEventListener("click", (event) => {
   if (target.closest<HTMLElement>("#artifact-inspector")) {
     const reviewPrev = target.closest<HTMLButtonElement>("[data-review-page-prev]");
     const reviewNext = target.closest<HTMLButtonElement>("[data-review-page-next]");
-    if (reviewPrev && artifactReviewPage > 0) { artifactReviewPage -= 1; renderArtifactReviews(); }
-    if (reviewNext && artifactReviewPage < Math.ceil(currentArtifactReviews.flatMap((review) => review.report?.findings ?? []).length / ARTIFACT_REVIEW_PAGE_SIZE) - 1) { artifactReviewPage += 1; renderArtifactReviews(); }
+    const reviewNumber = target.closest<HTMLButtonElement>("[data-review-page-number]");
+    const reviewTotal = Math.max(1, Math.ceil(currentArtifactReviews.flatMap((review) => review.report?.findings ?? []).length / ARTIFACT_REVIEW_PAGE_SIZE));
+    if (reviewNumber) artifactReviewPage = Math.min(reviewTotal - 1, Math.max(0, Number(reviewNumber.dataset.reviewPageValue ?? 1) - 1));
+    else if (reviewPrev && artifactReviewPage > 0) artifactReviewPage -= 1;
+    else if (reviewNext && artifactReviewPage < reviewTotal - 1) artifactReviewPage += 1;
+    if (reviewPrev || reviewNext || reviewNumber) renderArtifactReviews();
     event.stopPropagation();
     return;
   }
@@ -863,13 +875,22 @@ document.addEventListener("click", (event) => {
     reviewButton.textContent = "Running 3 role reviews…";
     void (async () => {
       const roles = ["algorithm_correctness", "learning_design", "provenance_safety"];
+      let allPassed = true;
       for (const role of roles) {
         const response = await fetch(`/api/drafts/${id}/reviews`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ role }) });
         if (!response.ok) { const payload = await response.json() as { error?: string }; throw new Error(`${role}: ${payload.error ?? "review failed"}`); }
+        const payload = await response.json() as { review?: { verdict?: string } };
+        if (payload.review?.verdict !== "pass") allPassed = false;
       }
-      message.textContent = "All LLM pre-reviews passed. Inspect feedback, then Human approve.";
+      await syncFromApi();
+      const reviewed = readDrafts().find((draft) => draft.id === id);
+      message.textContent = allPassed
+        ? "All LLM pre-reviews passed. Inspect feedback, then Human approve."
+        : reviewed?.status === "needs_revision"
+          ? "LLM pre-review found revision items. Inspect the feedback, revise or approve with rationale."
+          : "LLM pre-review completed. Inspect the feedback before approving.";
       message.className = "form-message success";
-      await syncFromApi(); await inspectArtifact(id!); showView("drafts");
+      await inspectArtifact(id!); showView("drafts");
     })().catch((error) => { message.textContent = error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
     reviewButton.disabled = false;
     reviewButton.textContent = originalLabel;

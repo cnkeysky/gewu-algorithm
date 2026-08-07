@@ -77,3 +77,62 @@ test("delete confirmation dialog can be cancelled", async ({ page }) => {
   await expect(page.locator("#confirm-dialog")).toBeHidden();
   await expect(page.locator(".draft-list .draft-row")).toHaveCount(6);
 });
+
+test("human revision moves a needs_revision draft to a directly publishable state", async ({ page }) => {
+  const id = "rev-flow-1";
+  const baseDraft = {
+    id,
+    title: "Revision flow draft",
+    problem: "Return the maximum value from a non-empty list.",
+    provider: "deepseek",
+    model: "deepseek-v4-flash",
+    language: "python",
+    variants: 1,
+    modes: ["shadow_typing"],
+    assistance: [],
+    status: "needs_revision",
+    artifactPath: `artifacts/${id}`,
+    createdAt: "2026-08-07T08:00:00.000Z",
+  };
+  const needReview = { id: "rev-1", draftId: id, role: "algorithm_correctness", verdict: "needs_revision", artifactHash: "hash-1", createdAt: "2026-08-07T08:01:00.000Z" };
+  const humanReview = { id: "rev-2", draftId: id, role: "human_revision", verdict: "pass", artifactHash: null, createdAt: "2026-08-07T08:02:00.000Z" };
+  let saved = false;
+  const draftAt = () => ({ ...baseDraft, status: saved ? "validated" : "needs_revision" });
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: [draftAt()] } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: saved ? [humanReview] : [needReview] } }));
+  await page.route("**/api/drafts/rev-flow-1/artifact", (route) => {
+    if (route.request().method() === "PUT") {
+      saved = true;
+      return route.fulfill({ json: { status: "validated", draft: draftAt() } });
+    }
+    return route.fulfill({
+      json: {
+        draft: draftAt(),
+        files: {
+          "unit.json": JSON.stringify({ schema_version: "1", id: "unit.revision-flow", statement: "Return the maximum value." }),
+          "code/python.py": "def maximum(items):\n    return max(items)\n",
+          "code/__pycache__/python.cpython-310.pyc": "binary-garbage",
+        },
+        reviews: [needReview],
+      },
+    });
+  });
+
+  await openDrafts(page);
+  const row = page.locator(`.draft-row[data-draft-id="${id}"]`);
+  await expect(row.locator(".draft-status")).toHaveText("Needs revision");
+  await expect(row.locator("[data-view-artifact-id]")).toHaveText("Revise artifact");
+  await expect(row.locator("[data-accept-id]")).toBeVisible();
+
+  await row.locator("[data-view-artifact-id]").click();
+  await expect(page.locator("#artifact-inspector")).toBeVisible();
+  const fileNames = await page.locator(".artifact-file summary").allTextContents();
+  expect(fileNames.some((name) => name.includes(".pyc"))).toBe(false);
+  await page.locator("#save-artifact").click();
+  await page.waitForTimeout(400);
+  await page.locator("#close-artifact").click();
+
+  await expect(row.locator(".draft-status")).toHaveText("Contract valid");
+  await expect(row.locator("[data-review-id]")).toBeVisible();
+  await expect(row.locator("[data-accept-id]")).toBeVisible();
+});

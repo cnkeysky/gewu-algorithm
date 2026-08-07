@@ -52,9 +52,9 @@ test("shadow typing advances multiline guidance through Enter and indentation", 
   await expect(meta).toContainText("progress 8%");
   await expect(guidance).toHaveText("def bfs(graph: list[list[int]], start: int) -> list[int]:");
 
-  await page.keyboard.type("def bfs(graph: list[list[int]], start: int) -> list[int]:", { delay: 2 });
-  await expect(meta).toContainText("progress 22%");
+  await page.keyboard.type("def bfs(graph: list[list[int]], start: int) -> list[int]:", { delay: 8 });
   await expect(guidance).toHaveText("Enter");
+  await expect(meta).toContainText("progress 22%");
   await page.keyboard.press("Enter");
   await expect(meta).toContainText("progress 22%");
   await expect(guidance).toHaveText("4sp");

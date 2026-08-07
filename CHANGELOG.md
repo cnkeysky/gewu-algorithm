@@ -47,6 +47,16 @@ allowed only with explicit migration notes (see
 - Review history is paginated like the other lists, and a draft blocked by
   `needs_revision` gets an explicit "Open artifact to revise" action in the
   workflow gate.
+- Human-edited artifacts can be published directly: saving a revision records
+  a `human_revision` pass review and moves the draft to `validated`, where both
+  "Human approve" and "LLM pre-review" are offered. Running the LLM pre-review
+  again after a human edit is supported and reports the real outcome instead of
+  always claiming all roles passed.
+- `needs_revision` drafts get a prominent "Revise artifact" action and a
+  workflow "Open artifact to revise" button; LLM pre-review findings are
+  paginated with the standard "Showing X–Y of Z" control inside a fixed-height
+  container, and audit trail verdicts are color-coded (pass green,
+  needs_revision/reject red) with readable labels.
 
 ### Docs
 

@@ -461,11 +461,14 @@ const server = createServer(async (request, response) => {
       if (!draft) return send(response, 404, { error: "draft not found" });
       const payload = await body(request).catch(() => ({}));
       const humanOverride = isRecord(payload) && payload.override === true && typeof payload.rationale === "string" && payload.rationale.trim().length > 0;
-      if (!["llm_reviewed", "needs_revision"].includes(draft.status)) return send(response, 409, { error: "LLM pre-review must pass or be human-overridden before acceptance" });
-      if (draft.status === "needs_revision" && !humanOverride) return send(response, 409, { error: "draft needs revision; send {override:true, rationale} only after explicit human review" });
-      const passedReview = state.reviews.some((review) => review.draftId === draft.id && review.verdict === "pass" && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
+      const humanEdited = state.reviews.some((review) => review.draftId === draft.id && review.role === "human_revision" && review.verdict === "pass");
+      if (!["llm_reviewed", "needs_revision"].includes(draft.status) && !(draft.status === "validated" && humanEdited)) {
+        return send(response, 409, { error: "LLM pre-review must pass or the artifact must be human-edited and reviewed before acceptance" });
+      }
+      if (draft.status === "needs_revision" && !humanOverride && !humanEdited) return send(response, 409, { error: "draft needs revision; send {override:true, rationale} only after explicit human review" });
+      const passedReview = humanEdited || state.reviews.some((review) => review.draftId === draft.id && review.verdict === "pass" && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
       if (!passedReview && !humanOverride) {
-        return send(response, 409, { error: "a passing LLM pre-review for the current artifact is required before human acceptance; send {override:true, rationale} only after explicit human review" });
+        return send(response, 409, { error: "a passing pre-review for the current artifact is required before human acceptance; send {override:true, rationale} only after explicit human review" });
       }
       if (!passedReview && humanOverride) {
         const acceptanceReview: ReviewRecord = {
@@ -572,10 +575,19 @@ const server = createServer(async (request, response) => {
       await rm(root, { recursive: true, force: true });
       await rename(staging, root);
       state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
-      draft.status = "generated";
+      const humanRevision: ReviewRecord = {
+        id: crypto.randomUUID(),
+        draftId: draft.id,
+        role: "human_revision",
+        verdict: "pass",
+        artifactHash: null,
+        createdAt: new Date().toISOString(),
+      };
+      state.reviews = [humanRevision, ...state.reviews];
+      draft.status = "validated";
       draft.publishedPath = undefined;
       await saveState(state);
-      return send(response, 200, { status: "generated", draft });
+      return send(response, 200, { status: "validated", draft });
     }
     const rollbackMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/rollback$/);
     if (request.method === "POST" && rollbackMatch) {
