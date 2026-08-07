@@ -680,7 +680,7 @@ impl Core {
             let due = self
                 .last_checkpoint_save
                 .get(session_id)
-                .map_or(true, |last| now.saturating_sub(*last) >= CHECKPOINT_SAVE_INTERVAL_MS);
+                .is_none_or(|last| now.saturating_sub(*last) >= CHECKPOINT_SAVE_INTERVAL_MS);
             if due {
                 self.store
                     .save_checkpoint(session.checkpoint(session_id)?)?;
