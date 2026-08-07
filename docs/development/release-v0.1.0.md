@@ -25,8 +25,11 @@ Internal trial delivery. Executed on 2026-08-07 against
    `USE_PROFILES {html, mathMl, svg}` defaults and does not use the affected
    options (`CUSTOM_ELEMENT_HANDLING`, `RETURN_DOM`, `IN_PLACE`, function
    `ADD_TAGS`). Upgrade when a patched release is published. `cargo-audit` is
-   not installed in this environment; Rust crate advisory review is pending
-   tool availability.
+   v0.22.2; against the RustSec advisory database (1,190 advisories),
+   `cargo audit` reports **0 vulnerabilities** across the 32 locked crate
+   dependencies. The advisory DB fetch requires HTTPS access to
+   `github.com/RustSec/advisory-db`; environments without that route can run
+   `cargo audit --db <local-db> --no-fetch`.
 6. **Binaries** — release build for Linux x86_64:
    `target/release/gewu`, `pack`, `validate` (checksums below).
 7. **VSIX packaging** — `gewu-algorithm-0.1.0.vsix` packaged (41 files,

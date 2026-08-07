@@ -17,6 +17,10 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - name: Audit dependencies
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
 
   clients:
     name: TypeScript, Web, and VS Code
