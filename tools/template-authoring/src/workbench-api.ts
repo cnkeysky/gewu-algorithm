@@ -100,8 +100,8 @@ class DraftInputError extends Error {
 }
 
 function loadState(): State {
-  const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path FROM drafts ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
-  const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, created_at FROM reviews ORDER BY created_at DESC").all() as Array<Record<string, unknown>>;
+  const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path FROM drafts ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
+  const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, created_at FROM reviews ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
   return {
     drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), unitId: row.unit_id ? String(row.unit_id) : undefined, artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined })),
     reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, reportPath: row.report_path ? String(row.report_path) : undefined, createdAt: String(row.created_at) })),

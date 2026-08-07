@@ -57,6 +57,11 @@ allowed only with explicit migration notes (see
   paginated with the standard "Showing X–Y of Z" control inside a fixed-height
   container, and audit trail verdicts are color-coded (pass green,
   needs_revision/reject red) with readable labels.
+- Draft actions show a global toast so feedback is visible from the Drafts
+  page (the old inline message lived in the hidden authoring form); actions
+  refresh the list in place without resetting the page or scroll position;
+  list ordering is deterministic (created_at + insertion tiebreaker); the
+  accepted-draft action is renamed "Extend unit" to match what it does.
 
 ### Docs
 

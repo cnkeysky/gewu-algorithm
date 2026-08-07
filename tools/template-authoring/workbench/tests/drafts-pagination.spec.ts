@@ -136,3 +136,46 @@ test("human revision moves a needs_revision draft to a directly publishable stat
   await expect(row.locator("[data-review-id]")).toBeVisible();
   await expect(row.locator("[data-accept-id]")).toBeVisible();
 });
+
+test("requesting a revision keeps the page, the row, and shows a toast", async ({ page }) => {
+  const base = (index: number) => ({
+    id: `rollback-${index}`,
+    title: `Rollback draft ${index}`,
+    problem: "Return the maximum value.",
+    provider: "deepseek",
+    model: "deepseek-v4-flash",
+    language: "python",
+    variants: 1,
+    modes: ["shadow_typing"],
+    assistance: [],
+    status: index === 1 ? "generated" : "queued",
+    artifactPath: index === 1 ? "artifacts/rollback-1" : undefined,
+    createdAt: new Date(Date.UTC(2026, 7, 5, 8, index)).toISOString(),
+  });
+  let rolled = false;
+  // Rollback target is last so it lands on page 2 (8 drafts, 6 per page).
+  const draftsAt = () => {
+    const ordered = Array.from({ length: 8 }, (_, index) => ({ ...base(index + 2), status: "queued" }));
+    ordered[7] = { ...base(1), status: rolled ? "revision_requested" : "generated", artifactPath: rolled ? undefined : base(1).artifactPath };
+    return ordered;
+  };
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: draftsAt() } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await page.route("**/api/drafts/rollback-1/rollback", (route) => { rolled = true; return route.fulfill({ json: { status: "revision_requested" } }); });
+
+  await openDrafts(page);
+  await expect(page.locator(".draft-row")).toHaveCount(6);
+  await page.locator(".draft-list [data-page-next='drafts']").click();
+  await expect(page.locator(".draft-row")).toHaveCount(2);
+  const row = page.locator('.draft-row[data-draft-id="rollback-1"]');
+  await expect(row).toBeVisible();
+  const rowY = await row.evaluate((el) => el.getBoundingClientRect().y);
+  await row.locator("[data-rollback-id]").click();
+  await expect(page.locator("#app-toast")).toContainText("Revision requested");
+  await expect(row).toBeVisible();
+  await expect(row.locator(".draft-status")).toHaveText("Revision requested");
+  const pageInfo = await page.locator(".draft-list .pagination-info").textContent();
+  expect(pageInfo).toContain("7–8 of 8");
+  const afterY = await row.evaluate((el) => el.getBoundingClientRect().y);
+  expect(Math.abs(afterY - rowY)).toBeLessThanOrEqual(2);
+});

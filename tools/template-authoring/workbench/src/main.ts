@@ -141,6 +141,7 @@ root.innerHTML = `
     </section>
   </main>
   <footer><span>GEWU / deliberate algorithm practice</span><span>Local by design.</span></footer>
+  <div id="app-toast" class="toast" role="status" hidden></div>
   <div class="modal-overlay" id="confirm-dialog" hidden>
     <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
       <h3 id="confirm-title">Confirm</h3>
@@ -340,6 +341,17 @@ async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> 
   }
 }
 function practiceMessage(text: string, error = false): void { const target = document.querySelector<HTMLParagraphElement>("#practice-message")!; target.textContent = text; target.className = `form-message ${error ? "error" : "success"}`; }
+let toastTimer: number | undefined;
+function notify(text: string, error = false): void {
+  message.textContent = text;
+  message.className = `form-message ${error ? "error" : "success"}`;
+  const toast = document.querySelector<HTMLElement>("#app-toast")!;
+  toast.textContent = text;
+  toast.className = `toast ${error ? "error" : "success"}`;
+  toast.hidden = false;
+  if (toastTimer !== undefined) window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => { toast.hidden = true; }, 4000);
+}
 function syncProblemPaneHeight(): void {
   const pane = document.querySelector<HTMLElement>(".problem-pane");
   const column = document.querySelector<HTMLElement>(".session-column");
@@ -674,7 +686,7 @@ function renderDrafts(): void {
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}">LLM pre-review</button>` : "",
       canAccept ? `<button class="inline-action approval-action" type="button" data-accept-id="${draft.id}">Human approve</button>` : "",
       canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}">Request revision</button>` : "",
-      canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}">New revision</button>` : "",
+      canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}">Extend unit</button>` : "",
       canDelete ? `<button class="inline-action danger-action" type="button" data-delete-id="${draft.id}">Delete</button>` : "",
     ].filter(Boolean).join("");
     const pipeline = (label: string, active: boolean) => `<b class="${active ? "active" : ""}">${label}</b>`;
@@ -788,11 +800,10 @@ document.querySelector<HTMLButtonElement>("#save-artifact")!.addEventListener("c
     const response = await fetch(`/api/drafts/${id}/artifact`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ files }) });
     const payload = await response.json() as { error?: string; errors?: string[] };
     if (!response.ok) throw new Error(payload.error ?? payload.errors?.join("; ") ?? "Artifact revision failed");
-    message.textContent = "Revision saved and contract validated. Approve it directly or run LLM pre-review again.";
-    message.className = "form-message success";
+    notify("Revision saved and contract validated. Approve it directly or run LLM pre-review again.");
     await syncFromApi();
     await inspectArtifact(id);
-  } catch (error) { message.textContent = error instanceof Error ? error.message : "Artifact revision failed"; message.className = "form-message error"; }
+  } catch (error) { notify(error instanceof Error ? error.message : "Artifact revision failed", true); }
 });
 
 function showView(view: string): void {
@@ -801,6 +812,12 @@ function showView(view: string): void {
   document.querySelectorAll<HTMLElement>(".app-view").forEach((panel) => { panel.hidden = panel.id !== `${view}-view`; });
   document.querySelectorAll<HTMLButtonElement>(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function renderDraftsView(): void {
+  // Refresh the Drafts view in place after an action: keep the current page and
+  // scroll position so the row the user acted on stays put.
+  renderDrafts();
+  renderHistory();
 }
 
 document.addEventListener("click", (event) => {
@@ -839,7 +856,7 @@ document.addEventListener("click", (event) => {
   const viewArtifact = target.closest<HTMLButtonElement>("[data-view-artifact-id]");
   if (viewArtifact) {
     event.stopPropagation();
-    void inspectArtifact(viewArtifact.dataset.viewArtifactId!).catch((error) => { message.textContent = error instanceof Error ? error.message : "Unable to inspect artifact"; message.className = "form-message error"; });
+    void inspectArtifact(viewArtifact.dataset.viewArtifactId!).catch((error) => { notify(error instanceof Error ? error.message : "Unable to inspect artifact", true); });
     return;
   }
   const generateButton = target.closest<HTMLButtonElement>("[data-generate-id]");
@@ -848,10 +865,9 @@ document.addEventListener("click", (event) => {
     const id = generateButton.dataset.generateId;
     void fetch(`/api/drafts/${id}/generate`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { error?: string; status?: string };
-      message.textContent = response.ok ? "Template generated. Run Validate contract next." : `Generation failed: ${payload.error ?? "unknown error"}`;
-      message.className = response.ok ? "form-message success" : "form-message error";
-      if (response.ok) { await syncFromApi(); showView("drafts"); }
-    }).catch((error) => { message.textContent = error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
+      notify(response.ok ? "Template generated. Run Validate contract next." : `Generation failed: ${payload.error ?? "unknown error"}`, !response.ok);
+      if (response.ok) { await syncFromApi(); renderDraftsView(); }
+    }).catch((error) => { notify(error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable.", true); });
     return;
   }
   const validateButton = target.closest<HTMLButtonElement>("[data-validate-id]");
@@ -860,10 +876,9 @@ document.addEventListener("click", (event) => {
     const id = validateButton.dataset.validateId;
     void fetch(`/api/drafts/${id}/validate`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { status?: string; errors?: string[] };
-      message.textContent = response.ok ? "Rust contract validation passed. Run LLM pre-review next." : `Validation failed: ${(payload.errors ?? ["unknown error"]).join("; ")}`;
-      message.className = response.ok ? "form-message success" : "form-message error";
-      if (response.ok) { await syncFromApi(); showView("drafts"); }
-    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+      notify(response.ok ? "Rust contract validation passed. Run LLM pre-review next." : `Validation failed: ${(payload.errors ?? ["unknown error"]).join("; ")}`, !response.ok);
+      if (response.ok) { await syncFromApi(); renderDraftsView(); }
+    }).catch(() => { notify("Authoring API is unavailable.", true); });
     return;
   }
   const reviewButton = target.closest<HTMLButtonElement>("[data-review-id]");
@@ -884,14 +899,13 @@ document.addEventListener("click", (event) => {
       }
       await syncFromApi();
       const reviewed = readDrafts().find((draft) => draft.id === id);
-      message.textContent = allPassed
+      notify(allPassed
         ? "All LLM pre-reviews passed. Inspect feedback, then Human approve."
         : reviewed?.status === "needs_revision"
           ? "LLM pre-review found revision items. Inspect the feedback, revise or approve with rationale."
-          : "LLM pre-review completed. Inspect the feedback before approving.";
-      message.className = "form-message success";
-      await inspectArtifact(id!); showView("drafts");
-    })().catch((error) => { message.textContent = error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
+          : "LLM pre-review completed. Inspect the feedback before approving.");
+      await inspectArtifact(id!); renderDraftsView();
+    })().catch((error) => { notify(error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable.", true); });
     reviewButton.disabled = false;
     reviewButton.textContent = originalLabel;
     return;
@@ -907,10 +921,9 @@ document.addEventListener("click", (event) => {
     const body = needsOverride ? JSON.stringify({ override: true, rationale: rationale ?? "human review" }) : undefined;
     void fetch(`/api/drafts/${id}/accept`, { method: "POST", headers: body ? { "content-type": "application/json" } : undefined, body }).then(async (response) => {
       const payload = await response.json() as { error?: string };
-      message.textContent = response.ok ? "Human approval recorded; draft is accepted." : `Human approval failed: ${payload.error ?? "unknown error"}`;
-      message.className = response.ok ? "form-message success" : "form-message error";
-      if (response.ok) { await syncFromApi(); showView("drafts"); }
-    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+      notify(response.ok ? "Human approval recorded; draft is accepted." : `Human approval failed: ${payload.error ?? "unknown error"}`, !response.ok);
+      if (response.ok) { await syncFromApi(); renderDraftsView(); }
+    }).catch(() => { notify("Authoring API is unavailable.", true); });
     return;
   }
   const rollbackButton = target.closest<HTMLButtonElement>("[data-rollback-id]");
@@ -919,10 +932,9 @@ document.addEventListener("click", (event) => {
     const id = rollbackButton.dataset.rollbackId;
     void fetch(`/api/drafts/${id}/rollback`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { error?: string };
-      message.textContent = response.ok ? "Revision requested. The previous artifact remains in history." : `Revision request failed: ${payload.error ?? "unknown error"}`;
-      message.className = response.ok ? "form-message success" : "form-message error";
-      if (response.ok) { await syncFromApi(); showView("drafts"); }
-    }).catch(() => { message.textContent = "Authoring API is unavailable."; message.className = "form-message error"; });
+      notify(response.ok ? "Revision requested. The previous artifact remains in history." : `Revision request failed: ${payload.error ?? "unknown error"}`, !response.ok);
+      if (response.ok) { await syncFromApi(); renderDraftsView(); }
+    }).catch(() => { notify("Authoring API is unavailable.", true); });
     return;
   }
   const forkButton = target.closest<HTMLButtonElement>("[data-fork-id]");
@@ -934,10 +946,9 @@ document.addEventListener("click", (event) => {
       if (!response.ok || !payload.draft) throw new Error(payload.error ?? "fork failed");
       await syncFromApi();
       loadDraftIntoForm(payload.draft);
-      message.textContent = "New revision created. Adjust the modes, then Generate template.";
-      message.className = "form-message success";
+      notify("Extend unit: a new editable draft was created. Adjust the modes, then Generate template.");
       showView("new");
-    }).catch((error) => { message.textContent = error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable."; message.className = "form-message error"; });
+    }).catch((error) => { notify(error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable.", true); });
     return;
   }
   const deleteButton = target.closest<HTMLButtonElement>("[data-delete-id]");
@@ -951,8 +962,7 @@ document.addEventListener("click", (event) => {
         const response = await fetch(`/api/drafts/${id}`, { method: "DELETE" });
         const payload = await response.json() as { error?: string };
         if (!response.ok) throw new Error(payload.error ?? "delete failed");
-        message.textContent = "Draft deleted.";
-        message.className = "form-message success";
+        notify("Draft deleted.");
         if (editingDraftId === id) {
           editingDraftId = undefined;
           submitDraft.innerHTML = `Create draft <span aria-hidden="true">&#8594;</span>`;
@@ -962,10 +972,9 @@ document.addEventListener("click", (event) => {
           artifactInspector.dataset.draftId = "";
         }
         await syncFromApi();
-        showView("drafts");
+        renderDraftsView();
       } catch (error) {
-        message.textContent = error instanceof Error ? `Delete failed: ${error.message}` : "Authoring API is unavailable.";
-        message.className = "form-message error";
+        notify(error instanceof Error ? `Delete failed: ${error.message}` : "Authoring API is unavailable.", true);
       }
     })();
     return;
@@ -1049,8 +1058,7 @@ form.addEventListener("submit", async (event) => {
   const wasEditing = Boolean(editingDraftId);
   const selectedModes = selectedValues<PracticeMode>("mode");
   if (!selectedModes.length) {
-    message.textContent = "Select at least one practice projection.";
-    message.className = "form-message error";
+    notify("Select at least one practice projection.", true);
     return;
   }
   const problem = document.querySelector<HTMLTextAreaElement>("#problem")!.value.trim();
@@ -1084,8 +1092,7 @@ form.addEventListener("submit", async (event) => {
   draftPersistence = persisted ? "saved" : "local";
   renderDrafts();
   renderHistory();
-  message.textContent = persisted ? (wasEditing ? "Draft revision saved to the local authoring API." : "Draft saved to the local authoring API.") : "Draft queued in this browser. Start the authoring API to share it locally.";
-  message.className = "form-message success";
+  notify(persisted ? (wasEditing ? "Draft revision saved to the local authoring API." : "Draft saved to the local authoring API.") : "Draft queued in this browser. Start the authoring API to share it locally.");
   submitDraft.innerHTML = `Update draft <span aria-hidden="true">&#8594;</span>`;
 });
 document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", () => {
