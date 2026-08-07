@@ -6,6 +6,12 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+### Changed
+
+- Pagination redesigned: hidden when a list fits on one page, numbered page
+  buttons with previous/next, and a go-to-page input (Enter to jump) only for
+  many pages; the standalone Go button is removed.
+
 ### Docs
 
 - Reorganized the root README Option A: `npm run dev` and the action menu

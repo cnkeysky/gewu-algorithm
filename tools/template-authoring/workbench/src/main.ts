@@ -186,11 +186,33 @@ let draftPage = 0;
 
 type PaginationKind = PracticeListName | "drafts";
 
+function pageNumberItems(page: number, totalPages: number): Array<number | "…"> {
+  const current = page + 1;
+  const items: Array<number | "…"> = [];
+  const pushWindow = (from: number, to: number): void => { for (let value = from; value <= to; value += 1) items.push(value); };
+  if (totalPages <= 7) {
+    pushWindow(1, totalPages);
+    return items;
+  }
+  items.push(1);
+  if (current > 3) items.push("…");
+  pushWindow(Math.max(2, current - 1), Math.min(totalPages - 1, current + 1));
+  if (current < totalPages - 2) items.push("…");
+  items.push(totalPages);
+  return items;
+}
+
 function paginationHtml(kind: PaginationKind, page: number, totalPages: number, totalItems: number, pageSize: number): string {
-  if (totalItems === 0) return "";
+  if (totalItems === 0 || totalPages <= 1) return "";
   const start = page * pageSize + 1;
   const end = Math.min((page + 1) * pageSize, totalItems);
-  return `<div class="list-pagination"><span class="pagination-info">Showing ${start}–${end} of ${totalItems} · Page ${page + 1} / ${totalPages}</span><span class="pagination-controls"><button class="page-button" type="button" data-page-prev="${kind}" aria-label="Previous page" ${page === 0 ? "disabled" : ""}>&#8249;</button><input class="page-jump" data-page-jump="${kind}" type="number" min="1" max="${totalPages}" value="${page + 1}" aria-label="Jump to page" /><button class="page-button" type="button" data-page-go="${kind}" aria-label="Go to page">Go</button><button class="page-button" type="button" data-page-next="${kind}" aria-label="Next page" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>`;
+  const pagesHtml = pageNumberItems(page, totalPages).map((item) => item === "…"
+    ? `<span class="page-ellipsis" aria-hidden="true">…</span>`
+    : `<button class="page-button page-number ${item === page + 1 ? "active" : ""}" type="button" data-page-number="${kind}" data-page-value="${item}" aria-label="Page ${item}" ${item === page + 1 ? 'aria-current="page"' : ""}>${item}</button>`).join("");
+  const jumpHtml = totalPages > 7
+    ? `<label class="page-jump-wrap">Page <input class="page-jump" data-page-jump="${kind}" type="number" min="1" max="${totalPages}" value="${page + 1}" aria-label="Go to page (Enter to jump)" /> / ${totalPages}</label>`
+    : "";
+  return `<div class="list-pagination"><span class="pagination-info">Showing ${start}–${end} of ${totalItems}</span><span class="pagination-controls"><button class="page-button" type="button" data-page-prev="${kind}" aria-label="Previous page" ${page === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-page-next="${kind}" aria-label="Next page" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button>${jumpHtml}</span></div>`;
 }
 
 function paginationKindTotal(kind: PaginationKind): number {
@@ -663,19 +685,15 @@ function showView(view: string): void {
 
 document.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
-  const paginationControl = target.closest<HTMLElement>("[data-page-prev], [data-page-next], [data-page-go]");
+  const paginationControl = target.closest<HTMLElement>("[data-page-prev], [data-page-next], [data-page-number]");
   if (paginationControl) {
     event.stopPropagation();
-    const kind = (paginationControl.dataset.pagePrev ?? paginationControl.dataset.pageNext ?? paginationControl.dataset.pageGo) as PaginationKind;
+    const kind = (paginationControl.dataset.pagePrev ?? paginationControl.dataset.pageNext ?? paginationControl.dataset.pageNumber) as PaginationKind;
     const current = paginationKindPage(kind);
     let next = current;
     if (paginationControl.dataset.pagePrev !== undefined) next = current - 1;
     else if (paginationControl.dataset.pageNext !== undefined) next = current + 1;
-    else {
-      const input = paginationControl.closest<HTMLElement>(".list-pagination")?.querySelector<HTMLInputElement>(".page-jump");
-      const value = Number(input?.value ?? current + 1);
-      next = Number.isInteger(value) ? value - 1 : current;
-    }
+    else next = Number(paginationControl.dataset.pageValue ?? current + 1) - 1;
     setPaginationKindPage(kind, next);
     renderPaginationKind(kind);
     return;
@@ -796,7 +814,12 @@ document.addEventListener("keydown", (event) => {
   const jump = (event.target as HTMLElement).closest<HTMLInputElement>(".page-jump");
   if (jump && event.key === "Enter") {
     event.preventDefault();
-    jump.closest<HTMLElement>(".list-pagination")?.querySelector<HTMLButtonElement>("[data-page-go]")?.click();
+    const kind = jump.dataset.pageJump as PaginationKind;
+    const value = Number(jump.value);
+    if (Number.isInteger(value)) {
+      setPaginationKindPage(kind, value - 1);
+      renderPaginationKind(kind);
+    }
     return;
   }
   const row = (event.target as HTMLElement).closest<HTMLElement>(".draft-row");

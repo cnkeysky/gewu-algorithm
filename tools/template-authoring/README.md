@@ -110,9 +110,11 @@ artifact, keeps prior reports immutable, and returns the draft to
 `revision_requested` so it can be generated again.
 
 Paginated lists (Drafts, Interrupted, Spaced review, Recent attempts) show an
-entry range (`Showing 1–6 of 24`), the current page, and a jump-to-page input
-next to the previous/next buttons. Drafts pagination is pinned below a
-scrollable list, so page content changes do not move it.
+entry range (`Showing 1–6 of 24`) and numbered page buttons with previous/next.
+A go-to-page input (press Enter to jump) appears only when there are many pages,
+and the pagination bar is hidden when everything fits on one page. Drafts
+pagination is pinned below a scrollable list, so page content changes do not
+move it.
 
 Human approval also publishes a validated copy under
 `drafts/.workbench/published/` by default. Set `GEWU_PUBLISHED_ROOT` to point at
