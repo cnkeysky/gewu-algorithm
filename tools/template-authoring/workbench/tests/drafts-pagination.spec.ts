@@ -237,3 +237,19 @@ test("a status filter with no matches shows a targeted empty state", async ({ pa
   await page.locator("#draft-filters .filter-pill", { hasText: /^Published/ }).click();
   await expect(page.locator(".draft-list .empty-state")).toContainText("No published units yet");
 });
+
+test("draft action buttons ignore rapid double clicks", async ({ page }) => {
+  const seed = {
+    id: "debounce-1", title: "Debounce target", problem: "P.", provider: "deepseek", model: "deepseek-v4-flash",
+    language: "python", variants: 1, modes: ["shadow_typing"], assistance: [], status: "generated",
+    artifactPath: "artifacts/debounce-1", createdAt: "2026-08-07T09:00:00.000Z",
+  };
+  let validateCalls = 0;
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: [seed] } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await page.route("**/api/drafts/debounce-1/validate", (route) => { validateCalls += 1; return route.fulfill({ json: { status: "validated" } }); });
+  await openDrafts(page);
+  await page.locator("[data-validate-id]").dblclick();
+  await page.waitForTimeout(600);
+  expect(validateCalls).toBe(1);
+});

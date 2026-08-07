@@ -3,7 +3,7 @@
 //! deterministic practice transitions, and local persistence.
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -33,11 +33,17 @@ use thiserror::Error;
 /// Version of the application service and protocol implementation.
 pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Recovery checkpoints are written at most this often per session; a crash
+/// loses at most this much typing. The frontend forces a final save on unload,
+/// so normal typing does not hammer the disk at every batched event.
+const CHECKPOINT_SAVE_INTERVAL_MS: u64 = 1500;
+
 /// Offline application service configured with a content root and local data root.
 pub struct Core {
     content_roots: Vec<PathBuf>,
     store: LocalStore,
     sessions: BTreeMap<String, ActiveSession>,
+    last_checkpoint_save: HashMap<String, u64>,
     next_session: u64,
 }
 
@@ -98,6 +104,7 @@ impl Core {
             content_roots,
             store: LocalStore::open(data_root)?,
             sessions: BTreeMap::new(),
+            last_checkpoint_save: HashMap::new(),
             next_session: 1,
         })
     }
@@ -276,6 +283,8 @@ impl Core {
         let view = active.view(&session_id);
         self.store
             .save_checkpoint(active.checkpoint(&session_id)?)?;
+        self.last_checkpoint_save
+            .insert(session_id.clone(), unix_millis());
         self.sessions.insert(session_id, active);
         Ok(view)
     }
@@ -312,6 +321,7 @@ impl Core {
             .start_params();
         let restarted = self.start_session(params)?;
         self.store.clear_checkpoint(&checkpoint_id(session_id))?;
+        self.last_checkpoint_save.remove(session_id);
         self.sessions.remove(session_id);
         Ok(restarted)
     }
@@ -324,6 +334,8 @@ impl Core {
             .ok_or_else(|| CoreError::UnknownSession(session_id.to_owned()))?
             .checkpoint(session_id)?;
         self.store.save_checkpoint(checkpoint)?;
+        self.last_checkpoint_save
+            .insert(session_id.to_owned(), unix_millis());
         Ok(())
     }
 
@@ -435,6 +447,7 @@ impl Core {
         for checkpoint in peers {
             removed |= self.store.clear_checkpoint(&checkpoint.id)?;
             self.sessions.remove(&checkpoint.session_id);
+            self.last_checkpoint_save.remove(&checkpoint.session_id);
         }
         Ok(removed)
     }
@@ -661,9 +674,18 @@ impl Core {
             self.store.append_attempt(attempt.clone())?;
             self.update_review_state(&attempt)?;
             self.store.clear_checkpoint(&checkpoint_id(session_id))?;
+            self.last_checkpoint_save.remove(session_id);
         } else {
-            self.store
-                .save_checkpoint(session.checkpoint(session_id)?)?;
+            let now = unix_millis();
+            let due = self
+                .last_checkpoint_save
+                .get(session_id)
+                .map_or(true, |last| now.saturating_sub(*last) >= CHECKPOINT_SAVE_INTERVAL_MS);
+            if due {
+                self.store
+                    .save_checkpoint(session.checkpoint(session_id)?)?;
+                self.last_checkpoint_save.insert(session_id.to_owned(), now);
+            }
         }
         Ok(())
     }
@@ -2009,7 +2031,7 @@ mod tests {
         );
         let complete = core
             .apply_event(ApplyEventParams {
-                session_id: session.session_id,
+                session_id: session.session_id.clone(),
                 event: PracticeEventDto::SubmitAnswer {
                     answer: "middle comparison".to_owned(),
                 },
@@ -2105,7 +2127,7 @@ mod tests {
 
         let complete = core
             .apply_event(ApplyEventParams {
-                session_id: session.session_id,
+                session_id: session.session_id.clone(),
                 event: PracticeEventDto::InsertText {
                     text: prompted.target_text,
                 },
@@ -2145,7 +2167,7 @@ mod tests {
         assert_eq!(session.completed_steps, 0);
         let completed = core
             .apply_event(ApplyEventParams {
-                session_id: session.session_id,
+                session_id: session.session_id.clone(),
                 event: PracticeEventDto::InsertText {
                     text: "queue.popleft()".to_owned(),
                 },
@@ -2177,7 +2199,7 @@ mod tests {
         assert_eq!(session.current_code_slot.as_deref(), Some("frontier-pop"));
         let completed = core
             .apply_event(ApplyEventParams {
-                session_id: session.session_id,
+                session_id: session.session_id.clone(),
                 event: PracticeEventDto::InsertText {
                     text: "queue.popleft()".to_owned(),
                 },
@@ -2203,7 +2225,7 @@ mod tests {
             .expect("start comment guided recall");
         let partial = core
             .apply_event(ApplyEventParams {
-                session_id: session.session_id,
+                session_id: session.session_id.clone(),
                 event: PracticeEventDto::InsertText {
                     text: "queue.".to_owned(),
                 },
@@ -2217,6 +2239,8 @@ mod tests {
             .find(|value| value.practice_id.as_deref() == Some("bfs-comment-guided-frontier"))
             .expect("comment guided checkpoint");
         assert_eq!(partial.accepted_text, "queue.");
+        core.save_checkpoint(&session.session_id)
+            .unwrap_or_else(|error| panic!("save checkpoint: {error}"));
         drop(core);
 
         let mut reopened = Core::open(fixture_root(), &data).expect("reopen core");
@@ -2248,7 +2272,7 @@ mod tests {
             .unwrap_or_else(|error| panic!("start: {error}"));
         let partial = core
             .apply_event(ApplyEventParams {
-                session_id: session.session_id,
+                session_id: session.session_id.clone(),
                 event: PracticeEventDto::InsertText {
                     text: "from ".to_owned(),
                 },
@@ -2262,6 +2286,8 @@ mod tests {
             .into_iter()
             .find(|value| value.mode == PracticeModeDto::CodeRecall)
             .unwrap_or_else(|| panic!("code recall checkpoint"));
+        core.save_checkpoint(&session.session_id)
+            .unwrap_or_else(|error| panic!("save checkpoint: {error}"));
         drop(core);
 
         let mut reopened =
@@ -2297,7 +2323,7 @@ mod tests {
         assert_eq!(reasoning.completed_steps, 0);
         let reasoning = core
             .apply_event(ApplyEventParams {
-                session_id: reasoning.session_id,
+                session_id: reasoning.session_id.clone(),
                 event: PracticeEventDto::SubmitAnswer {
                     answer: "interval ordered target".to_owned(),
                 },
@@ -2317,7 +2343,7 @@ mod tests {
             .unwrap_or_else(|error| panic!("start transfer: {error}"));
         let transfer = core
             .apply_event(ApplyEventParams {
-                session_id: transfer.session_id,
+                session_id: transfer.session_id.clone(),
                 event: PracticeEventDto::SubmitAnswer {
                     answer: "monotonic interval predicate Retain an interval that contains the first true position. The comparison is replaced by a monotonic boolean predicate. The predicate must be monotonic over the search interval.".to_owned(),
                 },
@@ -2355,7 +2381,7 @@ mod tests {
             })
             .unwrap_or_else(|error| panic!("start reasoning: {error}"));
         core.apply_event(ApplyEventParams {
-            session_id: reasoning.session_id,
+            session_id: reasoning.session_id.clone(),
             event: PracticeEventDto::RevealPrompt,
             elapsed: elapsed(1),
         })
@@ -2376,7 +2402,7 @@ mod tests {
             })
             .unwrap_or_else(|error| panic!("start transfer: {error}"));
         core.apply_event(ApplyEventParams {
-            session_id: transfer.session_id,
+            session_id: transfer.session_id.clone(),
             event: PracticeEventDto::RevealPrompt,
             elapsed: elapsed(1),
         })
@@ -2387,6 +2413,10 @@ mod tests {
             .into_iter()
             .find(|value| value.mode == PracticeModeDto::TransferPractice)
             .unwrap_or_else(|| panic!("transfer checkpoint"));
+        core.save_checkpoint(&reasoning.session_id)
+            .unwrap_or_else(|error| panic!("save reasoning checkpoint: {error}"));
+        core.save_checkpoint(&transfer.session_id)
+            .unwrap_or_else(|error| panic!("save transfer checkpoint: {error}"));
         drop(core);
 
         let mut reopened =
@@ -2421,7 +2451,7 @@ mod tests {
             .unwrap_or_else(|error| panic!("start: {error}"));
         let rejected = core
             .apply_event(ApplyEventParams {
-                session_id: session.session_id,
+                session_id: session.session_id.clone(),
                 event: PracticeEventDto::SubmitAnswer {
                     answer: "not enough evidence".to_owned(),
                 },
@@ -2435,6 +2465,8 @@ mod tests {
             .into_iter()
             .find(|value| value.mode == PracticeModeDto::ReasoningRecall)
             .unwrap_or_else(|| panic!("reasoning checkpoint"));
+        core.save_checkpoint(&session.session_id)
+            .unwrap_or_else(|error| panic!("save checkpoint: {error}"));
         drop(core);
 
         let mut reopened =
@@ -2472,6 +2504,8 @@ mod tests {
                 elapsed: elapsed(1),
             })
             .unwrap_or_else(|error| panic!("event: {error}"));
+        core.save_checkpoint(&session.session_id)
+            .unwrap_or_else(|error| panic!("save checkpoint: {error}"));
         let mut resumed =
             Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
         assert!(
@@ -2639,6 +2673,8 @@ mod tests {
             .unwrap_or_else(|error| panic!("flow start: {error}"));
         let flow_checkpoint = checkpoint_id(&flow.session_id);
 
+        core.save_checkpoint(&shadow.session_id)
+            .unwrap_or_else(|error| panic!("save shadow checkpoint: {error}"));
         let mut reopened =
             Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("reopen: {error}"));
         let checkpoints = reopened

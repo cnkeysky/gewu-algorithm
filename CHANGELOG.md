@@ -17,6 +17,16 @@ allowed only with explicit migration notes (see
 - Spaced review only schedules material completed at least once:
   interrupted-only history produces no recommendation (it stays in the
   Interrupted panel); the `Inconclusive` recommendation kind is removed.
+- Core throttles recovery checkpoint writes (at most once per 1.5s per
+  session), so typing no longer writes the checkpoint at every batched event;
+  the workbench forces a final checkpoint on page unload, keeping recovery
+  granularity. The JSON-RPC protocol is unchanged (version stays 2).
+- The shadow guidance ghost repaints immediately from the local value, so
+  deleting or correcting characters never leaves a stale or missing hint
+  while Core confirms.
+- Draft action buttons and practice start/stop ignore rapid repeated clicks
+  (in-flight locks), and the code editor auto-activates on start/resume so
+  Enter and typing work immediately without a click.
 
 ## [0.1.5] - 2026-08-07
 

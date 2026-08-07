@@ -393,6 +393,32 @@ function notify(text: string, error = false): void {
   if (toastTimer !== undefined) window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => { toast.hidden = true; }, 4000);
 }
+const actionLocks = new Set<string>();
+let practiceStarting = false;
+function lockAction(action: string, id: string | undefined): boolean {
+  const key = `${action}:${id ?? ""}`;
+  if (actionLocks.has(key)) return false;
+  actionLocks.add(key);
+  return true;
+}
+function unlockAction(action: string, id: string | undefined): void { actionLocks.delete(`${action}:${id ?? ""}`); }
+window.addEventListener("pagehide", () => {
+  const sessionId = activePracticeSession?.session_id;
+  if (!sessionId) return;
+  // Force a final checkpoint on unload: checkpoint persistence is throttled
+  // in Core to keep typing off the disk, so recovery must be flushed here.
+  void (async () => {
+    try { await shadowEditor?.flush(); } catch { /* best effort */ }
+    try {
+      await fetch(practiceApi, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: practiceRequestId++, method: "gewu/saveCheckpoint", params: { session_id: sessionId } }),
+        keepalive: true,
+      });
+    } catch { /* best effort */ }
+  })();
+});
 function syncProblemPaneHeight(): void {
   const pane = document.querySelector<HTMLElement>(".problem-pane");
   const column = document.querySelector<HTMLElement>(".session-column");
@@ -510,6 +536,7 @@ async function updateShadowEditor(container: HTMLElement, session: PracticeSessi
   }
   if (shadowEditor) {
     shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
+    if (sessionChanged && session.status === "active") shadowEditor.focus();
     return;
   }
   if (!shadowEditorLoading) {
@@ -517,6 +544,7 @@ async function updateShadowEditor(container: HTMLElement, session: PracticeSessi
   }
   shadowEditor = await shadowEditorLoading;
   shadowEditor.update(shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
+  if (sessionChanged && session.status === "active") shadowEditor.focus();
   if (shadowEditorPendingFocus) {
     shadowEditorPendingFocus = false;
     shadowEditor.focus();
@@ -840,6 +868,7 @@ document.querySelector<HTMLButtonElement>("#workflow-revise")!.addEventListener(
 document.querySelector<HTMLButtonElement>("#save-artifact")!.addEventListener("click", async () => {
   const id = artifactInspector.dataset.draftId;
   if (!id) return;
+  if (!lockAction("artifact-save", id)) return;
   const files: Record<string, string> = { "unit.json": document.querySelector<HTMLTextAreaElement>("#artifact-manifest")!.value };
   document.querySelectorAll<HTMLTextAreaElement>("[data-artifact-file]").forEach((field) => { if (field.dataset.artifactFile) files[field.dataset.artifactFile] = field.value; });
   try {
@@ -850,6 +879,7 @@ document.querySelector<HTMLButtonElement>("#save-artifact")!.addEventListener("c
     await syncFromApi();
     await inspectArtifact(id);
   } catch (error) { notify(error instanceof Error ? error.message : "Artifact revision failed", true); }
+  finally { unlockAction("artifact-save", id); }
 });
 
 function showView(view: string): void {
@@ -925,28 +955,31 @@ document.addEventListener("click", (event) => {
   if (generateButton) {
     event.stopPropagation();
     const id = generateButton.dataset.generateId;
+    if (!lockAction("generate", id)) return;
     void fetch(`/api/drafts/${id}/generate`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { error?: string; status?: string };
       notify(response.ok ? "Template generated. Run Validate contract next." : `Generation failed: ${payload.error ?? "unknown error"}`, !response.ok);
       if (response.ok) { await syncFromApi(); renderDraftsView(); }
-    }).catch((error) => { notify(error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable.", true); });
+    }).catch((error) => { notify(error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable.", true); }).finally(() => unlockAction("generate", id));
     return;
   }
   const validateButton = target.closest<HTMLButtonElement>("[data-validate-id]");
   if (validateButton) {
     event.stopPropagation();
     const id = validateButton.dataset.validateId;
+    if (!lockAction("validate", id)) return;
     void fetch(`/api/drafts/${id}/validate`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { status?: string; errors?: string[] };
       notify(response.ok ? "Rust contract validation passed. Run LLM pre-review next." : `Validation failed: ${(payload.errors ?? ["unknown error"]).join("; ")}`, !response.ok);
       if (response.ok) { await syncFromApi(); renderDraftsView(); }
-    }).catch(() => { notify("Authoring API is unavailable.", true); });
+    }).catch(() => { notify("Authoring API is unavailable.", true); }).finally(() => unlockAction("validate", id));
     return;
   }
   const reviewButton = target.closest<HTMLButtonElement>("[data-review-id]");
   if (reviewButton) {
     event.stopPropagation();
     const id = reviewButton.dataset.reviewId;
+    if (!lockAction("review", id)) return;
     reviewButton.disabled = true;
     const originalLabel = reviewButton.textContent ?? "LLM pre-review";
     reviewButton.textContent = "Running 3 role reviews…";
@@ -967,7 +1000,7 @@ document.addEventListener("click", (event) => {
           ? "LLM pre-review found revision items. Inspect the feedback, revise or approve with rationale."
           : "LLM pre-review completed. Inspect the feedback before approving.");
       await inspectArtifact(id!); renderDraftsView();
-    })().catch((error) => { notify(error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable.", true); });
+    })().catch((error) => { notify(error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable.", true); }).finally(() => unlockAction("review", id));
     reviewButton.disabled = false;
     reviewButton.textContent = originalLabel;
     return;
@@ -976,6 +1009,7 @@ document.addEventListener("click", (event) => {
   if (acceptButton) {
     event.stopPropagation();
     const id = acceptButton.dataset.acceptId;
+    if (!lockAction("accept", id)) return;
     const draft = readDrafts().find((item) => item.id === id);
     const needsOverride = draft?.status === "needs_revision";
     const rationale = needsOverride ? window.prompt("This draft still has LLM review findings. Confirm you reviewed them and enter the reason for approving:") : null;
@@ -985,24 +1019,26 @@ document.addEventListener("click", (event) => {
       const payload = await response.json() as { error?: string };
       notify(response.ok ? "Human approval recorded; draft is accepted." : `Human approval failed: ${payload.error ?? "unknown error"}`, !response.ok);
       if (response.ok) { await syncFromApi(); renderDraftsView(); }
-    }).catch(() => { notify("Authoring API is unavailable.", true); });
+    }).catch(() => { notify("Authoring API is unavailable.", true); }).finally(() => unlockAction("accept", id));
     return;
   }
   const rollbackButton = target.closest<HTMLButtonElement>("[data-rollback-id]");
   if (rollbackButton) {
     event.stopPropagation();
     const id = rollbackButton.dataset.rollbackId;
+    if (!lockAction("rollback", id)) return;
     void fetch(`/api/drafts/${id}/rollback`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { error?: string };
       notify(response.ok ? "Revision requested. The previous artifact remains in history." : `Revision request failed: ${payload.error ?? "unknown error"}`, !response.ok);
       if (response.ok) { await syncFromApi(); renderDraftsView(); }
-    }).catch(() => { notify("Authoring API is unavailable.", true); });
+    }).catch(() => { notify("Authoring API is unavailable.", true); }).finally(() => unlockAction("rollback", id));
     return;
   }
   const forkButton = target.closest<HTMLButtonElement>("[data-fork-id]");
   if (forkButton) {
     event.stopPropagation();
     const id = forkButton.dataset.forkId;
+    if (!lockAction("fork", id)) return;
     void fetch(`/api/drafts/${id}/fork`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { draft?: DraftRecord; error?: string };
       if (!response.ok || !payload.draft) throw new Error(payload.error ?? "fork failed");
@@ -1010,16 +1046,17 @@ document.addEventListener("click", (event) => {
       loadDraftIntoForm(payload.draft);
       notify("Extend unit: a new editable draft was created. Adjust the modes, then Generate template.");
       showView("new");
-    }).catch((error) => { notify(error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable.", true); });
+    }).catch((error) => { notify(error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable.", true); }).finally(() => unlockAction("fork", id));
     return;
   }
   const deleteButton = target.closest<HTMLButtonElement>("[data-delete-id]");
   if (deleteButton) {
     event.stopPropagation();
     const id = deleteButton.dataset.deleteId;
+    if (!lockAction("delete", id)) return;
     void (async () => {
       const confirmed = await openConfirm("Delete draft?", "Its artifact and review reports will be removed. Accepted drafts cannot be deleted.", "Delete");
-      if (!confirmed) return;
+      if (!confirmed) { unlockAction("delete", id); return; }
       try {
         const response = await fetch(`/api/drafts/${id}`, { method: "DELETE" });
         const payload = await response.json() as { error?: string };
@@ -1038,7 +1075,7 @@ document.addEventListener("click", (event) => {
       } catch (error) {
         notify(error instanceof Error ? `Delete failed: ${error.message}` : "Authoring API is unavailable.", true);
       }
-    })();
+    })().finally(() => unlockAction("delete", id));
     return;
   }
   const draftButton = target.closest<HTMLButtonElement>("[data-edit-id]") ?? target.closest<HTMLButtonElement>("[data-draft-id]");
@@ -1171,6 +1208,8 @@ document.querySelector<HTMLButtonElement>("#reset")!.addEventListener("click", (
 });
 document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (practiceStarting) return;
+  practiceStarting = true;
   try {
     if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
     if (activePracticeSession && activePracticeSnapshot?.status === "active") {
@@ -1209,6 +1248,7 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
     practiceMessage("Practice started.");
     await refreshPracticeData();
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to start practice", true); }
+  finally { practiceStarting = false; }
 });
 document.querySelector<HTMLButtonElement>("#session-reveal")!.addEventListener("click", async () => {
   if (!activePracticeSession || activePracticeSession.mode === "shadow_typing") return;
@@ -1249,6 +1289,8 @@ document.querySelector<HTMLButtonElement>("#session-submit")!.addEventListener("
 });
 document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("click", async () => {
   if (!activePracticeSession) return;
+  const sessionId = activePracticeSession.session_id;
+  if (!lockAction("stop", sessionId)) return;
   try {
     if (activePracticeSession.mode === "shadow_typing" || activePracticeSession.mode === "code_recall") await shadowEditor?.flush();
     const result = await practiceRpc<{ session: PracticeSession }>("gewu/stopSession", { session_id: activePracticeSession.session_id, elapsed: { active_ms: 1000, wall_ms: 1000 } });
@@ -1256,6 +1298,7 @@ document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("cl
     activePracticeSession = undefined;
     await refreshPracticeData();
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to stop practice", true); }
+  finally { unlockAction("stop", sessionId); }
 });
 document.querySelector<HTMLButtonElement>("#refresh-checkpoints")!.addEventListener("click", () => { void refreshPracticeData(); });
 document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click", async (event) => {

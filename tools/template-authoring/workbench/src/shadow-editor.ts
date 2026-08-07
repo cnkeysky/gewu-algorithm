@@ -161,6 +161,9 @@ export function mountShadowEditor(
   };
   const subscription = editor.onDidChangeModelContent(() => {
     if (syncing || locked) return;
+    // Repaint the guidance immediately from the local value so deletions and
+    // corrections never leave a stale or missing ghost while Core confirms.
+    paintGhost(model.getValue());
     if (flushTimer !== undefined) return;
     // Monaco updates locally immediately. A short batching window keeps
     // sustained typing from turning every character into a disk checkpoint.

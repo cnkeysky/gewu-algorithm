@@ -185,6 +185,25 @@ test("code recall editor accepts Enter through the same strict prefix pipeline",
   await expect(meta).toContainText("rejected inputs 0");
 });
 
+test("guidance repaints immediately after deleting characters", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  const editor = page.locator("#session-editor .monaco-editor");
+  const guidance = page.locator("#session-editor .gewu-shadow-guidance");
+  await editor.click({ position: { x: 220, y: 30 } });
+  await page.keyboard.type("from collections import deque");
+  await expect(guidance).toHaveText("Enter");
+  // Deleting must repaint the ghost from the local value immediately.
+  await page.keyboard.press("Backspace");
+  await expect(guidance).toHaveText("e");
+  await page.keyboard.type("e");
+  await expect(guidance).toHaveText("Enter");
+});
+
 test("code recall restart keeps the mode and variant bound", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
