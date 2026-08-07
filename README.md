@@ -88,11 +88,6 @@ Running the script without a command opens a menu: `1) Start`, `2) Stop`,
 - `5) Restart` — stop everything, then start again
 - `0) Exit` — quit the menu
 
-The web workbench lists that paginate (Drafts, Interrupted, Spaced review,
-Recent attempts) show an entry range (`Showing 1–6 of 24`), the current page,
-and a jump-to-page input next to the previous/next buttons. The Drafts
-pagination is pinned, so page content changes do not move it.
-
 The same setup can run non-interactively (no prompts):
 
 ```sh

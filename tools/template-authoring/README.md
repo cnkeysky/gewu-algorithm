@@ -109,6 +109,11 @@ an explicit human action. `POST /api/drafts/:id/rollback` clears the current
 artifact, keeps prior reports immutable, and returns the draft to
 `revision_requested` so it can be generated again.
 
+Paginated lists (Drafts, Interrupted, Spaced review, Recent attempts) show an
+entry range (`Showing 1–6 of 24`), the current page, and a jump-to-page input
+next to the previous/next buttons. Drafts pagination is pinned below a
+scrollable list, so page content changes do not move it.
+
 Human approval also publishes a validated copy under
 `drafts/.workbench/published/` by default. Set `GEWU_PUBLISHED_ROOT` to point at
 the content root used by `gewu-cli`; the published directory contains only
