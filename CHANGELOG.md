@@ -10,9 +10,14 @@ allowed only with explicit migration notes (see
 
 - Dev runner services now run in the background and the script exits after
   starting them. Running the script without a command opens an action menu
-  (`1` start, `2` stop, `3` status, `4` prepare, `5` restart, `0` exit);
+  (`1` start, `2` stop, `3` status, `4` prepare, `5` restart, `0` exit) with
+  one-line descriptions for each action;
   `start` probes existing services and only starts the missing ones; a new
   `dev:status` script shows what is running and healthy.
+- Paginated web lists (Drafts, Interrupted, Spaced review, Recent attempts)
+  now show an entry range and current page (`Showing 1–6 of 24 · Page 1 / 4`),
+  a jump-to-page input, and pinned pagination that does not move with content;
+  draft workflow labels are separated with `›` so they no longer run together.
 
 ## [0.1.1] - 2026-08-07
 

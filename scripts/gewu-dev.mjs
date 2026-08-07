@@ -519,7 +519,16 @@ async function doStart() {
 
 async function runMenu() {
   for (;;) {
-    const choice = await ask("\nGEWU dev — choose an action:\n  1) Start services\n  2) Stop services\n  3) Status\n  4) Prepare (install + LLM config)\n  5) Restart services\n  0) Exit\nChoice: ", "0");
+    const choice = await ask(
+      "\nGEWU dev — choose an action:\n"
+      + "  1) Start services — ensure core, API, and web are running (starts only what is missing)\n"
+      + "  2) Stop services — stop all managed services\n"
+      + "  3) Status — show which services are running and healthy\n"
+      + "  4) Prepare — install dependencies, build the core, configure the LLM provider\n"
+      + "  5) Restart — stop everything, then start again\n"
+      + "  0) Exit\nChoice: ",
+      "0",
+    );
     if (choice === "1") await doStart();
     else if (choice === "2") stopAll();
     else if (choice === "3") printStatus(await statusServices());

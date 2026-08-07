@@ -183,6 +183,29 @@ const PRACTICE_PAGE_SIZE = 2;
 const practicePages: Record<PracticeListName, number> = { checkpoints: 0, recommendations: 0, attempts: 0 };
 const DRAFT_PAGE_SIZE = 6;
 let draftPage = 0;
+
+type PaginationKind = PracticeListName | "drafts";
+
+function paginationHtml(kind: PaginationKind, page: number, totalPages: number, totalItems: number, pageSize: number): string {
+  if (totalItems === 0) return "";
+  const start = page * pageSize + 1;
+  const end = Math.min((page + 1) * pageSize, totalItems);
+  return `<div class="list-pagination"><span class="pagination-info">Showing ${start}–${end} of ${totalItems} · Page ${page + 1} / ${totalPages}</span><span class="pagination-controls"><button class="page-button" type="button" data-page-prev="${kind}" aria-label="Previous page" ${page === 0 ? "disabled" : ""}>&#8249;</button><input class="page-jump" data-page-jump="${kind}" type="number" min="1" max="${totalPages}" value="${page + 1}" aria-label="Jump to page" /><button class="page-button" type="button" data-page-go="${kind}" aria-label="Go to page">Go</button><button class="page-button" type="button" data-page-next="${kind}" aria-label="Next page" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>`;
+}
+
+function paginationKindTotal(kind: PaginationKind): number {
+  return kind === "drafts" ? readDrafts().length : kind === "checkpoints" ? checkpointItems.length : kind === "recommendations" ? recommendationItems.length : attemptItems.length;
+}
+function paginationKindSize(kind: PaginationKind): number { return kind === "drafts" ? DRAFT_PAGE_SIZE : PRACTICE_PAGE_SIZE; }
+function paginationKindPage(kind: PaginationKind): number { return kind === "drafts" ? draftPage : practicePages[kind]; }
+function setPaginationKindPage(kind: PaginationKind, page: number): void {
+  const maxPage = Math.max(0, Math.ceil(paginationKindTotal(kind) / paginationKindSize(kind)) - 1);
+  const next = Math.min(maxPage, Math.max(0, page));
+  if (kind === "drafts") draftPage = next; else practicePages[kind] = next;
+}
+function renderPaginationKind(kind: PaginationKind): void {
+  if (kind === "drafts") renderDrafts(); else renderPracticeLists();
+}
 let checkpointItems: Checkpoint[] = [];
 let recommendationItems: Recommendation[] = [];
 let attemptItems: Attempt[] = [];
@@ -423,7 +446,9 @@ function renderPagedPracticeList<T>(name: PracticeListName, targetId: string, it
   practicePages[name] = Math.min(practicePages[name], totalPages - 1);
   const page = practicePages[name];
   const rows = items.slice(page * PRACTICE_PAGE_SIZE, (page + 1) * PRACTICE_PAGE_SIZE);
-  target.innerHTML = `<div class="paged-list-items">${rows.length ? rows.map(renderItem).join("") : `<div class="compact-empty">${emptyText}</div>`}</div><div class="list-pagination"><span>${items.length ? `${page + 1} / ${totalPages}` : "0 items"}</span><span><button class="page-button" type="button" title="Previous page" aria-label="Previous page" data-page-list="${name}" data-page-delta="-1" ${page === 0 ? "disabled" : ""}>&#8249;</button><button class="page-button" type="button" title="Next page" aria-label="Next page" data-page-list="${name}" data-page-delta="1" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>`;
+  target.innerHTML = items.length
+    ? `<div class="paged-scroll">${rows.map(renderItem).join("")}</div>${paginationHtml(name, page, totalPages, items.length, PRACTICE_PAGE_SIZE)}`
+    : `<div class="compact-empty">${emptyText}</div>`;
 }
 function renderPracticeLists(): void {
   renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
@@ -536,7 +561,7 @@ function renderDrafts(): void {
   const totalPages = Math.max(1, Math.ceil(drafts.length / DRAFT_PAGE_SIZE));
   draftPage = Math.min(draftPage, totalPages - 1);
   const visibleDrafts = drafts.slice(draftPage * DRAFT_PAGE_SIZE, (draftPage + 1) * DRAFT_PAGE_SIZE);
-  draftList.innerHTML = drafts.length ? `${visibleDrafts.map((draft) => {
+  draftList.innerHTML = drafts.length ? `<div class="paged-scroll">${visibleDrafts.map((draft) => {
     const canGenerate = ["queued", "revision_requested"].includes(draft.status);
     const canValidate = draft.status === "generated";
     const canReview = draft.status === "validated";
@@ -553,8 +578,10 @@ function renderDrafts(): void {
       canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}">Request revision</button>` : "",
       canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}">New revision</button>` : "",
     ].filter(Boolean).join("");
-    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow"><b class="${stage >= 1 ? "active" : ""}">01 Generate</b><b class="${stage >= 2 ? "active" : ""}">02 Validate</b><b class="${stage >= 4 ? "active" : ""}">03 Review</b><b class="${stage >= 5 ? "active" : ""}">04 Approve</b></small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${statusLabel(draft.status)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
-  }).join("")}<div class="draft-pagination"><span>${draftPage + 1} / ${totalPages}</span><span><button class="page-button" type="button" aria-label="Previous drafts page" data-draft-page="-1" ${draftPage === 0 ? "disabled" : ""}>&#8249;</button><button class="page-button" type="button" aria-label="Next drafts page" data-draft-page="1" ${draftPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+    const pipeline = (label: string, active: boolean) => `<b class="${active ? "active" : ""}">${label}</b>`;
+    const separator = `<span class="pipeline-sep" aria-hidden="true">&#8250;</span>`;
+    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow">${pipeline("01 Generate", stage >= 1)}${separator}${pipeline("02 Validate", stage >= 2)}${separator}${pipeline("03 Review", stage >= 4)}${separator}${pipeline("04 Approve", stage >= 5)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${statusLabel(draft.status)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
+  }).join("")}</div>${paginationHtml("drafts", draftPage, totalPages, drafts.length, DRAFT_PAGE_SIZE)}` : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
   renderWorkflow();
 }
 function renderWorkflow(): void {
@@ -636,11 +663,21 @@ function showView(view: string): void {
 
 document.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
-  const draftPageButton = target.closest<HTMLButtonElement>("[data-draft-page]");
-  if (draftPageButton) {
+  const paginationControl = target.closest<HTMLElement>("[data-page-prev], [data-page-next], [data-page-go]");
+  if (paginationControl) {
     event.stopPropagation();
-    draftPage += Number(draftPageButton.dataset.draftPage ?? 0);
-    renderDrafts();
+    const kind = (paginationControl.dataset.pagePrev ?? paginationControl.dataset.pageNext ?? paginationControl.dataset.pageGo) as PaginationKind;
+    const current = paginationKindPage(kind);
+    let next = current;
+    if (paginationControl.dataset.pagePrev !== undefined) next = current - 1;
+    else if (paginationControl.dataset.pageNext !== undefined) next = current + 1;
+    else {
+      const input = paginationControl.closest<HTMLElement>(".list-pagination")?.querySelector<HTMLInputElement>(".page-jump");
+      const value = Number(input?.value ?? current + 1);
+      next = Number.isInteger(value) ? value - 1 : current;
+    }
+    setPaginationKindPage(kind, next);
+    renderPaginationKind(kind);
     return;
   }
   const navigation = target.closest<HTMLButtonElement>(".nav-item, [data-go]");
@@ -756,6 +793,12 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
+  const jump = (event.target as HTMLElement).closest<HTMLInputElement>(".page-jump");
+  if (jump && event.key === "Enter") {
+    event.preventDefault();
+    jump.closest<HTMLElement>(".list-pagination")?.querySelector<HTMLButtonElement>("[data-page-go]")?.click();
+    return;
+  }
   const row = (event.target as HTMLElement).closest<HTMLElement>(".draft-row");
   if (!row || (event.target as HTMLElement).closest("button")) return;
   event.preventDefault();
@@ -962,13 +1005,6 @@ document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click",
     mode.value = recommendation.dataset.recommendationMode ?? mode.value;
     renderPracticeOptions();
     document.querySelector<HTMLFormElement>("#practice-start")!.requestSubmit();
-    return;
-  }
-  const pageButton = target.closest<HTMLButtonElement>("[data-page-list]");
-  if (pageButton) {
-    const name = pageButton.dataset.pageList as PracticeListName;
-    practicePages[name] += Number(pageButton.dataset.pageDelta ?? 0);
-    renderPracticeLists();
     return;
   }
   const resume = target.closest<HTMLButtonElement>("[data-resume-checkpoint]");

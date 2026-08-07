@@ -79,8 +79,19 @@ The script walks you through these steps:
    for existing services and only starts the ones that are missing.
 
 Running the script without a command opens a menu: `1) Start`, `2) Stop`,
-`3) Status`, `4) Prepare`, `5) Restart`, `0) Exit` — pick an action each time
-you run it.
+`3) Status`, `4) Prepare`, `5) Restart`, `0) Exit`, with one-line descriptions:
+
+- `1) Start` — ensure core, API, and web are running (starts only what is missing)
+- `2) Stop` — stop all managed services
+- `3) Status` — show which services are running and healthy
+- `4) Prepare` — install dependencies, build the core, configure the LLM provider
+- `5) Restart` — stop everything, then start again
+- `0) Exit` — quit the menu
+
+The web workbench lists that paginate (Drafts, Interrupted, Spaced review,
+Recent attempts) show an entry range (`Showing 1–6 of 24`), the current page,
+and a jump-to-page input next to the previous/next buttons. The Drafts
+pagination is pinned, so page content changes do not move it.
 
 The same setup can run non-interactively (no prompts):
 
