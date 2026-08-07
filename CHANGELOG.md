@@ -6,7 +6,7 @@ allowed only with explicit migration notes (see
 
 ## [0.1.2] - 2026-08-07
 
-## [Unreleased]
+## [0.1.3] - 2026-08-07
 
 ### Changed
 

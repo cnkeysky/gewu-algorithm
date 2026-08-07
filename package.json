@@ -1,6 +1,6 @@
 {
   "name": "gewu-algorithm",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Root convenience scripts for the GEWU development stack. The implementation lives in scripts/gewu-dev.mjs.",
   "scripts": {
