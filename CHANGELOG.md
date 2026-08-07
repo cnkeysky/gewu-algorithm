@@ -67,7 +67,9 @@ allowed only with explicit migration notes (see
   Pass / Needs revision / Reject). Filters slice before pagination, reset to
   page one, and show targeted empty states. The pagination strip reserves its
   space on single-page and empty lists, so switching filters no longer moves
-  the surrounding layout.
+  the surrounding layout; the Review history empty state fills the same fixed
+  height as its list so verdict filters with no matches do not collapse the
+  view.
 
 ### Docs
 

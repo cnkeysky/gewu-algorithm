@@ -233,6 +233,7 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .toast.error { background: #a85126; }
 .toast[hidden] { display: none; }
 .history-paged { display: flex; height: 528px; flex-direction: column; overflow-y: auto; }
+.history-list .empty-state { min-height: 528px; }
 .session-problem { margin: 18px 0 12px; padding: 12px 14px; border-left: 3px solid var(--green); background: #f2f8f4; }
 .session-problem > span { display: block; margin-bottom: 5px; color: var(--green); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .session-question { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.55; }
