@@ -131,11 +131,13 @@ root.innerHTML = `
     </section>
     <section id="drafts-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
+      <div class="filter-pills" id="draft-filters"></div>
       <div class="draft-list" id="draft-list"></div>
       <p class="view-note">Generated artifacts and LLM pre-review reports remain inspectable; only Human approve promotes a draft.</p>
     </section>
     <section id="history-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Audit trail</p><h2>Review history</h2></div><span class="lock">Immutable reports</span></div>
+      <div class="filter-pills" id="history-filters"></div>
       <div class="history-list" id="history-list"></div>
       <p class="view-note">Reports are tied to an artifact hash and cannot promote a draft without human acceptance.</p>
     </section>
@@ -217,8 +219,43 @@ const DRAFT_PAGE_SIZE = 6;
 let draftPage = 0;
 const HISTORY_PAGE_SIZE = 6;
 let historyPage = 0;
+type DraftFilter = "all" | "attention" | "progress" | "published";
+type HistoryFilter = "all" | "pass" | "needs_revision" | "reject";
+let draftFilter: DraftFilter = "all";
+let historyFilter: HistoryFilter = "all";
 
 type PaginationKind = PracticeListName | "drafts" | "history";
+
+function filterDrafts(drafts: DraftRecord[]): DraftRecord[] {
+  if (draftFilter === "attention") return drafts.filter((draft) => draft.status === "needs_revision" || draft.status === "llm_reviewed");
+  if (draftFilter === "progress") return drafts.filter((draft) => ["queued", "generated", "validated", "revision_requested"].includes(draft.status));
+  if (draftFilter === "published") return drafts.filter((draft) => draft.status === "accepted");
+  return drafts;
+}
+function filterReviews(reviews: ReviewRecord[]): ReviewRecord[] {
+  if (historyFilter === "pass") return reviews.filter((review) => review.verdict === "pass");
+  if (historyFilter === "needs_revision") return reviews.filter((review) => review.verdict === "needs_revision");
+  if (historyFilter === "reject") return reviews.filter((review) => review.verdict === "reject");
+  return reviews;
+}
+function renderDraftFilters(allDrafts: DraftRecord[]): void {
+  const groups: Array<{ key: DraftFilter; label: string; match: (draft: DraftRecord) => boolean }> = [
+    { key: "all", label: "All", match: () => true },
+    { key: "attention", label: "Needs attention", match: (draft) => draft.status === "needs_revision" || draft.status === "llm_reviewed" },
+    { key: "progress", label: "In progress", match: (draft) => ["queued", "generated", "validated", "revision_requested"].includes(draft.status) },
+    { key: "published", label: "Published", match: (draft) => draft.status === "accepted" },
+  ];
+  document.querySelector<HTMLElement>("#draft-filters")!.innerHTML = groups.map((group) => `<button class="filter-pill${draftFilter === group.key ? " active" : ""}" type="button" data-draft-filter="${group.key}">${group.label}<span class="filter-count">${allDrafts.filter(group.match).length}</span></button>`).join("");
+}
+function renderHistoryFilters(allReviews: ReviewRecord[]): void {
+  const groups: Array<{ key: HistoryFilter; label: string; match: (review: ReviewRecord) => boolean }> = [
+    { key: "all", label: "All", match: () => true },
+    { key: "pass", label: "Pass", match: (review) => review.verdict === "pass" },
+    { key: "needs_revision", label: "Needs revision", match: (review) => review.verdict === "needs_revision" },
+    { key: "reject", label: "Reject", match: (review) => review.verdict === "reject" },
+  ];
+  document.querySelector<HTMLElement>("#history-filters")!.innerHTML = groups.map((group) => `<button class="filter-pill${historyFilter === group.key ? " active" : ""}" type="button" data-history-filter="${group.key}">${group.label}<span class="filter-count">${allReviews.filter(group.match).length}</span></button>`).join("");
+}
 
 function pageNumberItems(page: number, totalPages: number): Array<number | "…"> {
   const current = page + 1;
@@ -237,7 +274,11 @@ function pageNumberItems(page: number, totalPages: number): Array<number | "…"
 }
 
 function paginationHtml(kind: PaginationKind, page: number, totalPages: number, totalItems: number, pageSize: number): string {
-  if (totalItems === 0 || totalPages <= 1) return "";
+  if (totalItems === 0) return "";
+  // Reserve the pagination strip even on a single page so the surrounding
+  // layout (footer, filters, fixed-height lists) never jumps when a filter
+  // changes the number of visible items.
+  if (totalPages <= 1) return `<div class="list-pagination is-empty" aria-hidden="true"></div>`;
   const start = page * pageSize + 1;
   const end = Math.min((page + 1) * pageSize, totalItems);
   const pagesHtml = pageNumberItems(page, totalPages).map((item) => item === "…"
@@ -250,7 +291,7 @@ function paginationHtml(kind: PaginationKind, page: number, totalPages: number, 
 }
 
 function paginationKindTotal(kind: PaginationKind): number {
-  return kind === "drafts" ? readDrafts().length : kind === "history" ? readReviews().length : kind === "checkpoints" ? checkpointItems.length : kind === "recommendations" ? recommendationItems.length : attemptItems.length;
+  return kind === "drafts" ? filterDrafts(readDrafts()).length : kind === "history" ? filterReviews(readReviews()).length : kind === "checkpoints" ? checkpointItems.length : kind === "recommendations" ? recommendationItems.length : attemptItems.length;
 }
 function paginationKindSize(kind: PaginationKind): number { return kind === "drafts" ? DRAFT_PAGE_SIZE : kind === "history" ? HISTORY_PAGE_SIZE : PRACTICE_PAGE_SIZE; }
 function paginationKindPage(kind: PaginationKind): number { return kind === "drafts" ? draftPage : kind === "history" ? historyPage : practicePages[kind]; }
@@ -665,11 +706,14 @@ function draftStage(status: DraftRecord["status"]): number {
   return status === "queued" || status === "revision_requested" ? 1 : status === "generated" ? 2 : status === "validated" || status === "needs_revision" ? 3 : status === "llm_reviewed" ? 4 : status === "accepted" ? 5 : 0;
 }
 function renderDrafts(): void {
-  const drafts = readDrafts();
-  document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(drafts.length);
+  const allDrafts = readDrafts();
+  document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(allDrafts.length);
+  renderDraftFilters(allDrafts);
+  const drafts = filterDrafts(allDrafts);
   const totalPages = Math.max(1, Math.ceil(drafts.length / DRAFT_PAGE_SIZE));
   draftPage = Math.min(draftPage, totalPages - 1);
   const visibleDrafts = drafts.slice(draftPage * DRAFT_PAGE_SIZE, (draftPage + 1) * DRAFT_PAGE_SIZE);
+  const empty = draftFilter === "attention" ? ["Nothing needs attention", "You are all caught up."] : draftFilter === "progress" ? ["No drafts in progress", "Start a draft to see it here."] : draftFilter === "published" ? ["No published units yet", "Approve a draft to publish it."] : ["No local drafts yet", "Create a draft to see it here."];
   draftList.innerHTML = drafts.length ? `<div class="paged-scroll">${visibleDrafts.map((draft) => {
     const canGenerate = ["queued", "revision_requested"].includes(draft.status);
     const canValidate = draft.status === "generated";
@@ -692,7 +736,7 @@ function renderDrafts(): void {
     const pipeline = (label: string, active: boolean) => `<b class="${active ? "active" : ""}">${label}</b>`;
     const separator = `<span class="pipeline-sep" aria-hidden="true">&#8250;</span>`;
     return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow">${pipeline("01 Generate", stage >= 1)}${separator}${pipeline("02 Validate", stage >= 2)}${separator}${pipeline("03 Review", stage >= 4)}${separator}${pipeline("04 Approve", stage >= 5)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${statusLabel(draft.status)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
-  }).join("")}</div>${paginationHtml("drafts", draftPage, totalPages, drafts.length, DRAFT_PAGE_SIZE)}` : `<div class="empty-state"><strong>No local drafts yet</strong><span>Create a draft to see it here.</span></div>`;
+  }).join("")}</div>${paginationHtml("drafts", draftPage, totalPages, drafts.length, DRAFT_PAGE_SIZE)}` : `<div class="empty-state"><strong>${empty[0]}</strong><span>${empty[1]}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
   renderWorkflow();
 }
 function renderWorkflow(): void {
@@ -733,10 +777,12 @@ function markDraftDirty(): void {
 }
 function renderHistory(): void {
   const drafts = readDrafts();
-  const reviews = readReviews();
+  const allReviews = readReviews();
+  renderHistoryFilters(allReviews);
+  const reviews = filterReviews(allReviews);
   historyList.innerHTML = reviews.length
     ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View feedback</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
-    : `<div class="empty-state"><strong>No review reports yet</strong><span>Reports appear after a draft is validated and reviewed.</span></div>`;
+    : `<div class="empty-state"><strong>${historyFilter === "all" ? "No review reports yet" : "No matching reports"}</strong><span>${historyFilter === "all" ? "Reports appear after a draft is validated and reviewed." : "Try another verdict filter."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
 }
 
 async function inspectArtifact(id: string): Promise<void> {
@@ -832,6 +878,22 @@ document.addEventListener("click", (event) => {
     else if (reviewNext && artifactReviewPage < reviewTotal - 1) artifactReviewPage += 1;
     if (reviewPrev || reviewNext || reviewNumber) renderArtifactReviews();
     event.stopPropagation();
+    return;
+  }
+  const draftFilterButton = target.closest<HTMLButtonElement>("[data-draft-filter]");
+  if (draftFilterButton) {
+    event.stopPropagation();
+    draftFilter = draftFilterButton.dataset.draftFilter as DraftFilter;
+    draftPage = 0;
+    renderDrafts();
+    return;
+  }
+  const historyFilterButton = target.closest<HTMLButtonElement>("[data-history-filter]");
+  if (historyFilterButton) {
+    event.stopPropagation();
+    historyFilter = historyFilterButton.dataset.historyFilter as HistoryFilter;
+    historyPage = 0;
+    renderHistory();
     return;
   }
   const paginationControl = target.closest<HTMLElement>("[data-page-prev], [data-page-next], [data-page-number]");

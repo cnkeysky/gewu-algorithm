@@ -62,6 +62,12 @@ allowed only with explicit migration notes (see
   refresh the list in place without resetting the page or scroll position;
   list ordering is deterministic (created_at + insertion tiebreaker); the
   accepted-draft action is renamed "Extend unit" to match what it does.
+- Drafts and Review history gain status/verdict filter pills with live counts
+  (Drafts: All / Needs attention / In progress / Published; History: All /
+  Pass / Needs revision / Reject). Filters slice before pagination, reset to
+  page one, and show targeted empty states. The pagination strip reserves its
+  space on single-page and empty lists, so switching filters no longer moves
+  the surrounding layout.
 
 ### Docs
 

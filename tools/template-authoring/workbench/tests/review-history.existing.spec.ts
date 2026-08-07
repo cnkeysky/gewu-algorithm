@@ -62,3 +62,25 @@ test("LLM pre-review findings render as severity cards with standard pagination"
     expect(nextHeight).toBe(gridHeight);
   }
 });
+
+test("verdict filters group the audit trail with live counts", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Review history", exact: true }).click();
+  await expect(page.locator("#history-filters .filter-pill").first()).toBeVisible();
+  const passPill = page.locator("#history-filters .filter-pill", { hasText: /^Pass/ });
+  const count = Number((await passPill.locator(".filter-count").textContent()) ?? "0");
+  expect(count).toBeGreaterThan(0);
+  await passPill.click();
+  await expect(page.locator("#history-view .history-row").first()).toBeVisible();
+  const verdicts = await page.locator("#history-view .history-status").allTextContents();
+  expect(verdicts.every((value) => value.trim() === "pass")).toBe(true);
+  const rejectPill = page.locator("#history-filters .filter-pill", { hasText: /^Reject/ });
+  await rejectPill.click();
+  const rejectCount = Number((await rejectPill.locator(".filter-count").textContent()) ?? "0");
+  if (rejectCount === 0) {
+    await expect(page.locator("#history-view .empty-state")).toContainText("No matching reports");
+  } else {
+    const verdictsAfter = await page.locator("#history-view .history-status").allTextContents();
+    expect(verdictsAfter.every((value) => value.trim() === "reject")).toBe(true);
+  }
+});

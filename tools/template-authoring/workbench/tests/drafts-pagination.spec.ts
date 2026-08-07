@@ -179,3 +179,61 @@ test("requesting a revision keeps the page, the row, and shows a toast", async (
   const afterY = await row.evaluate((el) => el.getBoundingClientRect().y);
   expect(Math.abs(afterY - rowY)).toBeLessThanOrEqual(2);
 });
+
+test("status filters group drafts with live counts and empty states", async ({ page }) => {
+  const statuses: Array<[string, string]> = [
+    ["Needs fix A", "needs_revision"],
+    ["Needs fix B", "needs_revision"],
+    ["Ready to approve", "llm_reviewed"],
+    ["Queued one", "queued"],
+    ["Generated one", "generated"],
+    ["Validated one", "validated"],
+    ["Published one", "accepted"],
+    ["Published two", "accepted"],
+  ];
+  const seeds = statuses.map(([title, status], index) => ({
+    id: `filter-${index}`,
+    title,
+    problem: "P.",
+    provider: "deepseek",
+    model: "deepseek-v4-flash",
+    language: "python",
+    variants: 1,
+    modes: ["shadow_typing"],
+    assistance: [],
+    status,
+    artifactPath: ["needs_revision", "llm_reviewed", "validated", "accepted"].includes(status) ? `artifacts/filter-${index}` : undefined,
+    createdAt: new Date(Date.UTC(2026, 7, 5, 9, index)).toISOString(),
+  }));
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: seeds } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await openDrafts(page);
+
+  const pill = (label: string) => page.locator("#draft-filters .filter-pill", { hasText: new RegExp(`^${label}`) });
+  await expect(pill("All")).toContainText("8");
+  await expect(pill("Needs attention")).toContainText("3");
+  await expect(pill("In progress")).toContainText("3");
+  await expect(pill("Published")).toContainText("2");
+
+  await pill("Needs attention").click();
+  await expect(page.locator(".draft-row")).toHaveCount(3);
+  await expect(page.locator(".draft-list .list-pagination")).toBeHidden();
+  const statusesShown = await page.locator(".draft-row .draft-status").allTextContents();
+  expect(statusesShown.every((value) => ["Needs revision", "LLM pre-reviewed"].includes(value))).toBe(true);
+
+  await pill("Published").click();
+  await expect(page.locator(".draft-row")).toHaveCount(2);
+  await expect(page.locator(".draft-row .draft-status").first()).toHaveText("Human approved");
+});
+
+test("a status filter with no matches shows a targeted empty state", async ({ page }) => {
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: [{
+    id: "only-queued", title: "Only queued", problem: "P.", provider: "deepseek", model: "deepseek-v4-flash",
+    language: "python", variants: 1, modes: ["shadow_typing"], assistance: [], status: "queued",
+    createdAt: "2026-08-07T09:00:00.000Z",
+  }] } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await openDrafts(page);
+  await page.locator("#draft-filters .filter-pill", { hasText: /^Published/ }).click();
+  await expect(page.locator(".draft-list .empty-state")).toContainText("No published units yet");
+});

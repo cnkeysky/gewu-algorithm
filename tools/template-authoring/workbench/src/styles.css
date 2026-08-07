@@ -54,6 +54,7 @@ fieldset { margin: 27px 0 0; padding: 0; border: 0; } legend { display: flex; ju
 .compact-empty { padding: 10px 0; color: var(--muted); font-size: 11px; }
 .paged-scroll { overflow-y: auto; }.draft-list { display: flex; flex-direction: column; }.draft-list .paged-scroll { height: 600px; overflow: hidden; }.draft-list .empty-state { min-height: 600px; }
 .list-pagination { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 34px; margin-top: 4px; padding-top: 4px; border-top: 1px solid #eef1ee; color: var(--muted); font-size: 10px; flex: 0 0 auto; }.pagination-info { min-width: 0; }.pagination-controls { display: flex; gap: 5px; align-items: center; }.page-button { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); background: #fff; color: var(--ink); font-size: 17px; line-height: 1; }.page-button:disabled { cursor: default; color: #b7c1bb; background: #f5f7f5; }.page-button.page-number { width: auto; min-width: 24px; padding: 0 5px; font-size: 11px; font-weight: 600; }.page-button.page-number.active { background: var(--green); border-color: var(--green); color: #fff; }.page-ellipsis { align-self: center; color: var(--muted); }.page-jump-wrap { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; color: var(--muted); font-size: 10px; }.page-jump { width: 40px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 3px; background: #fff; color: var(--ink); font-size: 10px; text-align: center; }
+.list-pagination.is-empty { visibility: hidden; }
 .draft-pipeline .pipeline-sep { opacity: .55; margin: 0 1px; }
 .draft-row .draft-pipeline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; color: #a4ada8; font-size: 9px; letter-spacing: .02em; }.draft-pipeline b { font-weight: 600; }.draft-pipeline b.active { color: #3c7561; }.draft-pipeline .pipeline-sep { opacity: .5; }
 footer { display: flex; justify-content: space-between; margin-top: auto; padding: 18px 5vw; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
@@ -222,6 +223,12 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .finding-card p { margin: 9px 0 0; color: var(--ink); font-size: 12px; line-height: 1.55; }
 .finding-card .finding-evidence, .finding-card .finding-suggestion { display: block; margin-top: 7px; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .finding-pagination { margin-top: 14px; }
+.filter-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.filter-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); font-size: 11px; font-weight: 650; transition: border-color .14s ease, background .14s ease, color .14s ease; }
+.filter-pill:hover { border-color: #b3c2ba; }
+.filter-pill.active { border-color: var(--green); background: var(--green); color: #fff; }
+.filter-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #edf0ed; color: #5b6670; font-size: 10px; font-weight: 700; }
+.filter-pill.active .filter-count { background: rgba(255, 255, 255, .22); color: #fff; }
 .toast { position: fixed; right: 24px; bottom: 24px; z-index: 60; max-width: min(440px, calc(100vw - 48px)); padding: 12px 16px; border-radius: 10px; background: var(--green); color: #fff; font-size: 12px; line-height: 1.5; box-shadow: 0 12px 32px rgba(21, 33, 29, .25); }
 .toast.error { background: #a85126; }
 .toast[hidden] { display: none; }
