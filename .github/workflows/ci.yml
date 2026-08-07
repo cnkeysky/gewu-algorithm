@@ -13,6 +13,17 @@ on:
   workflow_dispatch:
 
 jobs:
+  version-sync:
+    name: Version sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check release version references
+        run: npm run check:version
+
   rust:
     name: Rust gates
     runs-on: ubuntu-latest

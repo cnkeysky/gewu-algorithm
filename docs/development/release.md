@@ -26,17 +26,21 @@ Published content packs declare supported schema versions. Attempts preserve the
 
 1. Confirm requirements and non-goals for the release.
 2. Update changelog and compatibility documentation.
-3. For every contract change, review the cascade checklist in
+3. Run `npm run check:version -- --fix` so the README "internal vX.Y.Z level"
+   line, VS Code package version, CHANGELOG section, and release record all
+   match the release version; CI's Version sync job enforces the same check on
+   every push so a stale version can never ship.
+4. For every contract change, review the cascade checklist in
    [`coding-standards.md`](coding-standards.md) and attach the propagation
    matrix to the change review.
-4. Run formatting, lint, unit, schema, protocol, persistence, and integration tests.
-5. Run dependency vulnerability and license checks.
-6. Build binaries for supported targets in clean environments.
-7. Package and install the VS Code extension artifact.
-8. Verify offline local practice.
-9. Verify credential redaction and local-data deletion.
-10. Verify upgrade from the previous supported release.
-11. Tag immutable source revisions and publish checksums.
+5. Run formatting, lint, unit, schema, protocol, persistence, and integration tests.
+6. Run dependency vulnerability and license checks.
+7. Build binaries for supported targets in clean environments.
+8. Package and install the VS Code extension artifact.
+9. Verify offline local practice.
+10. Verify credential redaction and local-data deletion.
+11. Verify upgrade from the previous supported release.
+12. Tag immutable source revisions and publish checksums.
 
 ## Versioning Policy
 

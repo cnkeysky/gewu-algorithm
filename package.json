@@ -4,6 +4,7 @@
   "private": true,
   "description": "Root convenience scripts for the GEWU development stack. The implementation lives in scripts/gewu-dev.mjs.",
   "scripts": {
+    "check:version": "node scripts/check-version.mjs",
     "dev": "node scripts/gewu-dev.mjs",
     "dev:start": "node scripts/gewu-dev.mjs start",
     "dev:prepare": "node scripts/gewu-dev.mjs prepare",
