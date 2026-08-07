@@ -17,7 +17,9 @@ allowed only with explicit migration notes (see
   Linux, macOS, and Windows. The setup is guided step by step (prerequisites,
   dependencies, core build, LLM provider wizard, services), confirms before
   slow installs, confirms ports before starting, and stops on Enter/Ctrl+C or
-  `npm run dev:stop`.
+  `npm run dev:stop`. Model info is expected to be prepared by the user up
+  front, and the API key is read after the install/build steps so it is not
+  held across long-running work.
 - `cargo-audit` gate in the Rust CI job.
 
 ## [0.1.0] - 2026-08-07

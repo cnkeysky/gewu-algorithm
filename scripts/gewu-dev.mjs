@@ -77,10 +77,11 @@ flags:
   --e2e           also install Playwright chromium (for the e2e suite)
   --key           re-prompt for DEEPSEEK_API_KEY even if already set
   --provider ID   provider id (deepseek|openai|moonshotai|xiaomi)
-  --model ID      model id (used with --provider; must exist in the pi-ai catalog)
-  --api-key KEY   provider API key (used with --provider; hidden prompts otherwise)
+  --model ID      model id you prepared (catalog is listed when available)
+  --api-key KEY   provider API key (otherwise prompted after install/build)
 
-Cross-platform: POSIX ./scripts/gewu-dev.sh, Windows scripts\\gewu-dev.cmd.`);
+Have your provider and model id ready before the interactive run. The API key
+is read after the slow install/build steps, just before services start.`);
 }
 
 for (let i = 0; i < args.length; i += 1) {
@@ -109,13 +110,16 @@ async function confirmYes(question) {
   return answer === "y" || answer === "";
 }
 
+function installNeeded() {
+  return forceInstall || installE2e
+    || !existsSync(join(repo, "tools", "template-authoring", "node_modules"))
+    || !existsSync(join(repo, "tools", "template-authoring", "workbench", "node_modules"));
+}
+
 async function npmInstall(cwd, force) {
   if (existsSync(join(cwd, "node_modules")) && !force) {
     log(`node_modules present in ${cwd}; skipping npm ci (--force-install to reinstall)`);
     return;
-  }
-  if (!(await confirmYes(`Install npm dependencies in ${cwd} (may take a while)`))) {
-    die("dependencies are required; rerun with --force-install or install manually");
   }
   log(`npm ci in ${cwd}`);
   runSync(npm, ["ci"], { cwd, shell: isWin });
@@ -133,22 +137,6 @@ function checkPrerequisites() {
   if (!isWin && python !== "python3") {
     log(`using ${python} as the Python interpreter`);
   }
-}
-
-async function prepare() {
-  checkPrerequisites();
-  log("[2/5] Installing npm dependencies");
-  npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
-  npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
-  if (installE2e) {
-    log("Installing Playwright chromium (for e2e)");
-    runSync(npx(), ["playwright", "install", "chromium"], { cwd: join(repo, "tools", "template-authoring", "workbench"), shell: isWin });
-  }
-  log("[3/5] Building the Rust core");
-  runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
-  log("[4/5] Configuring the LLM provider");
-  await ensureEnv();
-  log("[5/5] Setup complete");
 }
 
 function npx() {
@@ -232,52 +220,86 @@ function writeEnvVar(content, name, value) {
   return `${content.replace(/\n*$/, "\n")}${name}=${value}\n`;
 }
 
-async function ensureEnv() {
-  log("Ensuring authoring environment (.env.local)");
+function readCurrentConfig() {
+  if (!existsSync(envFile)) return { provider: "deepseek", model: "deepseek-v4-flash", hasKey: false };
+  const content = readFileSync(envFile, "utf8");
+  return {
+    provider: /^GEWU_LLM_PROVIDER=(\S+)/m.exec(content)?.[1] ?? "deepseek",
+    model: /^GEWU_LLM_MODEL=(\S+)/m.exec(content)?.[1] ?? "deepseek-v4-flash",
+    hasKey: /^[A-Z_]+_API_KEY=[^ \t]+/m.test(content),
+  };
+}
+
+/** Collects the answers that do not depend on the installed toolchain, then execution runs. */
+async function collectConfig(starting) {
+  const current = readCurrentConfig();
+  if (selectedProvider && !PROVIDER_ENV[selectedProvider]) die(`unsupported provider: ${selectedProvider} (use one of: ${Object.keys(PROVIDER_ENV).join(", ")})`);
+
+  const reconfigure = keyOverride || Boolean(selectedProvider) || Boolean(selectedModel);
+  let provider;
+  let model;
+  let keyMode;
+
+  if (!reconfigure && current.hasKey) {
+    provider = current.provider;
+    model = current.model;
+    keyMode = "existing";
+    log(`using existing configuration: provider=${current.provider} model=${current.model} (API key present)`);
+  } else {
+    log("Have your LLM provider and model id ready (e.g., deepseek / deepseek-v4-flash).");
+    provider = selectedProvider ?? await ask(`Provider [${Object.keys(PROVIDER_ENV).join("|")}] (default ${current.provider}): `, current.provider);
+    if (!PROVIDER_ENV[provider]) die(`unsupported provider: ${provider}`);
+    if (selectedModel) {
+      model = selectedModel;
+    } else {
+      const models = await loadModels(provider);
+      const question = models.length
+        ? `Model (${models.map((id, index) => `${index + 1}: ${id}`).join(", ")}; default ${current.model}): `
+        : `Model id (the id you prepared; default ${current.model}): `;
+      const answer = await ask(question, current.model);
+      const index = Number(answer);
+      model = Number.isInteger(index) && index >= 1 && index <= models.length ? models[index - 1] : answer;
+    }
+    keyMode = "new";
+  }
+
+  let install = true;
+  if (isTTY && installNeeded() && !(await confirmYes("Install npm dependencies (may take a while)"))) {
+    die("dependencies are required; rerun with --force-install or install manually");
+  }
+
+  let core = corePort;
+  let api = apiPort;
+  let web = webPort;
+  if (starting && isTTY) {
+    for (;;) {
+      if (await confirmYes(`Start with core=${core} api=${api} web=${web}`)) break;
+      core = await ask("core port (default 4175): ", "4175");
+      api = await ask("authoring API port (default 4174): ", "4174");
+      web = await ask("web port (default 5173): ", "5173");
+      for (const value of [core, api, web]) {
+        if (!/^\d{1,5}$/.test(value)) die(`invalid port: ${value}`);
+      }
+    }
+  }
+  return { provider, model, keyMode, install, corePort: core, apiPort: api, webPort: web };
+}
+
+function writeConfig(config) {
   if (!existsSync(envFile)) {
     copyFileSync(envExample, envFile);
     log(`Created ${envFile} from .env.example`);
   }
+  const envVar = PROVIDER_ENV[config.provider];
   let content = readFileSync(envFile, "utf8");
-  const currentProvider = /^GEWU_LLM_PROVIDER=(\S+)/m.exec(content)?.[1] ?? "deepseek";
-  const currentModel = /^GEWU_LLM_MODEL=(\S+)/m.exec(content)?.[1] ?? "deepseek-v4-flash";
-
-  if (selectedProvider && !PROVIDER_ENV[selectedProvider]) die(`unsupported provider: ${selectedProvider} (use one of: ${Object.keys(PROVIDER_ENV).join(", ")})`);
-
-  let provider = selectedProvider;
-  let model = selectedModel;
-  let key = apiKeyValue;
-  const interactive = !provider && !key;
-
-  if (interactive && !keyOverride && /^[A-Z_]+_API_KEY=[^ \t]+/m.test(content)) {
-    log(`already configured: provider=${currentProvider} model=${currentModel} (API key present). Use --key to reconfigure.`);
-    return;
-  }
-
-  if (interactive) {
-    const providerAnswer = await ask(`Provider [${Object.keys(PROVIDER_ENV).join("|")}] (default ${currentProvider}): `, currentProvider);
-    provider = providerAnswer;
-    if (!PROVIDER_ENV[provider]) die(`unsupported provider: ${provider}`);
-    const models = await loadModels(provider);
-    const modelQuestion = models.length
-      ? `Model (${models.map((id, index) => `${index + 1}: ${id}`).join(", ")}; default ${currentModel}): `
-      : "Model id (pi-ai catalog unavailable; type an id): ";
-    const modelAnswer = await ask(modelQuestion, currentModel);
-    const modelIndex = Number(modelAnswer);
-    model = Number.isInteger(modelIndex) && modelIndex >= 1 && modelIndex <= models.length ? models[modelIndex - 1] : modelAnswer;
-    key = await askHidden(`${PROVIDER_ENV[provider]} (input hidden): `);
-  } else if (!key && (provider || selectedModel)) {
-    key = await askHidden(`${PROVIDER_ENV[provider ?? currentProvider]} (input hidden): `);
-  }
-
-  if (!key) die("API key cannot be empty");
-  const envVar = PROVIDER_ENV[provider ?? currentProvider];
-  content = writeEnvVar(content, "GEWU_LLM_PROVIDER", provider ?? currentProvider);
-  content = writeEnvVar(content, "GEWU_LLM_MODEL", model ?? currentModel);
-  content = writeEnvVar(content, envVar, key);
+  content = writeEnvVar(content, "GEWU_LLM_PROVIDER", config.provider);
+  content = writeEnvVar(content, "GEWU_LLM_MODEL", config.model);
+  if (config.key) content = writeEnvVar(content, envVar, config.key);
   writeFileSync(envFile, content, { mode: 0o600 });
   if (!isWin) chmodSync(envFile, 0o600);
-  log(`${envVar} and GEWU_LLM_PROVIDER/MODEL written to .env.local (mode 600)`);
+  log(config.key
+    ? `${envVar} and GEWU_LLM_PROVIDER/MODEL written to .env.local (mode 600)`
+    : `GEWU_LLM_PROVIDER/MODEL updated; existing API key preserved`);
 }
 
 function killTree(pid) {
@@ -351,33 +373,47 @@ function startOne(name, list, options) {
   return child.pid;
 }
 
+async function prepare() {
+  const config = await collectConfig(false);
+  checkPrerequisites();
+  log("[2/5] Installing npm dependencies");
+  await npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
+  await npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
+  if (installE2e) {
+    log("Installing Playwright chromium (for e2e)");
+    runSync(npx(), ["playwright", "install", "chromium"], { cwd: join(repo, "tools", "template-authoring", "workbench"), shell: isWin });
+  }
+  log("[3/5] Building the Rust core");
+  runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
+  log("[4/5] Writing LLM configuration");
+  const key = config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
+  if (config.keyMode === "new" && !key) die("API key cannot be empty");
+  writeConfig({ ...config, key });
+  log("[5/5] Setup complete");
+}
+
 async function doStart() {
   log("GEWU dev setup plan:");
-  log("  1/5 prerequisites -> 2/5 npm deps -> 3/5 core build -> 4/5 LLM config -> 5/5 start services");
+  log("  collect: prerequisites/deps/LLM/ports -> then run: deps -> core -> config -> services");
+  const config = await collectConfig(true);
   checkPrerequisites();
   log("[2/5] Installing npm dependencies");
   await npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
   await npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
   log("[3/5] Building the Rust core");
   runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
-  log("[4/5] Configuring the LLM provider");
-  await ensureEnv();
+  log("[4/5] Writing LLM configuration");
+  const key = config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
+  if (config.keyMode === "new" && !key) die("API key cannot be empty");
+  writeConfig({ ...config, key });
   log("[5/5] Starting services");
-  for (;;) {
-    if (await confirmYes(`Start with core=${corePort} api=${apiPort} web=${webPort}`)) break;
-    corePort = await ask("core port (default 4175): ", "4175");
-    apiPort = await ask("authoring API port (default 4174): ", "4174");
-    webPort = await ask("web port (default 5173): ", "5173");
-    for (const value of [corePort, apiPort, webPort]) {
-      if (!/^\d{1,5}$/.test(value)) die(`invalid port: ${value}`);
-    }
-  }
+  const { corePort: core, apiPort: api, webPort: web } = config;
   mkdirSync(join(devDir, "data"), { recursive: true });
   stopAll();
 
   startOne("core", [
     "cargo", "run", "-p", "gewu-cli", "--", "serve",
-    "--port", corePort,
+    "--port", core,
     "--content-root", "fixtures/algorithm-units/valid",
     "--content-root", "tools/template-authoring/drafts/.workbench/published",
     "--data-root", join(devDir, "data"),
@@ -386,23 +422,23 @@ async function doStart() {
   startOne("api", [npm, "run", "workbench:api:local"], {
     cwd: join(repo, "tools", "template-authoring"),
     shell: isWin,
-    env: { ...process.env, GEWU_WORKBENCH_PORT: apiPort },
+    env: { ...process.env, GEWU_WORKBENCH_PORT: api },
   });
 
-  startOne("web", [npm, "run", "dev", "--", "--host", "127.0.0.1", "--port", webPort], {
+  startOne("web", [npm, "run", "dev", "--", "--host", "127.0.0.1", "--port", web], {
     cwd: join(repo, "tools", "template-authoring", "workbench"),
     shell: isWin,
-    env: { ...process.env, GEWU_CORE_PORT: corePort, GEWU_AUTHORING_PORT: apiPort },
+    env: { ...process.env, GEWU_CORE_PORT: core, GEWU_AUTHORING_PORT: api },
   });
 
-  await waitFor(`http://127.0.0.1:${corePort}/health`, "core", Number(readFileSync(join(pidDir, "core.pid"), "utf8")));
-  await waitFor(`http://127.0.0.1:${apiPort}/api/drafts`, "authoring api", Number(readFileSync(join(pidDir, "api.pid"), "utf8")));
-  await waitFor(`http://127.0.0.1:${webPort}`, "web client", Number(readFileSync(join(pidDir, "web.pid"), "utf8")));
+  await waitFor(`http://127.0.0.1:${core}/health`, "core", Number(readFileSync(join(pidDir, "core.pid"), "utf8")));
+  await waitFor(`http://127.0.0.1:${api}/api/drafts`, "authoring api", Number(readFileSync(join(pidDir, "api.pid"), "utf8")));
+  await waitFor(`http://127.0.0.1:${web}`, "web client", Number(readFileSync(join(pidDir, "web.pid"), "utf8")));
 
   console.log(`\n\x1b[32mGEWU dev stack is up:\x1b[0m
-  core  http://127.0.0.1:${corePort}
-  api   http://127.0.0.1:${apiPort}
-  web   http://127.0.0.1:${webPort}
+  core  http://127.0.0.1:${core}
+  api   http://127.0.0.1:${api}
+  web   http://127.0.0.1:${web}
 Stop with Ctrl+C, or run npm run dev:stop from another terminal.`);
 }
 

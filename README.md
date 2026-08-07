@@ -63,9 +63,10 @@ also be passed directly as `node scripts/gewu-dev.mjs start --core-port 4175`.
 
 The first run installs npm dependencies, builds the Rust core, copies
 `tools/template-authoring/.env.example` to `.env.local`, and walks you through
-provider selection (deepseek, openai, moonshotai, xiaomi), model selection
-(listed from the pi-ai catalog), and a hidden API-key prompt. The same setup
-can run non-interactively:
+provider selection (deepseek, openai, moonshotai, xiaomi) and a model id you
+prepare ahead of time (the pi-ai catalog is listed when available). The API key
+is prompted with hidden input after the install/build steps, just before
+services start. The same setup can run non-interactively:
 
 ```sh
 npm run dev:prepare -- --provider openai --model gpt-4o --api-key sk-...
