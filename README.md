@@ -79,7 +79,11 @@ The script walks you through these steps:
 The same setup can run non-interactively (no prompts):
 
 ```sh
-# POSIX (Linux, macOS, WSL)
+# POSIX (Linux, macOS, WSL): set the variable first, then run
+export DEEPSEEK_API_KEY=sk-...
+npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
+
+# ...or as a one-line shorthand scoped to that single command
 DEEPSEEK_API_KEY=sk-... npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
 
 # Windows PowerShell
@@ -87,11 +91,14 @@ $env:DEEPSEEK_API_KEY = "sk-..."
 npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
 
 # Windows cmd
-set DEEPSEEK_API_KEY=sk-... && npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
+set DEEPSEEK_API_KEY=sk-...
+npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
 ```
 
 Omit the key to fall back to the hidden interactive prompt (works on every
 platform): `npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash`.
+The `sk-...` above is a placeholder; for a real key, prefer the hidden prompt so
+the key is not recorded in shell history.
 
 The runner is one cross-platform Node script (`scripts/gewu-dev.mjs`), so
 Linux, macOS, and Windows behave the same. `npm run dev` is the uniform entry
