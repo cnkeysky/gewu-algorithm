@@ -81,6 +81,15 @@ npx playwright install chromium   # once per machine
 npm run test:e2e                  # auto-starts a fresh Core and Vite
 ```
 
+## Releases
+
+- [`CHANGELOG.md`](CHANGELOG.md) tracks versions and compatibility notes.
+- `v0.1.0` (internal trial) is tagged; its execution record, audit notes, and
+  artifact checksums are in
+  [`docs/development/release-v0.1.0.md`](docs/development/release-v0.1.0.md).
+- CI runs Rust gates, TypeScript/Web/VS Code tests, and Playwright e2e on every
+  push and pull request (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
 ## Project Boundaries
 
 - **Project-GEWU** defines the general learning philosophy, evidence principles, and cognitive framework practice.
@@ -136,7 +145,15 @@ Directories are introduced as implementation begins. The intended architecture i
 
 ## Contributing
 
-The Stage 3 local MVP implementation provides a Rust core, JSON-RPC stdio host, local attempt/checkpoint persistence, deterministic `shadow_typing` and `flow_recall`, and a VS Code client. Extension-host, IME, and packaged-binary verification remain manual release checks. Before contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) and the relevant architecture decision records. Changes to public schemas, the core protocol, practice scoring, or template semantics require an ADR and compatibility analysis.
+The v0.1.0 implementation provides a Rust core with five practice modes
+(shadow typing, flow recall, code recall with four layouts, reasoning recall,
+and transfer practice), versioned local persistence, a Vite web workbench
+(authoring and practice), and a VS Code adapter. Extension-host, IME, and
+packaged-binary verification remain manual release checks. Before
+contributing, read [CONTRIBUTING.md](CONTRIBUTING.md) and the relevant
+architecture decision records. Changes to public schemas, the core protocol,
+practice scoring, or template semantics require an ADR and compatibility
+analysis.
 
 ## License
 

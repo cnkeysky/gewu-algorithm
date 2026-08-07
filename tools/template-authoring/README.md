@@ -70,12 +70,12 @@ npm run generate-template:local -- "Given an array of integers, return the indic
 
 The command requires the ignored `.env.local` file to contain `DEEPSEEK_API_KEY`.
 It writes `unit.json`, `code/python.py`, and non-secret `generation.json`, then
-performs response-shape and source-containment checks, Python syntax, fixed
-Kahn semantic examples, and the real Rust `gewu-template` manifest loader. It first writes to an
-ignored staging directory and exposes the final draft only after those checks
-pass. The adapter overwrites `provenance.generated_by` with its own trusted
-provider, model, task version, and timestamp, and resets all lifecycle and
-validation claims to `draft` and `pending`. A success record with
+performs response-shape checks, deterministic source-template derivation,
+Python syntax, and the real Rust `gewu-template` manifest loader. It first
+writes to an ignored staging directory and exposes the final draft only after
+those checks pass. The adapter overwrites `provenance.generated_by` with its
+own trusted provider, model, task version, and timestamp, and resets all
+lifecycle and validation claims to `draft` and `pending`. A success record with
 `contractValidation: "passed"` only means the draft can be reviewed; it does
 not mean that its content is accepted or publishable.
 
