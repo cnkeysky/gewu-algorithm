@@ -165,21 +165,21 @@ npm run test:e2e                  # auto-starts a fresh Core and Vite
 ## Releases
 
 - [`CHANGELOG.md`](CHANGELOG.md) tracks versions and compatibility notes.
+- `v0.1.6` (editor robustness and disk pressure) is tagged; see
+  [`docs/development/release-v0.1.6.md`](docs/development/release-v0.1.6.md).
+- `v0.1.5` (review workflow and filtering) is tagged; see
+  [`docs/development/release-v0.1.5.md`](docs/development/release-v0.1.5.md).
+- `v0.1.4` (web workbench UI polish) is tagged; see
+  [`docs/development/release-v0.1.4.md`](docs/development/release-v0.1.4.md).
+- `v0.1.3` (dev runner flow and cross-platform fixes) is tagged; see
+  [`docs/development/release-v0.1.3.md`](docs/development/release-v0.1.3.md).
+- `v0.1.2` (dev runner, CI, web UI, docs patch) is tagged; see
+  [`docs/development/release-v0.1.2.md`](docs/development/release-v0.1.2.md).
+- `v0.1.1` (tooling/CI/security patch) is tagged; see
+  [`docs/development/release-v0.1.1.md`](docs/development/release-v0.1.1.md).
 - `v0.1.0` (internal trial) is tagged; its execution record, audit notes, and
   artifact checksums are in
   [`docs/development/release-v0.1.0.md`](docs/development/release-v0.1.0.md).
-- `v0.1.1` (tooling/CI/security patch) is tagged; see
-  [`docs/development/release-v0.1.1.md`](docs/development/release-v0.1.1.md).
-- `v0.1.2` (dev runner, CI, web UI, docs patch) is tagged; see
-  [`docs/development/release-v0.1.2.md`](docs/development/release-v0.1.2.md).
-- `v0.1.3` (dev runner flow and cross-platform fixes) is tagged; see
-  [`docs/development/release-v0.1.3.md`](docs/development/release-v0.1.3.md).
-- `v0.1.4` (web workbench UI polish) is tagged; see
-  [`docs/development/release-v0.1.4.md`](docs/development/release-v0.1.4.md).
-- `v0.1.5` (review workflow and filtering) is tagged; see
-  [`docs/development/release-v0.1.5.md`](docs/development/release-v0.1.5.md).
-- `v0.1.6` (editor robustness and disk pressure) is tagged; see
-  [`docs/development/release-v0.1.6.md`](docs/development/release-v0.1.6.md).
 - CI runs Rust gates, TypeScript/Web/VS Code tests, and Playwright e2e on every
   push and pull request, and smoke-tests the one-command dev runner on Linux,
   macOS, and Windows (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
