@@ -37,7 +37,6 @@ let installE2e = false;
 let keyOverride = false;
 let selectedProvider;
 let selectedModel;
-let apiKeyValue;
 
 const PROVIDER_ENV = {
   deepseek: "DEEPSEEK_API_KEY",
@@ -78,10 +77,11 @@ flags:
   --key           re-prompt for DEEPSEEK_API_KEY even if already set
   --provider ID   provider id (deepseek|openai|moonshotai|xiaomi)
   --model ID      model id you prepared (catalog is listed when available)
-  --api-key KEY   provider API key (otherwise prompted after install/build)
 
 Have your provider and model id ready before the interactive run. The API key
-is read after the slow install/build steps, just before services start.`);
+is read after the slow install/build steps, just before services start. Never
+pass a key as a CLI argument: use the hidden prompt, or export the provider
+key environment variable (for example DEEPSEEK_API_KEY) before running.`);
 }
 
 for (let i = 0; i < args.length; i += 1) {
@@ -95,7 +95,6 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--key") keyOverride = true;
   else if (arg === "--provider") selectedProvider = args[++i];
   else if (arg === "--model") selectedModel = args[++i];
-  else if (arg === "--api-key") apiKeyValue = args[++i];
   else die(`unknown argument: ${arg} (run with 'help')`);
 }
 
@@ -302,6 +301,13 @@ function writeConfig(config) {
     : `GEWU_LLM_PROVIDER/MODEL updated; existing API key preserved`);
 }
 
+function resolveKey(provider) {
+  const envVar = PROVIDER_ENV[provider];
+  if (process.env[envVar]) return { key: process.env[envVar], source: `environment (${envVar})` };
+  if (process.env.GEWU_DEV_API_KEY) return { key: process.env.GEWU_DEV_API_KEY, source: "environment (GEWU_DEV_API_KEY)" };
+  return null;
+}
+
 function killTree(pid) {
   if (isWin) {
     spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
@@ -386,8 +392,10 @@ async function prepare() {
   log("[3/5] Building the Rust core");
   runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
   log("[4/5] Writing LLM configuration");
-  const key = config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
+  const resolved = config.keyMode === "new" ? resolveKey(config.provider) : null;
+  const key = resolved ? resolved.key : config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
   if (config.keyMode === "new" && !key) die("API key cannot be empty");
+  if (resolved) log(`API key read from ${resolved.source}; it is not echoed or logged`);
   writeConfig({ ...config, key });
   log("[5/5] Setup complete");
 }
@@ -403,8 +411,10 @@ async function doStart() {
   log("[3/5] Building the Rust core");
   runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
   log("[4/5] Writing LLM configuration");
-  const key = config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
+  const resolved = config.keyMode === "new" ? resolveKey(config.provider) : null;
+  const key = resolved ? resolved.key : config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
   if (config.keyMode === "new" && !key) die("API key cannot be empty");
+  if (resolved) log(`API key read from ${resolved.source}; it is not echoed or logged`);
   writeConfig({ ...config, key });
   log("[5/5] Starting services");
   const { corePort: core, apiPort: api, webPort: web } = config;

@@ -69,7 +69,7 @@ is prompted with hidden input after the install/build steps, just before
 services start. The same setup can run non-interactively:
 
 ```sh
-npm run dev:prepare -- --provider openai --model gpt-4o --api-key sk-...
+DEEPSEEK_API_KEY=sk-... npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
 ```
 
 The whole flow is guided step by step: prerequisites → npm dependencies →
@@ -78,8 +78,13 @@ Enter to stop everything (interactive terminal), or use Ctrl+C; from another
 terminal run `npm run dev:stop`.
 
 Commands: `prepare`, `start`, `stop`, `restart`; flags: `--force-install`,
-`--e2e`, `--key`, `--provider`, `--model`, `--api-key`. Ports can also be set
-with `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`.
+`--e2e`, `--key`, `--provider`, `--model`. Ports can also be set with
+`GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`.
+
+Security: API keys are read from the hidden interactive prompt or from the
+provider key environment variable (e.g. `DEEPSEEK_API_KEY`), never from CLI
+arguments, and are stored only in the git-ignored `.env.local` (mode 600 on
+POSIX). Keys are not echoed or written to the dev logs.
 
 The equivalent manual three-terminal stack:
 

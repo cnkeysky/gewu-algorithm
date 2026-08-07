@@ -12,14 +12,15 @@ allowed only with explicit migration notes (see
   (`scripts/gewu-dev.mjs`) exposed through root npm scripts (`npm run dev`,
   `dev:prepare`, `dev:stop`, `dev:restart`) installs dependencies, builds the
   core, and walks through provider/model selection with a hidden API-key
-  prompt (or accepts `--provider/--model/--api-key`), then starts core +
-  authoring API + web client with configurable ports and process cleanup on
-  Linux, macOS, and Windows. The setup is guided step by step (prerequisites,
-  dependencies, core build, LLM provider wizard, services), confirms before
-  slow installs, confirms ports before starting, and stops on Enter/Ctrl+C or
-  `npm run dev:stop`. Model info is expected to be prepared by the user up
-  front, and the API key is read after the install/build steps so it is not
-  held across long-running work.
+  prompt or the provider key environment variable (never a CLI argument), then
+  starts core + authoring API + web client with configurable ports and process
+  cleanup on Linux, macOS, and Windows. The setup is guided step by step
+  (prerequisites, dependencies, core build, LLM provider wizard, services),
+  confirms before slow installs, confirms ports before starting, and stops on
+  Enter/Ctrl+C or `npm run dev:stop`. Model info is expected to be prepared by
+  the user up front, and the API key is read after the install/build steps so
+  it is not held across long-running work and never appears in process
+  arguments, shell history, or dev logs.
 - `cargo-audit` gate in the Rust CI job.
 
 ## [0.1.0] - 2026-08-07
