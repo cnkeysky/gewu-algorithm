@@ -123,8 +123,9 @@ Human approval also publishes a validated copy under
 `drafts/.workbench/published/` by default. Set `GEWU_PUBLISHED_ROOT` to point at
 the content root used by `gewu-cli`; the published directory contains only
 Core-readable unit files. A generated artifact can be edited in the Artifact
-inspector and saved through `PUT /api/drafts/:id/artifact`; the Rust validator
-must pass again and previous LLM reviews are cleared before another review.
+inspector modal (opened from Drafts or Review history) and saved through
+`PUT /api/drafts/:id/artifact`; the Rust validator must pass again and
+previous LLM reviews are cleared before another review.
 Each approval also rebuilds `pack.json` with the Rust pack tool. Start Core
 against the same directory to practice the accepted units:
 

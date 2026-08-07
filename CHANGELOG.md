@@ -39,6 +39,14 @@ allowed only with explicit migration notes (see
   other pages.
 - The workbench dev server polls for file changes so WSL2 and atomic-save
   editors do not leave the browser tab on stale modules.
+- Artifact inspection is now a modal opened from Drafts or Review history
+  (the Review history "View feedback" action works again). The manifest gets
+  its own full-width, taller editor; binary cache files (`.pyc` /
+  `__pycache__`) are hidden from Source and tests; and LLM pre-review findings
+  render as severity-colored cards with pagination and role verdict chips.
+- Review history is paginated like the other lists, and a draft blocked by
+  `needs_revision` gets an explicit "Open artifact to revise" action in the
+  workflow gate.
 
 ### Docs
 
