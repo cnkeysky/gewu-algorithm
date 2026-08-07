@@ -1,0 +1,290 @@
+#!/usr/bin/env node
+// Cross-platform GEWU dev stack runner (Node 22+; Node is already required).
+import { spawn, spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  copyFileSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import readline from "node:readline";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repo = resolve(here, "..");
+const devDir = join(repo, ".gewu-dev");
+const logDir = join(devDir, "logs");
+const pidDir = join(devDir, "pids");
+const envFile = join(repo, "tools", "template-authoring", ".env.local");
+const envExample = join(repo, "tools", "template-authoring", ".env.example");
+const isWin = process.platform === "win32";
+const npm = isWin ? "npm.cmd" : "npm";
+
+const args = process.argv.slice(2);
+let command = "start";
+let corePort = process.env.GEWU_CORE_PORT ?? "4175";
+let apiPort = process.env.GEWU_WORKBENCH_PORT ?? "4174";
+let webPort = process.env.GEWU_WEB_PORT ?? "5173";
+let forceInstall = false;
+let installE2e = false;
+let keyOverride = false;
+
+const log = (message) => console.log(`\x1b[36m>>\x1b[0m ${message}`);
+const die = (message) => {
+  console.error(`\x1b[31merror:\x1b[0m ${message}`);
+  process.exit(1);
+};
+
+function usage() {
+  console.log(`usage: gewu-dev <command> [flags]
+
+commands:
+  prepare   install dependencies, build the core, and ensure .env.local/key
+  start     prepare (as needed) and start core + authoring API + web client
+  stop      stop all started processes
+  restart   stop then start
+  help      show this help
+
+flags:
+  --core-port N   core HTTP port (default 4175, env GEWU_CORE_PORT)
+  --api-port N    authoring API port (default 4174, env GEWU_WORKBENCH_PORT)
+  --web-port N    Vite web port (default 5173, env GEWU_WEB_PORT)
+  --force-install reinstall npm dependencies even if node_modules exists
+  --e2e           also install Playwright chromium (for the e2e suite)
+  --key           re-prompt for DEEPSEEK_API_KEY even if already set
+
+Cross-platform: POSIX ./scripts/gewu-dev.sh, Windows scripts\\gewu-dev.cmd.`);
+}
+
+for (let i = 0; i < args.length; i += 1) {
+  const arg = args[i];
+  if (["prepare", "start", "stop", "restart", "help"].includes(arg)) command = arg;
+  else if (arg === "--core-port") corePort = args[++i];
+  else if (arg === "--api-port") apiPort = args[++i];
+  else if (arg === "--web-port") webPort = args[++i];
+  else if (arg === "--force-install") forceInstall = true;
+  else if (arg === "--e2e") installE2e = true;
+  else if (arg === "--key") keyOverride = true;
+  else die(`unknown argument: ${arg} (run with 'help')`);
+}
+
+function runSync(name, list, options = {}) {
+  const result = spawnSync(name, list, { stdio: "inherit", ...options });
+  if (result.status !== 0) die(`${name} exited with code ${result.status}`);
+}
+
+function npmInstall(cwd, force) {
+  if (existsSync(join(cwd, "node_modules")) && !force) {
+    log(`node_modules present in ${cwd}; skipping npm ci (--force-install to reinstall)`);
+    return;
+  }
+  log(`npm ci in ${cwd}`);
+  runSync(npm, ["ci"], { cwd, shell: isWin });
+}
+
+function prepare() {
+  log("Checking prerequisites (node, npm, cargo, python3, git)");
+  const probes = [["node", "--version"], [npm, "--version"], ["cargo", "--version"], ["git", "--version"]];
+  for (const [tool, flag] of probes) {
+    const probe = spawnSync(tool, [flag], { stdio: "ignore" });
+    if (probe.status !== 0) die(`missing required tool: ${tool}`);
+  }
+  const python = ["python3", "python"].find((candidate) => spawnSync(candidate, ["--version"], { stdio: "ignore" }).status === 0);
+  if (!python) die("missing required tool: python3/python");
+  if (!isWin && python !== "python3") {
+    log(`using ${python} as the Python interpreter`);
+  }
+  npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
+  npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
+  if (installE2e) {
+    log("Installing Playwright chromium (for e2e)");
+    runSync(npx(), ["playwright", "install", "chromium"], { cwd: join(repo, "tools", "template-authoring", "workbench"), shell: isWin });
+  }
+  log("Building the Rust core");
+  runSync("cargo", ["build", "-p", "gewu-cli"], { cwd: repo });
+}
+
+function npx() {
+  return isWin ? "npx.cmd" : "npx";
+}
+
+function askHidden(question) {
+  return new Promise((resolvePrompt) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    let muted = false;
+    rl._writeToOutput = (stringToWrite) => {
+      if (muted) rl.output.write("*".repeat(String(stringToWrite).length));
+      else rl.output.write(stringToWrite);
+    };
+    rl.question(question, (answer) => {
+      rl.close();
+      resolvePrompt(answer.trim());
+    });
+    rl.on("SIGINT", () => process.exit(130));
+    muted = true;
+  });
+}
+
+async function ensureEnv() {
+  log("Ensuring authoring environment (.env.local)");
+  if (!existsSync(envFile)) {
+    copyFileSync(envExample, envFile);
+    log(`Created ${envFile} from .env.example`);
+  }
+  const hasKey = /^DEEPSEEK_API_KEY=[^ \t]+/m.test(readFileSync(envFile, "utf8"));
+  if (!hasKey || keyOverride) {
+    const key = await askHidden("DEEPSEEK_API_KEY (input hidden): ");
+    if (!key) die("DEEPSEEK_API_KEY cannot be empty");
+    let content = readFileSync(envFile, "utf8");
+    if (/^#? *DEEPSEEK_API_KEY=/m.test(content)) {
+      content = content.replace(/^#? *DEEPSEEK_API_KEY=.*$/m, `DEEPSEEK_API_KEY=${key}`);
+    } else {
+      content += `\nDEEPSEEK_API_KEY=${key}\n`;
+    }
+    writeFileSync(envFile, content, { mode: 0o600 });
+    log("DEEPSEEK_API_KEY written to .env.local (mode 600)");
+  } else {
+    log("DEEPSEEK_API_KEY already present in .env.local");
+  }
+  if (!isWin) chmodSync(envFile, 0o600);
+}
+
+function killTree(pid) {
+  if (isWin) {
+    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    return;
+  }
+  try {
+    process.kill(-pid, "SIGTERM");
+  } catch {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // Already gone.
+    }
+  }
+}
+
+function stopAll() {
+  log("Stopping GEWU dev processes");
+  if (!existsSync(pidDir)) return;
+  for (const name of readdirSync(pidDir)) {
+    const pid = Number(readFileSync(join(pidDir, name), "utf8"));
+    if (Number.isInteger(pid) && pid > 0) killTree(pid);
+    rmSync(join(pidDir, name), { force: true });
+  }
+}
+
+async function waitFor(url, label, pid) {
+  const deadline = Date.now() + 90_000;
+  while (Date.now() < deadline) {
+    if (!alive(pid)) die(`${label} exited early; see ${logDir}`);
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
+      if (response.ok) {
+        log(`${label} ready at ${url}`);
+        return;
+      }
+    } catch {
+      // Still starting.
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  die(`timed out waiting for ${label} at ${url}; see ${logDir}`);
+}
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function startOne(name, list, options) {
+  mkdirSync(logDir, { recursive: true });
+  mkdirSync(pidDir, { recursive: true });
+  const logPath = join(logDir, `${name}.log`);
+  const child = spawn(list[0], list.slice(1), {
+    cwd: repo,
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+    ...options,
+  });
+  const stream = createWriteStream(logPath, { flags: "a" });
+  child.stdout.pipe(stream);
+  child.stderr.pipe(stream);
+  writeFileSync(join(pidDir, `${name}.pid`), String(child.pid));
+  log(`started ${name} (pid ${child.pid}) -> ${logPath}`);
+  return child.pid;
+}
+
+async function doStart() {
+  prepare();
+  await ensureEnv();
+  mkdirSync(join(devDir, "data"), { recursive: true });
+  stopAll();
+
+  startOne("core", [
+    "cargo", "run", "-p", "gewu-cli", "--", "serve",
+    "--port", corePort,
+    "--content-root", "fixtures/algorithm-units/valid",
+    "--content-root", "tools/template-authoring/drafts/.workbench/published",
+    "--data-root", join(devDir, "data"),
+  ], { cwd: repo });
+
+  startOne("api", [npm, "run", "workbench:api:local"], {
+    cwd: join(repo, "tools", "template-authoring"),
+    shell: isWin,
+    env: { ...process.env, GEWU_WORKBENCH_PORT: apiPort },
+  });
+
+  startOne("web", [npm, "run", "dev", "--", "--host", "127.0.0.1", "--port", webPort], {
+    cwd: join(repo, "tools", "template-authoring", "workbench"),
+    shell: isWin,
+    env: { ...process.env, GEWU_CORE_PORT: corePort, GEWU_AUTHORING_PORT: apiPort },
+  });
+
+  await waitFor(`http://127.0.0.1:${corePort}/health`, "core", Number(readFileSync(join(pidDir, "core.pid"), "utf8")));
+  await waitFor(`http://127.0.0.1:${apiPort}/api/drafts`, "authoring api", Number(readFileSync(join(pidDir, "api.pid"), "utf8")));
+  await waitFor(`http://127.0.0.1:${webPort}`, "web client", Number(readFileSync(join(pidDir, "web.pid"), "utf8")));
+
+  console.log(`\n\x1b[32mGEWU dev stack is up:\x1b[0m
+  core  http://127.0.0.1:${corePort}
+  api   http://127.0.0.1:${apiPort}
+  web   http://127.0.0.1:${webPort}
+Stop with: scripts/gewu-dev.sh stop  (or Ctrl+C)`);
+}
+
+function keepAlive() {
+  process.on("SIGINT", () => {
+    stopAll();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    stopAll();
+    process.exit(0);
+  });
+  process.on("exit", stopAll);
+}
+
+if (command === "help") {
+  usage();
+} else if (command === "prepare") {
+  prepare();
+  await ensureEnv();
+  log("prepare complete");
+} else if (command === "stop") {
+  stopAll();
+} else if (command === "restart" || command === "start") {
+  keepAlive();
+  await doStart();
+  await new Promise(() => {});
+}

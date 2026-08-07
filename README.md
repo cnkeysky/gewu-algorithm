@@ -49,6 +49,24 @@ cd editors/vscode && npm ci && npm test
 
 ### Run the web workbench
 
+The quickest path is the one-command script:
+
+```sh
+scripts/gewu-dev.sh start --core-port 4175 --api-port 4174 --web-port 5173
+```
+
+On Windows use `scripts\gewu-dev.cmd start ...` (or `node
+scripts/gewu-dev.mjs start ...` anywhere). The runner is a cross-platform Node
+script, so Linux, macOS, and Windows behave the same.
+
+The first run installs npm dependencies, builds the Rust core, copies
+`tools/template-authoring/.env.example` to `.env.local`, and prompts for
+`DEEPSEEK_API_KEY` with hidden input. Commands: `prepare`, `start`, `stop`,
+`restart`; flags: `--force-install`, `--e2e`, `--key`. Ports can also be set
+with `GEWU_CORE_PORT`, `GEWU_WORKBENCH_PORT`, and `GEWU_WEB_PORT`.
+
+The equivalent manual three-terminal stack:
+
 Start three processes (each in its own terminal):
 
 ```sh
