@@ -3,7 +3,13 @@
 Work here follows the development playbook
 [`docs/development/agent-playbook.md`](docs/development/agent-playbook.md).
 The rules below are the hard minimum; the playbook holds the detail and the
-project-specific lessons.
+project-specific lessons. Severity: rules 1–9 are musts; the closure self-check
+is required after every change. Task triggers: UI changes → run the Playwright
+suite with geometry assertions; backend/CLI changes → unit tests plus real
+paths; docs-only changes → update CHANGELOG/README without adding tests;
+releases → the checklist in the playbook appendix. Rule changes must be made
+atomically: update this file, the playbook, and CHANGELOG in the same commit.
+Last updated: 2026-08-08.
 
 ## Workflow
 
@@ -47,3 +53,16 @@ End with a short self-check, for example:
 - Semantic check: stale assumptions searched; status-guard-legacy verified.
 - Verification: which tests ran; which real paths were exercised.
 - Records: CHANGELOG / README / docs updated.
+
+Example of a complete closure:
+
+```text
+- Cascade audit: added the language filter to Drafts/Units/Review history and
+  updated the three e2e specs; no other consumers.
+- Semantic check: searched for stale "Published"/"Approved" labels; backend
+  accept guards match the UI; legacy accepted drafts verified against the
+  real store.
+- Verification: npm test (29); playwright e2e (47); real DeepSeek
+  generate → review → approve → publish run.
+- Records: CHANGELOG, README, docs/architecture/approval-flow.md updated.
+```
