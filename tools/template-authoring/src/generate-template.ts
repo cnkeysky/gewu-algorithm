@@ -13,7 +13,7 @@ import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationPro
 export const GENERIC_INSTRUCTION = `Create one AlgorithmUnit for the problem. Infer domain, category, prerequisites, implementations, complexity, assumptions, tests, patterns, relationships, and practice projections from the text; do not invent an algorithm or signature beyond it.
 
 Statement:
-- problem.statement: complete learner-facing Markdown in your own words - paraphrase third-party pages (LeetCode) rather than reproducing verbatim; keep all constraints, example values, formulas ($...$, $$...$$, \\(...\\), \\[...\\]), and image references; never leak the solution.
+- problem.statement: complete learner-facing Markdown in your own words - rephrase the provided problem text rather than copying it verbatim (the input may be a third-party statement, e.g., LeetCode); keep all constraints, example values, formulas ($...$, $$...$$, \\(...\\), \\[...\\]), and image references; never leak the solution.
 - Keep Markdown image references (https URLs or relative paths).
 
 Identifiers:

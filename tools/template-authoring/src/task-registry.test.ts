@@ -14,7 +14,7 @@ test("registry resolves every problem to the single generic authoring task", () 
     implementation_variants: 1,
   });
   assert.doesNotMatch(task.instruction, /binary_search\(|sorted ascending|Kahn|topological_order/i);
-  assert.match(task.instruction, /infer .* from the problem/i);
+  assert.match(task.instruction, /infer .* from the (problem text|text)/i);
   assert.match(task.instruction, /Algorithm problem:/);
   assert.equal(task.taskVersion, "1");
 });

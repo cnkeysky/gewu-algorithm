@@ -50,7 +50,7 @@ function validDraft(): Record<string, unknown> {
 
 test("generic instruction is algorithm-agnostic", () => {
   assert.doesNotMatch(GENERIC_INSTRUCTION, /Kahn|binary search|topological_order|breadth-?first|shortest path|sorting algorithm/i);
-  assert.match(GENERIC_INSTRUCTION, /infer .* from the problem/i);
+  assert.match(GENERIC_INSTRUCTION, /infer .* from the (problem text|text)/i);
   assert.match(GENERIC_INSTRUCTION, /lowercase slugs/);
   assert.match(GENERIC_INSTRUCTION, /code\/python\.py/);
   assert.match(GENERIC_INSTRUCTION, /importlib\.util\.spec_from_file_location/);
