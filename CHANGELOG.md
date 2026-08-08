@@ -43,6 +43,11 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Provenance policy: generated manifests must cite the statement's actual
+  origin (title, URL, accessed_at) and choose a source-compatible license;
+  MIT is no longer the server fallback or prompt default — `all-rights-reserved`
+  is used when the model omits the license. The generation instruction is
+  restructured and de-duplicated for tighter adherence.
 - Core-stage generation now runs the authoritative Rust validator inside the
   structured retry loop, so contract violations (slug rules, dotted
   prerequisites, non-empty provenance fields) are fed back to the model and
