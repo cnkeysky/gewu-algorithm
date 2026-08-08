@@ -162,6 +162,17 @@ root.innerHTML = `
       </div>
     </div>
   </div>
+  <div class="modal-overlay" id="rationale-dialog" hidden>
+    <div class="confirm-dialog rationale-dialog" role="dialog" aria-modal="true" aria-labelledby="rationale-title">
+      <h3 id="rationale-title">Record approval</h3>
+      <p id="rationale-message"></p>
+      <textarea id="rationale-input" rows="3" placeholder="Reason for approval…" aria-label="Approval reason"></textarea>
+      <div class="confirm-actions">
+        <button class="button secondary" type="button" id="rationale-cancel">Cancel</button>
+        <button class="button primary" type="button" id="rationale-ok">Confirm approval</button>
+      </div>
+    </div>
+  </div>
   <div class="modal-overlay" id="problem-library" hidden>
     <div class="problem-library" role="dialog" aria-modal="true" aria-labelledby="problem-library-title">
       <div class="panel-heading"><div><p class="eyebrow">Problem library</p><h3 id="problem-library-title">Load a published unit</h3></div><button class="inline-action" type="button" id="close-problem-library">Close</button></div>
@@ -368,6 +379,36 @@ document.querySelector<HTMLButtonElement>("#confirm-ok")!.addEventListener("clic
 document.querySelector<HTMLButtonElement>("#confirm-cancel")!.addEventListener("click", () => closeConfirm(false));
 document.querySelector<HTMLElement>("#confirm-dialog")!.addEventListener("click", (event) => {
   if ((event.target as HTMLElement).id === "confirm-dialog") closeConfirm(false);
+});
+let rationaleResolve: ((value: string | null) => void) | null = null;
+function openRationale(title: string, message: string): Promise<string | null> {
+  document.querySelector<HTMLElement>("#rationale-title")!.textContent = title;
+  document.querySelector<HTMLElement>("#rationale-message")!.textContent = message;
+  const input = document.querySelector<HTMLTextAreaElement>("#rationale-input")!;
+  input.value = "";
+  document.querySelector<HTMLElement>("#rationale-dialog")!.hidden = false;
+  input.focus();
+  return new Promise((resolve) => { rationaleResolve = resolve; });
+}
+function closeRationale(value: string | null): void {
+  rationaleResolve?.(value);
+  rationaleResolve = null;
+  document.querySelector<HTMLElement>("#rationale-dialog")!.hidden = true;
+}
+document.querySelector<HTMLButtonElement>("#rationale-ok")!.addEventListener("click", () => {
+  closeRationale(document.querySelector<HTMLTextAreaElement>("#rationale-input")!.value.trim() || "Human approval");
+});
+document.querySelector<HTMLButtonElement>("#rationale-cancel")!.addEventListener("click", () => closeRationale(null));
+document.querySelector<HTMLElement>("#rationale-dialog")!.addEventListener("click", (event) => {
+  if ((event.target as HTMLElement).id === "rationale-dialog") closeRationale(null);
+});
+document.querySelector<HTMLTextAreaElement>("#rationale-input")!.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+    event.preventDefault();
+    closeRationale(document.querySelector<HTMLTextAreaElement>("#rationale-input")!.value.trim() || "Human approval");
+  } else if (event.key === "Escape") {
+    closeRationale(null);
+  }
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !document.querySelector<HTMLElement>("#confirm-dialog")!.hidden) closeConfirm(false);
@@ -964,9 +1005,9 @@ function renderDrafts(): void {
       canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}" title="Publish a corrected revision of this unit: fix the content, then re-approve.">Extend unit</button>` : "",
       canDelete ? `<button class="inline-action danger-action" type="button" data-delete-id="${draft.id}">Delete</button>` : "",
     ].filter(Boolean).join("");
-    const pipeline = (label: string, active: boolean) => `<b class="${active ? "active" : ""}">${label}</b>`;
+    const chip = (label: string, step: number) => `<b class="pipeline-${step < stage ? "done" : step === stage ? "current" : "pending"}">${label}</b>`;
     const separator = `<span class="pipeline-sep" aria-hidden="true">&#8250;</span>`;
-    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow">${pipeline("01 Generate", stage >= 1)}${separator}${pipeline("02 Validate", stage >= 2)}${separator}${pipeline("03 Review", stage >= 3)}${separator}${pipeline("04 Approve", stage >= 5)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${acceptanceLabel(draft)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
+    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow">${chip("01 Generate", 1)}${separator}${chip("02 Validate", 2)}${separator}${chip("03 Review", 3)}${separator}${chip("04 Approve", 4)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${acceptanceLabel(draft)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
   }).join("")}</div>${paginationHtml("drafts", draftPage, totalPages, drafts.length, DRAFT_PAGE_SIZE)}` : `<div class="empty-state"><strong>${empty[0]}</strong><span>${empty[1]}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
   renderWorkflow();
 }
@@ -1223,14 +1264,20 @@ document.addEventListener("click", (event) => {
     if (!lockAction("accept", id)) return;
     const draft = readDrafts().find((item) => item.id === id);
     const needsOverride = draft?.status === "needs_revision";
-    const rationale = needsOverride ? window.prompt("This draft still has LLM review findings. Confirm you reviewed them and enter the reason for approving:") : null;
-    if (needsOverride && rationale === null) return;
-    const body = needsOverride ? JSON.stringify({ override: true, rationale: rationale ?? "human review" }) : undefined;
-    void fetch(`/api/drafts/${id}/accept`, { method: "POST", headers: body ? { "content-type": "application/json" } : undefined, body }).then(async (response) => {
-      const payload = await response.json() as { error?: string };
-      notify(response.ok ? "Human approval recorded; draft is accepted." : `Human approval failed: ${payload.error ?? "unknown error"}`, !response.ok);
-      if (response.ok) { await syncFromApi(); renderDraftsView(); }
-    }).catch(() => { notify("Authoring API is unavailable.", true); }).finally(() => unlockAction("accept", id));
+    void (async () => {
+      const rationale = needsOverride
+        ? await openRationale("Approve despite review findings?", "This draft still has LLM review findings. Enter the reason you are approving it:")
+        : "Human approval";
+      if (needsOverride && rationale === null) { unlockAction("accept", id); return; }
+      const body = JSON.stringify(needsOverride ? { override: true, rationale: rationale ?? "human review" } : { acceptanceRole: "human_acceptance", rationale });
+      try {
+        const response = await fetch(`/api/drafts/${id}/accept`, { method: "POST", headers: { "content-type": "application/json" }, body });
+        const payload = await response.json() as { error?: string };
+        notify(response.ok ? "Human approval recorded; draft is accepted." : `Human approval failed: ${payload.error ?? "unknown error"}`, !response.ok);
+        if (response.ok) { await syncFromApi(); renderDraftsView(); }
+      } catch { notify("Authoring API is unavailable.", true); }
+      finally { unlockAction("accept", id); }
+    })();
     return;
   }
   const upgradeButton = target.closest<HTMLButtonElement>("[data-upgrade-id]");
@@ -1238,13 +1285,17 @@ document.addEventListener("click", (event) => {
     event.stopPropagation();
     const id = upgradeButton.dataset.upgradeId;
     if (!lockAction("upgrade", id)) return;
-    const rationale = window.prompt("Record explicit human approval for this LLM-approved unit. Enter a reason:");
-    if (rationale === null) return;
-    void fetch(`/api/drafts/${id}/accept`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ acceptanceRole: "human_acceptance", rationale: rationale || "human upgrade" }) }).then(async (response) => {
-      const payload = await response.json() as { error?: string };
-      notify(response.ok ? "Human approval recorded; the unit is now Human approved." : `Human upgrade failed: ${payload.error ?? "unknown error"}`, !response.ok);
-      if (response.ok) { await syncFromApi(); renderDraftsView(); }
-    }).catch(() => { notify("Authoring API is unavailable.", true); }).finally(() => unlockAction("upgrade", id));
+    void (async () => {
+      const rationale = await openRationale("Record human approval", "This unit is currently LLM approved. Enter the reason you are recording explicit human approval:");
+      if (rationale === null) { unlockAction("upgrade", id); return; }
+      try {
+        const response = await fetch(`/api/drafts/${id}/accept`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ acceptanceRole: "human_acceptance", rationale: rationale || "human upgrade" }) });
+        const payload = await response.json() as { error?: string };
+        notify(response.ok ? "Human approval recorded; the unit is now Human approved." : `Human upgrade failed: ${payload.error ?? "unknown error"}`, !response.ok);
+        if (response.ok) { await syncFromApi(); renderDraftsView(); }
+      } catch { notify("Authoring API is unavailable.", true); }
+      finally { unlockAction("upgrade", id); }
+    })();
     return;
   }
   const rollbackButton = target.closest<HTMLButtonElement>("[data-rollback-id]");

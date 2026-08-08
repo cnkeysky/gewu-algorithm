@@ -70,6 +70,11 @@ allowed only with explicit migration notes (see
   (it previously only lit after review passed), so 01 Generate → 02 Validate
   → 03 Review → 04 Approve matches the states. The state flow is now also
   summarized in the README.
+- Draft pipeline chips follow standard stepper semantics: completed steps are
+  green, the current step is highlighted as a pill, and upcoming steps are
+  muted gray (for example a validated draft shows 01/02 done, 03 current, 04
+  pending). The confirm and rationale dialogs are restyled with a consistent
+  header marker and a separated action row.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with

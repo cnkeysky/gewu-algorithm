@@ -57,6 +57,9 @@ fieldset { margin: 27px 0 0; padding: 0; border: 0; } legend { display: flex; ju
 .list-pagination.is-empty { visibility: hidden; }
 .draft-pipeline .pipeline-sep { opacity: .55; margin: 0 1px; }
 .draft-row .draft-pipeline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; color: #a4ada8; font-size: 9px; letter-spacing: .02em; }.draft-pipeline b { font-weight: 600; }.draft-pipeline b.active { color: #3c7561; }.draft-pipeline .pipeline-sep { opacity: .5; }
+.draft-pipeline b.pipeline-done { color: #3c7561; }
+.draft-pipeline b.pipeline-current { padding: 1px 7px; border: 1px solid #9fc6b5; border-radius: 999px; color: var(--green); background: var(--green-soft); }
+.draft-pipeline b.pipeline-pending { color: #a4ada8; }
 footer { display: flex; justify-content: space-between; margin-top: auto; padding: 18px 5vw; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 @media (max-width: 850px) { .topbar { gap: 18px; padding: 0 20px; }.topbar nav { gap: 12px; }.connection { display: none; }.shell { padding: 35px 20px 55px; }.intro { align-items: start; gap: 20px; flex-direction: column; }.lede { white-space: normal; }.workspace-grid { grid-template-columns: 1fr; }.right-column { grid-template-columns: 1fr 1fr; }.form-panel { padding: 22px; } }
 
@@ -112,9 +115,12 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .button.danger:hover { background: #963f22; border-color: #963f22; }
 .modal-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(21, 33, 29, .38); }
 .modal-overlay[hidden] { display: none; }
-.confirm-dialog { width: min(420px, 100%); padding: 24px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 24px 60px rgba(21, 33, 29, .22); animation: dialog-in .16s ease; }
-.confirm-dialog h3 { margin: 0 0 8px; font-size: 17px; }
+.confirm-dialog { width: min(420px, 100%); padding: 26px 26px 22px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 24px 60px rgba(21, 33, 29, .22); animation: dialog-in .16s ease; }
+.confirm-dialog h3 { display: flex; align-items: center; gap: 9px; margin: 0 0 6px; font-size: 18px; letter-spacing: -0.01em; }
+.confirm-dialog h3::before { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--orange); content: ""; }
 .confirm-dialog p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.rationale-dialog textarea { width: 100%; min-height: 84px; margin-top: 12px; padding: 10px 12px; resize: vertical; }
+.rationale-dialog .confirm-actions { margin-top: 14px; }
 .field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .field-head .field-label { margin-bottom: 0; }
 .problem-library { width: min(680px, 100%); padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 24px 60px rgba(21, 33, 29, .22); animation: dialog-in .16s ease; }
@@ -128,7 +134,7 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .problem-row strong, .problem-row small { display: block; }
 .problem-row strong { font-size: 13px; }
 .problem-row small { margin-top: 2px; color: var(--muted); font-size: 11px; }
-.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; padding-top: 14px; border-top: 1px solid #eef1ee; }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (max-width: 850px) { .home-hero { grid-template-columns: 1fr; min-height: auto; padding-top: 12px; }.hero-copy h1 { font-size: clamp(39px, 10vw, 62px); }.terminal-visual { max-width: 620px; }.vision-strip, .core-principles { grid-template-columns: 1fr; gap: 22px; }.home-cards { grid-template-columns: 1fr; }.home-cards article, .home-cards article + article { min-height: auto; padding: 25px 0; border-right: 0; border-bottom: 1px solid var(--line); }.home-cards article:last-child { border-bottom: 0; }.principle-list p { grid-template-columns: 120px 1fr; } }
 @media (max-width: 590px) { h1 { white-space: normal; } }
