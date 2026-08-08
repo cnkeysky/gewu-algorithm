@@ -63,12 +63,22 @@ allowed only with explicit migration notes (see
   instead of a stale action message.
 - Implementation strategy count is automatic: the web authoring form no longer
   asks how many variants to generate (`variants: 0` means auto), and the
-  generation instructions produce 1–3 genuinely distinct strategies only when
-  the problem warrants them, preferring a single canonical strategy and never
-  padding with artificial variants. The batch CLI keeps `--variants N` as an
-  explicit override (default auto). The practice projections note explains
-  that each selected mode binds to the unit's implementation strategies, and
-  the generation-profile summary shows `Implementation strategies: auto`.
+  generation instructions treat variant count as unconstrained: generate as
+  many genuinely distinct solutions as the problem warrants (typically one
+  canonical implementation, rarely more than three) and never variants that
+  differ only cosmetically. Shadow typing exposes one item per implementation
+  strategy; flow recall, code recall, reasoning recall, and transfer practice
+  bind to the canonical first-declared implementation only — their practice
+  variants are exercise formats, not additional implementations. The batch CLI
+  keeps `--variants N` as an explicit override (default auto), the practice
+  projections note explains the binding, and the generation-profile summary
+  shows `Implementation strategies: auto`.
+- Web authoring preserves an existing draft's explicit strategy count when
+  editing (only new drafts default to auto), and the practice unit list is
+  filtered by the selected language so a unit with no options in that language
+  is hidden instead of failing on start. Practice summaries resolve language
+  to `None` (unknown) when the selected implementation no longer exists in the
+  current revision instead of guessing from the first implementation.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

@@ -22,8 +22,10 @@ test("core stage instruction keeps practice extras empty", () => {
   assert.match(coreStageInstruction("base", 1), /CORE stage/);
   assert.match(coreStageInstruction("base", 1), /leave practice\.code_recall/);
   assert.match(coreStageInstruction("base", 1), /exactly one implementation strategy/);
-  assert.match(coreStageInstruction("base", 0), /1-3 genuinely distinct implementation strategies/);
+  assert.match(coreStageInstruction("base", 0), /There is no fixed variant count/);
+  assert.match(coreStageInstruction("base", 0), /never produce variants that differ only cosmetically/);
   assert.match(coreStageInstruction("base", 2), /exactly 2 distinct implementation strategies/);
+  assert.match(coreStageInstruction("base", 2), /bind to the canonical first-declared implementation/);
 });
 
 test("code recall stage embeds the canonical code and enforces verbatim slots", () => {

@@ -347,7 +347,7 @@ impl Core {
             let language = self
                 .find_unit(&checkpoint.unit_id)
                 .ok()
-                .map(|unit| language_for(&unit, checkpoint.implementation.as_deref()));
+                .and_then(|unit| resolved_language(&unit, checkpoint.implementation.as_deref()));
             let key = format!(
                 "{}:{}:{}:{:?}:{:?}",
                 checkpoint.unit_id,
@@ -464,7 +464,7 @@ impl Core {
                 let language = self
                     .find_unit(&value.unit_id)
                     .ok()
-                    .map(|unit| language_for(&unit, value.implementation.as_deref()));
+                    .and_then(|unit| resolved_language(&unit, value.implementation.as_deref()));
                 stored_attempt_view(value, language)
             })
             .collect::<Result<Vec<_>, _>>()
@@ -493,7 +493,7 @@ impl Core {
                 recommendation.language = self
                     .find_unit(recommendation.unit_id.as_str())
                     .ok()
-                    .map(|unit| language_for(&unit, recommendation.implementation.as_deref()));
+                    .and_then(|unit| resolved_language(&unit, recommendation.implementation.as_deref()));
                 recommendation.due_at_ms = states
                     .iter()
                     .find(|state| {
@@ -1402,6 +1402,19 @@ fn language_for(unit: &AlgorithmUnit, implementation: Option<&str>) -> String {
         .or_else(|| unit.implementations.first())
         .map(|item| item.language.clone())
         .unwrap_or_else(|| "plaintext".to_owned())
+}
+/// Language for read-time summaries. When an implementation is explicitly
+/// selected but no longer exists in the current unit revision, return `None`
+/// (unknown) instead of guessing from the first implementation.
+fn resolved_language(unit: &AlgorithmUnit, implementation: Option<&str>) -> Option<String> {
+    match implementation {
+        Some(key) => unit
+            .implementations
+            .iter()
+            .find(|item| item.key == key)
+            .map(|item| item.language.clone()),
+        None => unit.implementations.first().map(|item| item.language.clone()),
+    }
 }
 fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
     let mut options = Vec::new();

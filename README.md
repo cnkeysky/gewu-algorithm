@@ -235,9 +235,11 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 - `--concurrency n`, `--provider`, `--model`, `--modes`, `--assistance`,
   `--report path`.
 - `--variants N` — explicit implementation strategy count. Default is auto:
-  the model generates 1–3 genuinely distinct strategies only when the problem
-  warrants them (batch overrides the automatic behavior; the web authoring
-  form always uses auto).
+  the model generates as many genuinely distinct solutions as the problem
+  warrants (typically one canonical implementation), never cosmetic variants
+  (batch overrides the automatic behavior; the web authoring form always uses
+  auto). Shadow typing exposes one item per strategy; the other practice modes
+  bind to the canonical implementation.
 - `--language <slug>` — global override. Without it each catalog entry's
   `language` applies (hot100.json pins python); catalogs may mix languages by
   giving entries different `language` values, and dedup stays per

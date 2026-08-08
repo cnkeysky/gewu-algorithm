@@ -602,10 +602,7 @@ async function refreshPracticeData(): Promise<void> {
     practiceUnits = units;
     document.querySelector<HTMLElement>("#home-unit-id")!.textContent = units[0]?.id ?? "your.algorithm";
     renderPracticeLanguageFilter();
-    const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit")!;
-    const selectedUnitId = unitSelect.value;
-    unitSelect.innerHTML = units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("");
-    if (units.some((unit) => unit.id === selectedUnitId)) unitSelect.value = selectedUnitId;
+    renderPracticeUnits();
     renderPracticeOptions();
     const shouldRecoverSession = practiceWasDisconnected;
     setPracticeConnection(true);
@@ -688,6 +685,21 @@ function renderPracticeLanguageFilter(): void {
     practiceLanguage = languages[0] ?? "";
     select.value = practiceLanguage;
   }
+}
+
+function renderPracticeUnits(): void {
+  const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit");
+  if (!unitSelect) return;
+  const previous = unitSelect.value;
+  // Units without any practice option in the selected language are hidden so
+  // starting practice can never be blocked by an empty variant list.
+  const units = practiceLanguage
+    ? practiceUnits.filter((unit) => unit.practice_options.some((option) => option.language === practiceLanguage))
+    : practiceUnits;
+  unitSelect.innerHTML = units.length
+    ? units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("")
+    : `<option value="">No units in ${practiceLanguage}</option>`;
+  if (units.some((unit) => unit.id === previous)) unitSelect.value = previous;
 }
 
 interface DraftRecord {
@@ -1201,6 +1213,7 @@ document.querySelector<HTMLSelectElement>("#practice-unit")!.addEventListener("c
 document.querySelector<HTMLSelectElement>("#practice-mode")!.addEventListener("change", renderPracticeOptions);
 document.querySelector<HTMLSelectElement>("#practice-language")!.addEventListener("change", (event) => {
   practiceLanguage = (event.target as HTMLSelectElement).value;
+  renderPracticeUnits();
   renderPracticeOptions();
 });
 document.querySelector<HTMLSelectElement>("#draft-language")!.addEventListener("change", (event) => {
@@ -1222,6 +1235,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
   const problem = document.querySelector<HTMLTextAreaElement>("#problem")!.value.trim();
+  const existingDraft = editingDraftId ? readDrafts().find((draft) => draft.id === editingDraftId) : undefined;
   const record: DraftRecord = {
     id: editingDraftId ?? crypto.randomUUID(),
     title: problem.split(/\s+/).slice(0, 3).join(" ").replace(/[^a-zA-Z0-9 -]/g, "") || "Untitled algorithm",
@@ -1229,7 +1243,9 @@ form.addEventListener("submit", async (event) => {
     provider: document.querySelector<HTMLSelectElement>("#provider")!.value,
     model: document.querySelector<HTMLSelectElement>("#model")!.value,
     language: document.querySelector<HTMLInputElement>("#languages")!.value || "python",
-    variants: 0,
+    // New drafts default to auto (0); editing preserves the previous explicit
+    // strategy count so a revision never silently discards it.
+    variants: existingDraft?.variants ?? 0,
     modes: selectedModes,
     assistance: selectedModes.includes("code_recall") ? selectedValues<Assistance>("assistance") : [],
     status: "queued",
@@ -1383,7 +1399,12 @@ document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("cl
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to stop practice", true); }
   finally { unlockAction("stop", sessionId); }
 });
-document.querySelector<HTMLButtonElement>("#practice-back")!.addEventListener("click", () => { setPracticeFocus(false); practiceMessage(practiceWorkspaceSummary()); });
+document.querySelector<HTMLButtonElement>("#practice-back")!.addEventListener("click", () => {
+  setPracticeFocus(false);
+  // Refresh first so the workspace summary reflects the real list state
+  // (for example a checkpoint saved during the active session).
+  void refreshPracticeData();
+});
 document.querySelector<HTMLButtonElement>("#refresh-checkpoints")!.addEventListener("click", () => { void refreshPracticeData(); });
 const splitDivider = document.querySelector<HTMLElement>("#split-divider");
 if (splitDivider) {
