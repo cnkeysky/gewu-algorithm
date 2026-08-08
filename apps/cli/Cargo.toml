@@ -1,6 +1,6 @@
 [package]
 name = "gewu-cli"
-version = "0.1.7"
+version = "0.1.8"
 description = "Local CLI and stdio JSON-RPC host for gewu-algorithm"
 edition.workspace = true
 license.workspace = true

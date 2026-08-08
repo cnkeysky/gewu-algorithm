@@ -6,6 +6,8 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-08-08
+
 ### Added
 
 - Batch authoring ships `tools/template-authoring/hot100.json`: the current

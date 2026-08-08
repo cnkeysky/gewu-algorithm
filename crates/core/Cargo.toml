@@ -1,6 +1,6 @@
 [package]
 name = "gewu-core"
-version = "0.1.7"
+version = "0.1.8"
 description = "Application services for offline gewu-algorithm practice"
 edition.workspace = true
 license.workspace = true
