@@ -8,6 +8,11 @@ allowed only with explicit migration notes (see
 
 ### Added
 
+- LLM requests can be routed through a custom OpenAI-compatible relay/proxy:
+  set `GEWU_LLM_PROVIDER=relay`, `GEWU_LLM_MODEL`, `GEWU_LLM_BASE_URL`, and
+  `GEWU_LLM_API_KEY` (or reuse `DEEPSEEK_API_KEY`); the dev script and the
+  authoring workbench provider list expose the relay when the base URL is
+  configured.
 - Share the project-independent global agent rules as a reusable template in
   `docs/development/global-agent-rules.md`, so collaborators can copy the same
   baseline into their global config or other repositories.

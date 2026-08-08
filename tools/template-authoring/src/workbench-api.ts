@@ -6,8 +6,7 @@ import { promisify } from "node:util";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import { PiGenerator, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
+import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
@@ -30,7 +29,7 @@ const databasePath = join(storageRoot, "authoring.sqlite");
 mkdirSync(storageRoot, { recursive: true });
 const database = new DatabaseSync(databasePath);
 const publishedRoot = resolve(process.env.GEWU_PUBLISHED_ROOT ?? join(storageRoot, "published"));
-const modelCatalog = builtinModels();
+const modelCatalog = modelCatalogFromEnvironment();
 database.exec(`
   CREATE TABLE IF NOT EXISTS drafts (
     id TEXT PRIMARY KEY, task_id TEXT, title TEXT NOT NULL, problem TEXT NOT NULL,
@@ -467,9 +466,11 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/health") return send(response, 200, { status: "ok", storage: "local" });
     if (request.method === "GET" && url.pathname === "/api/tasks") return send(response, 200, { tasks: builtinTaskRegistry.list().map((definition) => ({ taskId: definition.taskId, label: definition.label, taskVersion: definition.taskVersion })) });
     if (request.method === "GET" && url.pathname === "/api/providers") {
-      const providers = [
+      const providerEntries: Array<[string, string]> = [
         ["deepseek", "DeepSeek"], ["openai", "OpenAI"], ["moonshotai", "Moonshot"], ["xiaomi", "Xiaomi MiMo"],
-      ].map(([id, label]) => ({ id, label, models: modelCatalog.getModels(id).map((model) => model.id) }));
+      ];
+      if (process.env.GEWU_LLM_BASE_URL) providerEntries.push(["relay", "Relay"]);
+      const providers = providerEntries.map(([id, label]) => ({ id, label, models: modelCatalog.getModels(id).map((model) => model.id) }));
       return send(response, 200, { providers });
     }
     const state = await loadState();

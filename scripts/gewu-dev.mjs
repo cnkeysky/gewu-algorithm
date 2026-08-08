@@ -45,6 +45,7 @@ const PROVIDER_ENV = {
   openai: "OPENAI_API_KEY",
   moonshotai: "MOONSHOT_API_KEY",
   xiaomi: "XIAOMI_API_KEY",
+  relay: "GEWU_LLM_API_KEY",
 };
 
 const FALLBACK_MODELS = {
@@ -52,6 +53,7 @@ const FALLBACK_MODELS = {
   openai: ["gpt-4o", "gpt-4o-mini"],
   moonshotai: ["moonshot-v1-8k", "moonshot-v1-32k"],
   xiaomi: ["MiMo-7B-RL"],
+  relay: ["deepseek-chat"],
 };
 
 const log = (message) => console.log(`\x1b[36m>>\x1b[0m ${message}`);
@@ -230,6 +232,7 @@ function readCurrentConfig() {
   return {
     provider: /^GEWU_LLM_PROVIDER=(\S+)/m.exec(content)?.[1] ?? "deepseek",
     model: /^GEWU_LLM_MODEL=(\S+)/m.exec(content)?.[1] ?? "deepseek-v4-flash",
+    baseUrl: /^GEWU_LLM_BASE_URL=(\S+)/m.exec(content)?.[1] ?? "",
     hasKey: /^[A-Z_]+_API_KEY=[^ \t]+/m.test(content),
   };
 }
@@ -306,7 +309,14 @@ async function collectConfig(starting) {
       }
     }
   }
-  return { provider, model, keyMode, install, corePort: core, apiPort: api, webPort: web };
+  let baseUrl = process.env.GEWU_LLM_BASE_URL ?? current.baseUrl ?? "";
+  if (provider === "relay" && !baseUrl && isTTY) {
+    baseUrl = await ask("Relay endpoint base URL (e.g. https://api.example.com/v1): ", "");
+  }
+  if (provider === "relay" && !baseUrl) {
+    die("relay provider requires GEWU_LLM_BASE_URL (set it in .env.local or pass it via the environment)");
+  }
+  return { provider, model, baseUrl, keyMode, install, corePort: core, apiPort: api, webPort: web };
 }
 
 function writeConfig(config) {
@@ -318,6 +328,7 @@ function writeConfig(config) {
   let content = readFileSync(envFile, "utf8");
   content = writeEnvVar(content, "GEWU_LLM_PROVIDER", config.provider);
   content = writeEnvVar(content, "GEWU_LLM_MODEL", config.model);
+  if (config.baseUrl) content = writeEnvVar(content, "GEWU_LLM_BASE_URL", config.baseUrl);
   if (config.key) content = writeEnvVar(content, envVar, config.key);
   writeFileSync(envFile, content, { mode: 0o600 });
   if (!isWin) chmodSync(envFile, 0o600);

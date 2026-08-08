@@ -46,6 +46,32 @@ providers use the same two selection variables and the credential names
 defined by Pi-ai; inspect its model catalog rather than copying provider URLs
 or secrets into this repository.
 
+### Relay / custom OpenAI-compatible endpoint
+
+To route requests through a relay or proxy (for example a third-party API
+gateway), register it as a custom provider instead of relying on a built-in
+URL:
+
+```sh
+GEWU_LLM_PROVIDER=relay \
+GEWU_LLM_MODEL=<relay model id> \
+GEWU_LLM_BASE_URL=https://api.example.com/v1 \
+GEWU_LLM_API_KEY=<relay key> \
+npm run smoke
+```
+
+The OpenAI-compatible SDK appends `/chat/completions` to the base URL, so
+`https://api.example.com/v1` targets `.../v1/chat/completions`. The same
+variables go into the ignored `.env.local` for repeatable local runs; the
+relay key is accepted through `GEWU_LLM_API_KEY` (or `DEEPSEEK_API_KEY` for
+existing setups). The relay defaults to `GEWU_LLM_TOOL_CHOICE=auto`, because
+reasoning-mode upstreams reject a forced tool call; other providers keep the
+forced behavior unless `GEWU_LLM_TOOL_CHOICE=auto` is set explicitly. Other
+providers are unaffected when the base URL is unset. Relay requests strip the
+OpenAI SDK fingerprint headers (`x-stainless-*`) and send a neutral user agent
+plus opencode-style `x-opencode-session` / `x-opencode-request` headers,
+because some gateways block SDK fingerprints and prefer that convention.
+
 Structured generation and review use a required Pi-ai tool call. Tool
 arguments are validated against the task schema before GEWU sees them; plain
 text or malformed arguments are rejected, with at most one bounded repair
