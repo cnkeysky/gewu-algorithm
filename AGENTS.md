@@ -11,6 +11,13 @@ releases → the checklist in the playbook appendix. Rule changes must be made
 atomically: update this file, the playbook, and CHANGELOG in the same commit.
 Last updated: 2026-08-08.
 
+Read the playbook's relevant section on demand before acting on releases,
+UI/layout changes, data migrations, or any rule whose detail matters — the
+rules above stay resident, the detail is fetched when needed.
+
+These rules are defaults: explicit user instructions override them. If the
+user asks to skip a rule, follow the user and call it out in the closure.
+
 ## Workflow
 
 1. **Design before code.** Clarify state machines, data flow, and boundaries
