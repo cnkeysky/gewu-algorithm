@@ -154,8 +154,8 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
       if (typeof item.id !== "string" || !SLOT_MARKER.test(item.id)) throw new Error(`practice.code_recall[${index}].id must be a lowercase slug`);
       if (ids.has(item.id)) throw new Error(`practice.code_recall[${index}].id duplicates ${item.id}`);
       ids.add(item.id);
-      if (typeof item.implementation !== "string" || !implementationKeys.includes(item.implementation)) {
-        throw new Error(`practice.code_recall[${index}].implementation must reference a declared implementation key`);
+      if (typeof item.implementation !== "string" || item.implementation !== implementationKeys[0]) {
+        throw new Error(`practice.code_recall[${index}].implementation must bind to the canonical implementation ${implementationKeys[0]}`);
       }
       if (typeof item.prompt !== "string" || item.prompt.trim() === "") throw new Error(`practice.code_recall[${index}].prompt must be nonempty`);
     }
@@ -170,8 +170,8 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
         throw new Error(`practice.reasoning_recall[${index}].aspect is not supported`);
       }
       if (typeof item.prompt !== "string" || item.prompt.trim() === "") throw new Error(`practice.reasoning_recall[${index}].prompt must be nonempty`);
-      if (item.implementation !== undefined && (typeof item.implementation !== "string" || !implementationKeys.includes(item.implementation))) {
-        throw new Error(`practice.reasoning_recall[${index}].implementation must reference a declared implementation key`);
+      if (item.implementation !== undefined && (typeof item.implementation !== "string" || item.implementation !== implementationKeys[0])) {
+        throw new Error(`practice.reasoning_recall[${index}].implementation must bind to the canonical implementation ${implementationKeys[0]}`);
       }
       item.concepts = normalizeSlugs(item.concepts);
       if (item.concepts.length === 0) throw new Error(`practice.reasoning_recall[${index}].concepts must be nonempty lowercase slugs`);
@@ -189,8 +189,8 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
       }
       if (typeof item.new_case !== "string" || item.new_case.trim() === "") throw new Error(`practice.transfer_practice[${index}].new_case must be nonempty`);
       if (typeof item.prompt !== "string" || item.prompt.trim() === "") throw new Error(`practice.transfer_practice[${index}].prompt must be nonempty`);
-      if (item.implementation !== undefined && (typeof item.implementation !== "string" || !implementationKeys.includes(item.implementation))) {
-        throw new Error(`practice.transfer_practice[${index}].implementation must reference a declared implementation key`);
+      if (item.implementation !== undefined && (typeof item.implementation !== "string" || item.implementation !== implementationKeys[0])) {
+        throw new Error(`practice.transfer_practice[${index}].implementation must bind to the canonical implementation ${implementationKeys[0]}`);
       }
       item.concepts = normalizeSlugs(item.concepts);
       if (item.concepts.length === 0) throw new Error(`practice.transfer_practice[${index}].concepts must be nonempty lowercase slugs`);
@@ -217,25 +217,33 @@ export function mergeStage(spec: StageSpec, manifest: Record<string, unknown>, p
   }
 }
 
-/** When a unit declares several implementation variants, every practice mode must cover each variant. */
+/** Shadow typing exposes one item per implementation strategy; all other
+ * practice modes bind to the canonical first-declared implementation. */
 export function assertVariantCoverage(manifest: Record<string, unknown>): void {
   const practice = isRecord(manifest.practice) ? manifest.practice : undefined;
   const implementationKeys = Array.isArray(manifest.implementations)
     ? manifest.implementations.filter(isRecord).map((item) => String(item.key ?? "")).filter((key) => key !== "")
     : [];
   if (implementationKeys.length <= 1) return;
+  const canonical = implementationKeys[0];
   const coveredKeys = (items: unknown): Set<string> => {
     const covered = new Set<string>();
     if (!Array.isArray(items)) return covered;
     for (const item of items) {
       if (!isRecord(item)) continue;
-      covered.add(typeof item.implementation === "string" ? item.implementation : implementationKeys[0]);
+      covered.add(typeof item.implementation === "string" ? item.implementation : canonical);
     }
     return covered;
   };
-  for (const field of ["shadow_typing", "code_recall", "reasoning_recall", "transfer_practice"]) {
-    for (const key of implementationKeys) {
-      if (!coveredKeys(practice?.[field]).has(key)) throw new Error(`practice.${field} must cover implementation variant ${key}`);
+  for (const key of implementationKeys) {
+    if (!coveredKeys(practice?.shadow_typing).has(key)) throw new Error(`practice.shadow_typing must cover implementation variant ${key}`);
+  }
+  for (const field of ["code_recall", "reasoning_recall", "transfer_practice"]) {
+    const items = Array.isArray(practice?.[field]) ? practice[field] : [];
+    for (const [index, item] of items.entries()) {
+      if (!isRecord(item)) continue;
+      const reference = typeof item.implementation === "string" ? item.implementation : canonical;
+      if (reference !== canonical) throw new Error(`practice.${field}[${index}] must bind to the canonical implementation ${canonical}`);
     }
   }
 }

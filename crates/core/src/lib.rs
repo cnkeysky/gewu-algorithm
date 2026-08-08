@@ -493,7 +493,9 @@ impl Core {
                 recommendation.language = self
                     .find_unit(recommendation.unit_id.as_str())
                     .ok()
-                    .and_then(|unit| resolved_language(&unit, recommendation.implementation.as_deref()));
+                    .and_then(|unit| {
+                        resolved_language(&unit, recommendation.implementation.as_deref())
+                    });
                 recommendation.due_at_ms = states
                     .iter()
                     .find(|state| {
@@ -1413,7 +1415,10 @@ fn resolved_language(unit: &AlgorithmUnit, implementation: Option<&str>) -> Opti
             .iter()
             .find(|item| item.key == key)
             .map(|item| item.language.clone()),
-        None => unit.implementations.first().map(|item| item.language.clone()),
+        None => unit
+            .implementations
+            .first()
+            .map(|item| item.language.clone()),
     }
 }
 fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
@@ -1781,7 +1786,10 @@ fn transfer_attempt(
         wall_ms: duration_ms(value.wall_clock_duration()),
     }
 }
-fn stored_attempt_view(value: StoredAttempt, language: Option<String>) -> Result<AttemptSummary, CoreError> {
+fn stored_attempt_view(
+    value: StoredAttempt,
+    language: Option<String>,
+) -> Result<AttemptSummary, CoreError> {
     Ok(AttemptSummary {
         id: value.id,
         created_at: value.created_at,

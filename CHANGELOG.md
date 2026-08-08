@@ -87,6 +87,13 @@ allowed only with explicit migration notes (see
   typing, flow recall, the four code recall layouts (full recall, comment
   guided, comment to code, cloze), reasoning recall, and transfer practice —
   plus one shadow typing item per implementation strategy.
+- The canonical-binding design is now enforced, not just instructed:
+  `validateStageArtifact` requires code recall / reasoning recall / transfer
+  practice items to reference the canonical first-declared implementation, and
+  `assertVariantCoverage` requires shadow typing to cover every implementation
+  strategy while other modes bind to the canonical one (the previous rule that
+  every mode must cover every variant is removed — it contradicted the auto
+  strategy model).
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

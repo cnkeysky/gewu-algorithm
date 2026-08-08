@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildStageTask, coreStageInstruction, mergeStage, validateCoreStage, validateStageArtifact } from "./staged-generation.js";
+import { assertVariantCoverage, buildStageTask, coreStageInstruction, mergeStage, validateCoreStage, validateStageArtifact } from "./staged-generation.js";
 import type { GenerationProfile } from "./pi-generator.js";
 
 const PROFILE: GenerationProfile = {
@@ -68,4 +68,41 @@ test("core stage rejects extra practice projections", () => {
   validateCoreStage(core);
   core.manifest.practice.code_recall = [{ id: "extra", implementation: "python-teaching", layout: "full_recall", assistance: "none", prompt: "nope", scaffold: [] }];
   assert.throws(() => validateCoreStage(core), /core stage must leave practice\.code_recall/);
+});
+
+test("stage artifacts must bind recall and transfer to the canonical implementation", () => {
+  const multiContext = {
+    problem: "Two Sum",
+    implementations: [
+      { key: "python-hash", strategy: "Hash map lookups" },
+      { key: "python-sort", strategy: "Sort then two pointers" },
+    ],
+    code: "def solve():\n    return True\n",
+    patterns: [{ id: "two-sum", summary: "Complement lookup" }],
+  };
+  const canonical = { practice: { code_recall: [{ id: "cloze-1", implementation: "python-hash", layout: "cloze", assistance: "cloze", prompt: "Fill", scaffold: ["guide"], slots: [{ id: "s1", expected: "return True" }] }] } };
+  validateStageArtifact({ mode: "code_recall", layout: "cloze" }, canonical, multiContext);
+  const variantBinding = { practice: { code_recall: [{ id: "cloze-1", implementation: "python-sort", layout: "cloze", assistance: "cloze", prompt: "Fill", scaffold: ["guide"], slots: [{ id: "s1", expected: "return True" }] }] } };
+  assert.throws(() => validateStageArtifact({ mode: "code_recall", layout: "cloze" }, variantBinding, multiContext), /must bind to the canonical implementation python-hash/);
+});
+
+test("variant coverage requires shadow typing per strategy and canonical binding elsewhere", () => {
+  const manifest: Record<string, any> = {
+    implementations: [{ key: "python-hash", language: "python" }, { key: "python-sort", language: "python" }],
+    practice: {
+      shadow_typing: [{ implementation: "python-hash" }, { implementation: "python-sort" }],
+      code_recall: [{ id: "r1", implementation: "python-hash" }],
+      reasoning_recall: [{ id: "i1", implementation: "python-hash" }],
+      transfer_practice: [{ id: "t1", implementation: "python-hash" }],
+    },
+  };
+  assertVariantCoverage(manifest);
+
+  const missingShadow = structuredClone(manifest);
+  missingShadow.practice.shadow_typing = [{ implementation: "python-hash" }];
+  assert.throws(() => assertVariantCoverage(missingShadow), /practice\.shadow_typing must cover implementation variant python-sort/);
+
+  const variantRecall = structuredClone(manifest);
+  variantRecall.practice.code_recall[0].implementation = "python-sort";
+  assert.throws(() => assertVariantCoverage(variantRecall), /must bind to the canonical implementation python-hash/);
 });
