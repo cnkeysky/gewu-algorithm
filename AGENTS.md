@@ -3,7 +3,7 @@
 Work here follows the development playbook
 [`docs/development/agent-playbook.md`](docs/development/agent-playbook.md).
 The rules below are the hard minimum; the playbook holds the detail and the
-project-specific lessons. Severity: rules 1–9 are musts; the closure self-check
+project-specific lessons. Severity: rules 1–10 are musts; the closure self-check
 is required after every change. Task triggers: UI changes → run the Playwright
 suite with geometry assertions; backend/CLI changes → unit tests plus real
 paths; docs-only changes → update CHANGELOG/README without adding tests;
@@ -22,7 +22,8 @@ user asks to skip a rule, follow the user and call it out in the closure.
 
 1. **Design before code.** Clarify state machines, data flow, and boundaries
    before implementing. Real changes update `docs/decisions` (numbered ADRs)
-   and the relevant architecture doc.
+   and the relevant architecture doc; completing a roadmap stage or capability
+   also updates `docs/roadmap.md` in the same change.
 2. **Cascade audit.** Every change cascades to frontend, backend, CLI/scripts,
    tests, docs, README, CHANGELOG, and release notes as needed. Search for
    stale references and stale old-design assumptions before renaming anything.
@@ -51,6 +52,11 @@ user asks to skip a rule, follow the user and call it out in the closure.
    committing. Use idempotent migrations for schema changes and define
    fallbacks for existing data. Throttle high-frequency persistence in
    local-first apps.
+10. **DX and CI parity.** Provide memorable top-level commands that mirror CI
+    gates; local and CI scripts must invoke the same underlying commands.
+    Managed scripts must work non-interactively (defaults plus env vars or
+    flags), and their stop action must terminate every spawned background
+    service (process groups or pid files), not just the parent.
 
 ## Required closure after every change
 

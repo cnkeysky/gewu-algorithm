@@ -17,6 +17,11 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- AGENTS.md gains resident rule 10 (DX and CI parity: top-level commands
+  mirror CI gates, managed scripts run non-interactively, and stop terminates
+  every spawned background service) and rule 1 now requires
+  `docs/roadmap.md` updates when a stage or capability completes; the playbook
+  cross-references both rules in §8/§11/§12.
 - Coding standards now link the resident agent rules for on-demand reading and
   explicitly cover the web workbench and template-authoring CLI; persistence
   and async sections gain idempotent-migration and write-throttling rules.
