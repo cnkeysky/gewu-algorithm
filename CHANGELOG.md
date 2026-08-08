@@ -143,6 +143,10 @@ allowed only with explicit migration notes (see
   language badge moved out of the ellipsized variant line into the card footer
   (next to the timestamp), so it is never truncated by long labels such as
   "transfer practice · Rotting Oranges".
+- Practice list pagination now re-renders only the clicked list instead of all
+  three side lists, keeping page clicks synchronous and snappy (the click
+  handler was already non-throttled; repeated clicks stop at the last page
+  because the Next button becomes disabled).
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.
