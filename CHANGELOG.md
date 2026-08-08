@@ -6,6 +6,12 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+### Added
+
+- Review history gains a search box (title, role, or artifact hash), matching
+  the Drafts / Units / Practice lists; it stacks with the verdict and language
+  filters.
+
 ## [0.1.9] - 2026-08-08
 
 ### Added

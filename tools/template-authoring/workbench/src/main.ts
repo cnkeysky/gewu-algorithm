@@ -145,7 +145,7 @@ root.innerHTML = `
     </section>
     <section id="history-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Audit trail</p><h2>Review history</h2></div><span class="lock">Immutable reports</span></div>
-      <div class="filter-row"><div class="filter-pills" id="history-filters"></div><select id="history-language" class="filter-select" aria-label="Filter review history by language"><option value="all">All languages</option></select></div>
+      <div class="filter-row"><div class="filter-pills" id="history-filters"></div><span class="filter-tools"><input id="history-search" class="filter-search" type="search" placeholder="Search title, role, or hash…" aria-label="Search review history" /><select id="history-language" class="filter-select" aria-label="Filter review history by language"><option value="all">All languages</option></select></span></div>
       <div class="history-list" id="history-list"></div>
       <p class="view-note">Reports are tied to an artifact hash and cannot promote a draft without human acceptance.</p>
     </section>
@@ -261,6 +261,7 @@ let draftSearch = "";
 let problemLibraryQuery = "";
 let unitsSearch = "";
 let unitsLanguage = "all";
+let historySearch = "";
 
 type PaginationKind = PracticeListName | "drafts" | "history" | "units";
 
@@ -284,6 +285,16 @@ function filterReviews(reviews: ReviewRecord[]): ReviewRecord[] {
   if (historyLanguage !== "all") {
     const drafts = readDrafts();
     filtered = filtered.filter((review) => drafts.find((draft) => draft.id === review.draftId)?.language === historyLanguage);
+  }
+  if (historySearch) {
+    const query = historySearch.trim().toLowerCase();
+    const drafts = readDrafts();
+    filtered = filtered.filter((review) => {
+      const draft = drafts.find((draft) => draft.id === review.draftId);
+      return (draft?.title ?? "").toLowerCase().includes(query)
+        || displayRole(review.role).toLowerCase().includes(query)
+        || String(review.artifactHash ?? "").toLowerCase().includes(query);
+    });
   }
   return filtered;
 }
@@ -1059,7 +1070,7 @@ function renderHistory(): void {
   const reviews = filterReviews(allReviews);
   historyList.innerHTML = reviews.length
     ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}" data-readonly="1" title="Open the artifact and its review reports (read-only). Revision happens in Drafts.">View report</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row" title="${review.rationale ? escapeHtml(review.rationale) : ""}"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${escapeHtml(displayRole(review.role))}</strong><small>${draft?.title ?? "Unknown draft"}${draft?.language ? ` · ${escapeHtml(draft.language)}` : ""} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-actions"><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</span></div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
-    : `<div class="empty-state"><strong>${historyFilter === "all" && historyLanguage === "all" ? "No review reports yet" : "No matching reports"}</strong><span>${historyFilter === "all" && historyLanguage === "all" ? "Reports appear after a draft is validated and reviewed." : "Try another verdict or language filter."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
+    : `<div class="empty-state"><strong>${historyFilter === "all" && historyLanguage === "all" && !historySearch ? "No review reports yet" : "No matching reports"}</strong><span>${historyFilter === "all" && historyLanguage === "all" && !historySearch ? "Reports appear after a draft is validated and reviewed." : "Try another verdict, language, or search."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
 }
 
 async function inspectArtifact(id: string, readonly = false): Promise<void> {
@@ -1501,6 +1512,11 @@ document.querySelector<HTMLElement>("#problem-library-list")!.addEventListener("
 });
 document.querySelector<HTMLSelectElement>("#history-language")!.addEventListener("change", (event) => {
   historyLanguage = (event.target as HTMLSelectElement).value;
+  historyPage = 0;
+  renderHistory();
+});
+document.querySelector<HTMLInputElement>("#history-search")!.addEventListener("input", (event) => {
+  historySearch = (event.target as HTMLInputElement).value;
   historyPage = 0;
   renderHistory();
 });

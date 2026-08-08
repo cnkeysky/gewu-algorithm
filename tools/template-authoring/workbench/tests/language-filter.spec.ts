@@ -201,3 +201,42 @@ test("human approval is superior and upgrades an LLM-approved unit", async ({ pa
   await expect(humanRow.locator(".draft-status")).toHaveText("Human approved");
   await expect(humanRow.locator("[data-upgrade-id]")).toHaveCount(0);
 });
+
+test("approval rationale uses the app modal, not a browser prompt", async ({ page }) => {
+  const drafts = [{ ...draft("Needs fix", "python", 0), status: "needs_revision", artifactPath: "artifacts/0" }];
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  let nativeDialog = false;
+  page.on("dialog", () => { nativeDialog = true; });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Drafts/ }).click();
+
+  await page.locator("[data-accept-id]").click();
+  await expect(page.locator("#rationale-dialog")).toBeVisible();
+  await expect(page.locator("#rationale-input")).toBeFocused();
+  await page.locator("#rationale-cancel").click();
+  await expect(page.locator("#rationale-dialog")).toBeHidden();
+  expect(nativeDialog).toBe(false);
+});
+
+test("review history search filters by title, role, or hash", async ({ page }) => {
+  const drafts = [draft("Two Sum", "python", 0), draft("Valid Parentheses", "python", 1)];
+  const reviews = [
+    { id: "review-0", draftId: "draft-0", role: "algorithm_correctness", verdict: "pass", artifactHash: "hash-aaa", createdAt: "2026-08-05T08:30:00.000Z" },
+    { id: "review-1", draftId: "draft-1", role: "learning_design", verdict: "needs_revision", artifactHash: "hash-bbb", createdAt: "2026-08-05T08:31:00.000Z" },
+  ];
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Review history/ }).click();
+
+  const rows = page.locator(".history-row");
+  await expect(rows).toHaveCount(2);
+  await page.locator("#history-search").fill("parentheses");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Valid Parentheses");
+  await page.locator("#history-search").fill("hash-aaa");
+  await expect(rows).toHaveCount(1);
+  await page.locator("#history-search").fill("missing");
+  await expect(rows).toHaveCount(0);
+});
