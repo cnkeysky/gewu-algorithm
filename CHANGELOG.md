@@ -135,6 +135,14 @@ allowed only with explicit migration notes (see
   pagination keeps normal cases scroll-free. The Drafts row actions returned
   to a side-by-side layout (date and buttons on the same line) instead of
   stacking the buttons below the date.
+- The practice side lists (Interrupted, Spaced review, Recent attempts) drop
+  the earlier two-rows-per-page compromise: the three equal sections grow to
+  fit four checkpoints / recommendations and six attempts per page (attempt
+  entries keep their original two-line layout), and the existing scroll safety
+  net remains, so content never clips and paging is less frequent. The
+  language badge moved out of the ellipsized variant line into the card footer
+  (next to the timestamp), so it is never truncated by long labels such as
+  "transfer practice · Rotting Oranges".
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

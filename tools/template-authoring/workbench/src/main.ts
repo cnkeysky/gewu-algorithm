@@ -228,8 +228,9 @@ type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: n
 type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; language?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
 type Attempt = { id: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; language?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
 type PracticeListName = "checkpoints" | "recommendations" | "attempts";
-// Two rows leave enough room for long mode/status labels inside the fixed panels.
-const PRACTICE_PAGE_SIZE = 2;
+// Checkpoints and recommendations fit four compact cards; attempts grow
+// quickly and show six per page inside the same fixed section.
+const PRACTICE_PAGE_SIZES: Record<PracticeListName, number> = { checkpoints: 4, recommendations: 4, attempts: 6 };
 const practicePages: Record<PracticeListName, number> = { checkpoints: 0, recommendations: 0, attempts: 0 };
 const DRAFT_PAGE_SIZE = 6;
 let draftPage = 0;
@@ -337,7 +338,7 @@ function paginationHtml(kind: PaginationKind, page: number, totalPages: number, 
 function paginationKindTotal(kind: PaginationKind): number {
   return kind === "drafts" ? filterDrafts(readDrafts()).length : kind === "history" ? filterReviews(readReviews()).length : kind === "units" ? filterUnits().length : kind === "checkpoints" ? checkpointItems.length : kind === "recommendations" ? recommendationItems.length : attemptItems.length;
 }
-function paginationKindSize(kind: PaginationKind): number { return kind === "drafts" ? DRAFT_PAGE_SIZE : kind === "history" ? HISTORY_PAGE_SIZE : kind === "units" ? UNITS_PAGE_SIZE : PRACTICE_PAGE_SIZE; }
+function paginationKindSize(kind: PaginationKind): number { return kind === "drafts" ? DRAFT_PAGE_SIZE : kind === "history" ? HISTORY_PAGE_SIZE : kind === "units" ? UNITS_PAGE_SIZE : kind === "checkpoints" || kind === "recommendations" || kind === "attempts" ? PRACTICE_PAGE_SIZES[kind] : 1; }
 function paginationKindPage(kind: PaginationKind): number { return kind === "drafts" ? draftPage : kind === "history" ? historyPage : kind === "units" ? unitsPage : practicePages[kind]; }
 function setPaginationKindPage(kind: PaginationKind, page: number): void {
   const maxPage = Math.max(0, Math.ceil(paginationKindTotal(kind) / paginationKindSize(kind)) - 1);
@@ -659,19 +660,20 @@ async function refreshPracticeData(): Promise<void> {
 window.addEventListener("online", () => { void refreshPracticeData(); });
 function renderPagedPracticeList<T>(name: PracticeListName, targetId: string, items: T[], renderItem: (item: T) => string, emptyText: string): void {
   const target = document.querySelector<HTMLElement>(targetId)!;
-  const totalPages = Math.max(1, Math.ceil(items.length / PRACTICE_PAGE_SIZE));
+  const pageSize = PRACTICE_PAGE_SIZES[name];
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   practicePages[name] = Math.min(practicePages[name], totalPages - 1);
   const page = practicePages[name];
-  const rows = items.slice(page * PRACTICE_PAGE_SIZE, (page + 1) * PRACTICE_PAGE_SIZE);
+  const rows = items.slice(page * pageSize, (page + 1) * pageSize);
   target.innerHTML = items.length
-    ? `<div class="paged-scroll">${rows.map(renderItem).join("")}</div>${paginationHtml(name, page, totalPages, items.length, PRACTICE_PAGE_SIZE)}`
+    ? `<div class="paged-scroll">${rows.map(renderItem).join("")}</div>${paginationHtml(name, page, totalPages, items.length, pageSize)}`
     : `<div class="compact-empty">${emptyText}</div>`;
 }
 function renderPracticeLists(): void {
   const activeCheckpointId = activePracticeSession ? `checkpoint-${activePracticeSession.session_id}` : null;
-  renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); const isActive = checkpoint.id === activeCheckpointId; return `<div class="compact-row practice-record${isActive ? " is-active" : ""}"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}${languageBadge(checkpoint)}${isActive ? " · in progress" : ""}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
-  renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : `Due ${dueDate}`; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}${languageBadge(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><time title="${dueLabel}">${dueLabel}</time><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
-  renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id} · r${item.revision}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}${languageBadge(item)}</span></div><div class="record-footer"><time title="${created}">${created}</time><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
+  renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); const isActive = checkpoint.id === activeCheckpointId; return `<div class="compact-row practice-record${isActive ? " is-active" : ""}"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}${isActive ? " · in progress" : ""}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><span class="record-meta">${langChip(checkpoint.language)}<time title="${saved}">${saved}</time></span><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
+  renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : `Due ${dueDate}`; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><span class="record-meta">${langChip(item.language)}<time title="${dueLabel}">${dueLabel}</time></span><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
+  renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id} · r${item.revision}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span></div><div class="record-footer"><span class="record-meta">${langChip(item.language)}<time title="${created}">${created}</time></span><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
 }
 function renderPracticeOptions(): void {
   const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")?.value;
@@ -794,13 +796,6 @@ function formatDateTime(value: string): string { const date = new Date(value); r
 function progressPercent(accepted: number, target: number): number { return target > 0 ? Math.min(100, Math.round((accepted / target) * 100)) : 0; }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
 function langChip(language?: string): string { return language ? `<span class="lang-chip">${escapeHtml(language)}</span>` : ""; }
-function languageBadge(value: { unit_id?: string; mode?: string; implementation?: string; practice_id?: string; language?: string }): string {
-  if (!value.language) return "";
-  // Shadow typing variant labels already carry the language (for example
-  // "teaching · python"); a separate badge would be redundant and widen rows.
-  if (variantLabel(value).toLowerCase().includes(value.language.toLowerCase())) return "";
-  return langChip(value.language);
-}
 function practiceOptionLabel(unitId: string | undefined, mode: PracticeMode | undefined, practiceId?: string, implementation?: string): string {
   const options = practiceUnits.find((unit) => unit.id === unitId)?.practice_options ?? [];
   const match = practiceId ? options.find((option) => option.id === practiceId) : options.find((option) => option.id === implementation);
