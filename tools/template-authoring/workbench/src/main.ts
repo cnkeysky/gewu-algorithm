@@ -428,16 +428,9 @@ function renderPracticeSession(session: PracticeSession): void {
   activePracticeSnapshot = session;
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
   document.querySelector<HTMLElement>("#session-question")!.innerHTML = renderProblemStatement(session.problem_statement);
-  const unitShort = session.unit_id.split(".").pop() ?? "";
-  const practiceName = session.practice_id
-    ? session.practice_id.startsWith(`${unitShort}-`)
-      ? session.practice_id.slice(unitShort.length + 1).replaceAll("-", " ")
-      : session.practice_id.replaceAll("-", " ")
-    : "";
   const contextParts = [session.mode.replaceAll("_", " ")];
-  if (practiceName) contextParts.push(practiceName);
-  else if (session.code_layout) contextParts.push(session.code_layout.replaceAll("_", " "));
-  if (session.implementation) contextParts.push(`implementation ${session.implementation}`);
+  const optionLabel = practiceOptionLabel(session.unit_id, session.mode, session.practice_id, session.implementation);
+  if (optionLabel !== "default configuration") contextParts.push(optionLabel);
   document.querySelector<HTMLElement>("#session-context")!.textContent = contextParts.join(" · ") || "default variant";
   document.querySelector<HTMLElement>("#session-status")!.textContent = session.status;
   const progress = document.querySelector<HTMLElement>("#session-progress")!;
@@ -714,7 +707,16 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat(unde
 function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(date); }
 function progressPercent(accepted: number, target: number): number { return target > 0 ? Math.min(100, Math.round((accepted / target) * 100)) : 0; }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
-function variantLabel(value: { implementation?: string; practice_id?: string }): string { return value.implementation ? `implementation · ${value.implementation}` : value.practice_id ? `practice · ${value.practice_id}` : "default configuration"; }
+function practiceOptionLabel(unitId: string | undefined, mode: PracticeMode | undefined, practiceId?: string, implementation?: string): string {
+  const options = practiceUnits.find((unit) => unit.id === unitId)?.practice_options ?? [];
+  const match = practiceId ? options.find((option) => option.id === practiceId) : options.find((option) => option.id === implementation);
+  if (match) return match.label;
+  const raw = practiceId ?? implementation;
+  return raw ? raw.replaceAll("-", " ") : "default configuration";
+}
+function variantLabel(value: { unit_id?: string; mode?: string; implementation?: string; practice_id?: string }): string {
+  return practiceOptionLabel(value.unit_id, value.mode as PracticeMode | undefined, value.practice_id, value.implementation);
+}
 function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM pre-reviewed", needs_revision: "Needs revision", revision_requested: "Revision requested", accepted: "Human approved" })[status]; }
 function loadDraftIntoForm(draft: DraftRecord): void {
   (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;

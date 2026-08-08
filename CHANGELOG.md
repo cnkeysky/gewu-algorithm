@@ -12,6 +12,14 @@ allowed only with explicit migration notes (see
   `Comment Guided Frontier`, `No Hints`) instead of raw id/layout/assistance
   composites. Code recall non-structured sessions no longer show a stale
   `hints undefined` segment in the session status line.
+- The practice list rows (Interrupted, Spaced review, Recent attempts) and the
+  active session context now show the same humanized variant label as the
+  selector (for example `Comments` or `Fifo Shortest Distance · python-teaching`)
+  instead of a raw `implementation · python-teaching` key. Implementation keys
+  only appear when they are the actual selector (shadow typing).
+- The core binary version now matches the product release: `gewu-core` and
+  `gewu-cli` report `0.1.7`, so the web connection badge reads
+  `Core connected · v0.1.7 / protocol 2` instead of the stale `v0.1.0`.
 
 ## [0.1.7] - 2026-08-08
 
