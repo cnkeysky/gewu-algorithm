@@ -23,6 +23,27 @@ export const STAGE_SPECS: StageSpec[] = [
 
 const SLOT_MARKER = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/**
+ * Code recall layouts derived from the selected assistance. `full_recall` is
+ * always included; comments add comment_guided and comment_to_code, cloze adds
+ * cloze. Other assistance values (skeleton, keywords, none) are accepted for
+ * contract compatibility but do not add layouts.
+ */
+export function codeRecallLayoutsFor(assistance: string[]): CodeRecallLayout[] {
+  return [
+    "full_recall",
+    ...(assistance.includes("comments") ? (["comment_guided", "comment_to_code"] as const) : []),
+    ...(assistance.includes("cloze") ? (["cloze"] as const) : []),
+  ];
+}
+
+/** An explicit strategy count (batch `--variants N`) is a hard contract. */
+export function assertExplicitVariantCount(implementationKeys: string[], requested: number): void {
+  if (requested > 1 && implementationKeys.length !== requested) {
+    throw new Error(`expected exactly ${requested} implementation strategies, got ${implementationKeys.length}`);
+  }
+}
+
 function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -82,6 +103,7 @@ export function buildStageTask(
   const codeBlock = context.code;
   const implementationList = context.implementations.map((item) => `- ${item.key}: ${item.strategy}`).join("\n");
   const implementationKeys = context.implementations.map((item) => item.key);
+  const canonical = implementationKeys[0];
   let instruction: string;
   if (mode === "code_recall") {
     const layout = spec.layout ?? "full_recall";
@@ -91,12 +113,12 @@ export function buildStageTask(
       comment_to_code: `Generate one or more items with layout "comment_to_code" and assistance "comments". Provide an ordered nonempty scaffold of reviewed algorithm-operation comments. Never declare slots or source_template.`,
       cloze: `Generate one or more items with layout "cloze" and assistance "cloze". Every slot must declare expected code that appears verbatim in the canonical implementation; the server derives source_template from those slots.`,
     };
-    instruction = `Generate ONLY practice.code_recall items with layout "${layout}" for the algorithm unit described below. The unit declares these implementation variants:\n${implementationList}\nEvery item's implementation field must be one of: ${implementationKeys.join(", ")}. Generate items for each declared implementation variant when the layout applies. The canonical implementation source is:\n\`\`\`python\n${codeBlock}\n\`\`\`\n${layoutRules[layout]} Every slot expected value must be copied character-for-character from the canonical implementation; never invent expected text. Keep every prompt aligned with the implementation it references. Return one JSON object matching the schema: {"practice": {"code_recall": [items with layout "${layout}" only]}}.`;
+    instruction = `Generate ONLY practice.code_recall items with layout "${layout}" for the algorithm unit described below. The unit declares these implementation strategies:\n${implementationList}\nEvery item's implementation field MUST be "${canonical}" — code recall is an exercise format of the canonical implementation, never of another strategy. The canonical implementation source is:\n\`\`\`python\n${codeBlock}\n\`\`\`\n${layoutRules[layout]} Every slot expected value must be copied character-for-character from the canonical implementation; never invent expected text. Keep every prompt aligned with the canonical implementation. Return one JSON object matching the schema: {"practice": {"code_recall": [items with layout "${layout}" only]}}.`;
   } else if (mode === "reasoning_recall") {
-    instruction = `Generate ONLY the practice.reasoning_recall projection for the algorithm unit described below. The unit declares these implementation variants:\n${implementationList}\nEvery prompt must target the implemented strategy family (its states, invariants, boundaries, and failure modes); when several variants are declared, use trade_off items to compare them, and never describe an algorithm that is not among the declared variants as the implemented one. Each item should declare the variant it targets via the optional implementation field (one of: ${implementationKeys.join(", ")}), and every declared variant must be covered by at least one item. Each item must use one aspect from mechanism, invariant, trade_off, boundary, or failure_condition; prompts must be concrete and answerable without revealing the solution; concepts must be lowercase slugs. Return one JSON object matching the schema: {"practice": {"reasoning_recall": [...]}}.`;
+    instruction = `Generate ONLY the practice.reasoning_recall projection for the algorithm unit described below. The unit declares these implementation strategies:\n${implementationList}\nEvery item targets the CANONICAL implementation "${canonical}" — its states, invariants, boundaries, and failure modes. The optional implementation field must be "${canonical}" or omitted (both mean the canonical implementation). When several strategies are declared, trade_off items may compare them, but the implemented reference remains the canonical strategy. Each item must use one aspect from mechanism, invariant, trade_off, boundary, or failure_condition; prompts must be concrete and answerable without revealing the solution; concepts must be lowercase slugs. Return one JSON object matching the schema: {"practice": {"reasoning_recall": [...]}}.`;
   } else {
     const patternList = context.patterns.map((pattern) => `- ${pattern.id}: ${pattern.summary}`).join("\n");
-    instruction = `Generate ONLY the practice.transfer_practice projection for the algorithm unit described below. The unit declares these implementation variants:\n${implementationList}\nThe unit declares these patterns:\n${patternList}\nEvery item's pattern must exactly equal one of those pattern ids, and the transfer must keep the core mechanism of one declared implementation variant. Each item should declare the variant it targets via the optional implementation field (one of: ${implementationKeys.join(", ")}), and every declared variant must be covered by at least one item. Each item needs a concrete new_case, a prompt, lowercase-slug concepts, and nonempty transfers, differences, and boundaries. Return one JSON object matching the schema: {"practice": {"transfer_practice": [...]}}.`;
+    instruction = `Generate ONLY the practice.transfer_practice projection for the algorithm unit described below. The unit declares these implementation strategies:\n${implementationList}\nThe unit declares these patterns:\n${patternList}\nEvery item's pattern must exactly equal one of those pattern ids, and the transfer must keep the core mechanism of the CANONICAL implementation "${canonical}". The optional implementation field must be "${canonical}" or omitted (both mean the canonical implementation). Each item needs a concrete new_case, a prompt, lowercase-slug concepts, and nonempty transfers, differences, and boundaries. Return one JSON object matching the schema: {"practice": {"transfer_practice": [...]}}.`;
   }
   const fullInstruction = revisionFeedback
     ? `${instruction}\n\nRevision feedback from the last LLM pre-review relevant to this stage. Address every finding in this stage's output:\n${revisionFeedback}`
@@ -144,6 +166,18 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
   if (!Array.isArray(items)) throw new Error(`practice.${mode} must be an array`);
   if (spec.layout === "full_recall" && items.length === 0) throw new Error("practice.code_recall full_recall stage must not be empty");
   const implementationKeys = context.implementations.map((item) => item.key);
+  const canonical = implementationKeys[0];
+  // Recall and transfer items are exercise formats of the canonical
+  // implementation. LLMs frequently bind them to a non-canonical variant key;
+  // because their content is validated verbatim against the canonical source,
+  // the binding label is normalized server-side instead of failing generation.
+  const normalizeBinding = (item: Record<string, unknown>, field: string, index: number): void => {
+    if (item.implementation === undefined) return;
+    if (typeof item.implementation !== "string" || !implementationKeys.includes(item.implementation)) {
+      throw new Error(`practice.${field}[${index}].implementation must reference a declared implementation key`);
+    }
+    if (item.implementation !== canonical) item.implementation = canonical;
+  };
   if (mode === "code_recall") {
     const pseudoManifest = { practice: { code_recall: items } };
     materializeSourceTemplates(pseudoManifest, { "code/python.py": context.code });
@@ -154,9 +188,8 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
       if (typeof item.id !== "string" || !SLOT_MARKER.test(item.id)) throw new Error(`practice.code_recall[${index}].id must be a lowercase slug`);
       if (ids.has(item.id)) throw new Error(`practice.code_recall[${index}].id duplicates ${item.id}`);
       ids.add(item.id);
-      if (typeof item.implementation !== "string" || item.implementation !== implementationKeys[0]) {
-        throw new Error(`practice.code_recall[${index}].implementation must bind to the canonical implementation ${implementationKeys[0]}`);
-      }
+      if (typeof item.implementation !== "string") throw new Error(`practice.code_recall[${index}].implementation must reference the canonical implementation ${canonical}`);
+      normalizeBinding(item, "code_recall", index);
       if (typeof item.prompt !== "string" || item.prompt.trim() === "") throw new Error(`practice.code_recall[${index}].prompt must be nonempty`);
     }
   } else if (mode === "reasoning_recall") {
@@ -170,9 +203,7 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
         throw new Error(`practice.reasoning_recall[${index}].aspect is not supported`);
       }
       if (typeof item.prompt !== "string" || item.prompt.trim() === "") throw new Error(`practice.reasoning_recall[${index}].prompt must be nonempty`);
-      if (item.implementation !== undefined && (typeof item.implementation !== "string" || item.implementation !== implementationKeys[0])) {
-        throw new Error(`practice.reasoning_recall[${index}].implementation must bind to the canonical implementation ${implementationKeys[0]}`);
-      }
+      normalizeBinding(item, "reasoning_recall", index);
       item.concepts = normalizeSlugs(item.concepts);
       if (item.concepts.length === 0) throw new Error(`practice.reasoning_recall[${index}].concepts must be nonempty lowercase slugs`);
     }
@@ -189,9 +220,7 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
       }
       if (typeof item.new_case !== "string" || item.new_case.trim() === "") throw new Error(`practice.transfer_practice[${index}].new_case must be nonempty`);
       if (typeof item.prompt !== "string" || item.prompt.trim() === "") throw new Error(`practice.transfer_practice[${index}].prompt must be nonempty`);
-      if (item.implementation !== undefined && (typeof item.implementation !== "string" || item.implementation !== implementationKeys[0])) {
-        throw new Error(`practice.transfer_practice[${index}].implementation must bind to the canonical implementation ${implementationKeys[0]}`);
-      }
+      normalizeBinding(item, "transfer_practice", index);
       item.concepts = normalizeSlugs(item.concepts);
       if (item.concepts.length === 0) throw new Error(`practice.transfer_practice[${index}].concepts must be nonempty lowercase slugs`);
       for (const field of ["transfers", "differences", "boundaries"]) {

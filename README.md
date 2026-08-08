@@ -165,6 +165,14 @@ recall, the four code recall layouts (full recall, comment guided, comment to
 code, cloze), reasoning recall, and transfer practice, plus one shadow typing
 item per implementation strategy.
 
+What batch authoring needs: only the **authoring API** (the `npm run batch`
+runner starts it automatically when it is down) and the **LLM provider/key**
+configured for the authoring API (see the LLM configuration section). The Vite
+web client and the Rust Core are **not** required for generation — drafts land
+in the same local sqlite store and appear in the web Drafts / Review history
+pages whenever the client runs, and the Core is only needed later to practice
+the published units.
+
 ```sh
 npm run batch                      # interactive menu (starts the API if needed)
 npm run batch:run -- --problems tools/template-authoring/hot100.json --auto-accept

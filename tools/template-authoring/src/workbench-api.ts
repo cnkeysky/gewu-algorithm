@@ -13,8 +13,10 @@ import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
 import {
   STAGE_SPECS,
+  assertExplicitVariantCount,
   assertVariantCoverage,
   buildStageTask,
+  codeRecallLayoutsFor,
   coreStageInstruction,
   mergeStage,
   stageContextFromCore,
@@ -158,15 +160,7 @@ async function generateDraft(draft: DraftRecord, reviews: ReviewRecord[]): Promi
   const profile = {
     practice_modes: draft.modes as PracticeModeSelection[],
     code_recall_assistance: draft.assistance as CodeRecallAssistanceSelection[],
-    code_recall_layouts: draft.modes.includes("code_recall")
-      ? [
-          "full_recall",
-          ...(draft.assistance.includes("comments")
-            ? ["comment_guided" as const, "comment_to_code" as const]
-            : []),
-          ...(draft.assistance.includes("cloze") ? ["cloze" as const] : []),
-        ]
-      : [],
+    code_recall_layouts: draft.modes.includes("code_recall") ? codeRecallLayoutsFor(draft.assistance) : [],
     implementation_languages: [draft.language],
     implementation_variants: draft.variants,
   } satisfies GenerationProfile;
@@ -185,6 +179,12 @@ async function generateDraft(draft: DraftRecord, reviews: ReviewRecord[]): Promi
   if (!isRecord(coreManifest) || !isRecord(coreManifest.manifest) || !isRecord(coreManifest.sources)) throw new Error("core stage returned an invalid artifact");
   const manifest = coreManifest.manifest as Record<string, unknown>;
   if (draft.unitId) manifest.id = draft.unitId;
+  assertExplicitVariantCount(
+    Array.isArray(manifest.implementations)
+      ? manifest.implementations.filter(isRecord).map((item) => String(item.key ?? ""))
+      : [],
+    draft.variants,
+  );
 
   const stageContext = stageContextFromCore(manifest, coreManifest.sources, draft.problem);
   for (const spec of STAGE_SPECS) {

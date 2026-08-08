@@ -88,12 +88,25 @@ allowed only with explicit migration notes (see
   guided, comment to code, cloze), reasoning recall, and transfer practice —
   plus one shadow typing item per implementation strategy.
 - The canonical-binding design is now enforced, not just instructed:
-  `validateStageArtifact` requires code recall / reasoning recall / transfer
-  practice items to reference the canonical first-declared implementation, and
+  `validateStageArtifact` normalizes code recall / reasoning recall / transfer
+  practice bindings to the canonical first-declared implementation (their
+  content is already verified verbatim against the canonical source, so a
+  wrong variant label no longer fails the whole generation), and
   `assertVariantCoverage` requires shadow typing to cover every implementation
-  strategy while other modes bind to the canonical one (the previous rule that
-  every mode must cover every variant is removed — it contradicted the auto
-  strategy model).
+  strategy while other modes bind to the canonical one. The follow-up stage
+  instructions name the canonical key explicitly and no longer ask the model
+  to cover every variant in recall or transfer modes — that residue
+  contradicted the auto strategy model and caused real generation failures
+  with explicit `--variants N`.
+- Code recall layout derivation is extracted to `codeRecallLayoutsFor`
+  (comments + cloze → the four layouts; full recall always included; other
+  assistance values are contract-compatible no-ops), and an explicit
+  `--variants N` count is enforced at generation time (auto remains
+  unconstrained). The legacy `gewu-llm` profile validation also accepts
+  `variants: 0` (auto). Documentation updated to match the canonical-binding
+  model, and the README now states that batch authoring needs only the
+  authoring API and LLM key — the web client and Rust Core are not required
+  for generation.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

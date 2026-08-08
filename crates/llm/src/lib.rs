@@ -102,9 +102,9 @@ impl GenerationProfile {
                 "at least one practice mode is required".to_owned(),
             ));
         }
-        if self.implementation_languages.is_empty() || self.implementation_variants == 0 {
+        if self.implementation_languages.is_empty() {
             return Err(LlmError::InvalidRequest(
-                "at least one implementation language and variant are required".to_owned(),
+                "at least one implementation language is required; variants are 0 (auto) or a positive count".to_owned(),
             ));
         }
         let has_code_recall = self

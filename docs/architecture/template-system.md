@@ -55,10 +55,13 @@ persisted practice modes.
   practice mode are never published.
 - Generated implementation variants declare strategy, complexity, assumptions,
   and contained test references. Content cannot provide shell commands.
-- Practice definitions bind implementation variants where the contract allows:
-  shadow typing and code recall reference a variant key, while reasoning recall
-  and transfer practice may declare an optional variant binding (absent means
-  the unit's first implementation). Multi-variant units must cover every variant.
+- Practice definitions bind implementation strategies where the contract
+  allows: shadow typing exposes exactly one item per strategy, while code
+  recall, reasoning recall, and transfer practice bind to the canonical
+  first-declared implementation (an optional binding that is absent means the
+  canonical one). Multi-strategy units vary only shadow typing; the other
+  modes are exercise formats of the canonical implementation and are never
+  duplicated per strategy.
 - Problem-class prompt templates are not used. One algorithm-agnostic contract
   prompt drives generation; per-class strictness, when needed, belongs to the
   versioned review rubric rather than to generation prompts.

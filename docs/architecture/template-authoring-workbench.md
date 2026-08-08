@@ -36,8 +36,12 @@ authoring contract.
 
 - `practice_modes` selects shadow typing, flow recall, code recall, reasoning
   recall, or transfer practice;
-- `code_recall_assistance` selects skeleton, comments, keywords, cloze, or no
-  hints and is valid only when code recall is selected;
+- `code_recall_assistance` accepts the contract values (skeleton, comments,
+  keywords, cloze, or no hints), but layouts are derived only from comments
+  and cloze — comments add `comment_guided` and `comment_to_code`, cloze adds
+  `cloze`, and `full_recall` is always included. The web form and batch CLI
+  default to comments and cloze, which produce all four layouts. The other
+  values remain accepted for compatibility but do not add layouts;
 - `implementation_languages` and `implementation_variants` request source
   implementations, not copies of the algorithm unit.
 

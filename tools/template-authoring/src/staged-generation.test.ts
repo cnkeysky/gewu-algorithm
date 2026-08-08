@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertVariantCoverage, buildStageTask, coreStageInstruction, mergeStage, validateCoreStage, validateStageArtifact } from "./staged-generation.js";
+import {
+  assertExplicitVariantCount,
+  assertVariantCoverage,
+  buildStageTask,
+  codeRecallLayoutsFor,
+  coreStageInstruction,
+  mergeStage,
+  validateCoreStage,
+  validateStageArtifact,
+} from "./staged-generation.js";
 import type { GenerationProfile } from "./pi-generator.js";
 
 const PROFILE: GenerationProfile = {
@@ -70,7 +79,7 @@ test("core stage rejects extra practice projections", () => {
   assert.throws(() => validateCoreStage(core), /core stage must leave practice\.code_recall/);
 });
 
-test("stage artifacts must bind recall and transfer to the canonical implementation", () => {
+test("stage artifacts normalize recall and transfer bindings to the canonical implementation", () => {
   const multiContext = {
     problem: "Two Sum",
     implementations: [
@@ -83,7 +92,29 @@ test("stage artifacts must bind recall and transfer to the canonical implementat
   const canonical = { practice: { code_recall: [{ id: "cloze-1", implementation: "python-hash", layout: "cloze", assistance: "cloze", prompt: "Fill", scaffold: ["guide"], slots: [{ id: "s1", expected: "return True" }] }] } };
   validateStageArtifact({ mode: "code_recall", layout: "cloze" }, canonical, multiContext);
   const variantBinding = { practice: { code_recall: [{ id: "cloze-1", implementation: "python-sort", layout: "cloze", assistance: "cloze", prompt: "Fill", scaffold: ["guide"], slots: [{ id: "s1", expected: "return True" }] }] } };
-  assert.throws(() => validateStageArtifact({ mode: "code_recall", layout: "cloze" }, variantBinding, multiContext), /must bind to the canonical implementation python-hash/);
+  validateStageArtifact({ mode: "code_recall", layout: "cloze" }, variantBinding, multiContext);
+  assert.equal((variantBinding.practice.code_recall[0] as { implementation: string }).implementation, "python-hash");
+
+  const undeclared = { practice: { code_recall: [{ id: "cloze-1", implementation: "python-missing", layout: "cloze", assistance: "cloze", prompt: "Fill", scaffold: ["guide"], slots: [{ id: "s1", expected: "return True" }] }] } };
+  assert.throws(() => validateStageArtifact({ mode: "code_recall", layout: "cloze" }, undeclared, multiContext), /must reference a declared implementation key/);
+});
+
+test("stage instructions name the canonical key and forbid other bindings", () => {
+  const multiContext = {
+    problem: "Two Sum",
+    implementations: [
+      { key: "python-hash", strategy: "Hash map lookups" },
+      { key: "python-sort", strategy: "Sort then two pointers" },
+    ],
+    code: "def solve():\n    return True\n",
+    patterns: [{ id: "two-sum", summary: "Complement lookup" }],
+  };
+  const recall = buildStageTask({ mode: "code_recall", layout: "cloze" }, PROFILE, multiContext);
+  assert.match(recall.instruction, /implementation field MUST be "python-hash"/);
+  const reasoning = buildStageTask({ mode: "reasoning_recall" }, PROFILE, multiContext);
+  assert.match(reasoning.instruction, /"python-hash" or omitted/);
+  const transfer = buildStageTask({ mode: "transfer_practice" }, PROFILE, multiContext);
+  assert.match(transfer.instruction, /"python-hash" or omitted/);
 });
 
 test("variant coverage requires shadow typing per strategy and canonical binding elsewhere", () => {
@@ -105,4 +136,18 @@ test("variant coverage requires shadow typing per strategy and canonical binding
   const variantRecall = structuredClone(manifest);
   variantRecall.practice.code_recall[0].implementation = "python-sort";
   assert.throws(() => assertVariantCoverage(variantRecall), /must bind to the canonical implementation python-hash/);
+});
+
+test("code recall layouts derive from assistance with full recall always included", () => {
+  assert.deepEqual(codeRecallLayoutsFor(["comments", "cloze"]), ["full_recall", "comment_guided", "comment_to_code", "cloze"]);
+  assert.deepEqual(codeRecallLayoutsFor(["comments"]), ["full_recall", "comment_guided", "comment_to_code"]);
+  assert.deepEqual(codeRecallLayoutsFor(["cloze"]), ["full_recall", "cloze"]);
+  assert.deepEqual(codeRecallLayoutsFor(["none", "keywords", "skeleton"]), ["full_recall"]);
+});
+
+test("explicit variant count is a hard contract, auto is unconstrained", () => {
+  assertExplicitVariantCount(["a", "b"], 2);
+  assertExplicitVariantCount(["a"], 1);
+  assertExplicitVariantCount(["a"], 0);
+  assert.throws(() => assertExplicitVariantCount(["a"], 2), /expected exactly 2 implementation strategies/);
 });
