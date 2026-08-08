@@ -113,6 +113,12 @@ allowed only with explicit migration notes (see
   stacks with the status and language filters. The authoring intro lede now
   wraps instead of forcing horizontal overflow (the global `white-space:
   nowrap` on `.lede` broke the view once the copy grew).
+- The authoring form gains a "Browse published units" picker: accepted drafts
+  are the natural problem source — selecting one loads its full form
+  configuration (statement, language, projections) as an edit, so submitting
+  becomes a new revision of that unit. Each row also offers a Practice button
+  that jumps to the workspace with the unit preselected (the user still picks
+  the mode), with a clear message when the Core does not serve that unit.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

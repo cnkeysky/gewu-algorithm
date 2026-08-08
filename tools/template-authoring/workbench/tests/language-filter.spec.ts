@@ -107,3 +107,42 @@ test("drafts search filters by title, problem, or id", async ({ page }) => {
   await page.locator("#draft-search").fill("missing");
   await expect(rows).toHaveCount(0);
 });
+
+test("problem library loads a published unit into the authoring form", async ({ page }) => {
+  const published = { ...draft("Two Sum", "python", 0), status: "accepted", unitId: "array.two-sum", variants: 2 };
+  const drafts = [published, { ...draft("Draft in progress", "python", 1), status: "generated" }];
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Authoring", exact: true }).click();
+
+  await page.getByRole("button", { name: "Browse published units" }).click();
+  const rows = page.locator(".problem-row");
+  await expect(rows).toHaveCount(1);
+  await page.locator("#problem-library-search").fill("two");
+  await expect(rows).toHaveCount(1);
+  await page.locator("#problem-library-search").fill("in progress");
+  await expect(rows).toHaveCount(0);
+  await page.locator("#problem-library-search").fill("");
+  await rows.first().click();
+
+  await expect(page.locator("#problem-library")).toBeHidden();
+  await expect(page.locator("#problem")).toHaveValue(/indices/);
+  await expect(page.locator("#languages")).toHaveValue("python");
+  await expect(page.locator("#submit-draft")).toContainText("Update draft");
+});
+
+test("problem library practice button preselects the published unit in the workspace", async ({ page }) => {
+  const published = { ...draft("Breadth-First Search", "python", 0), status: "accepted", unitId: "graph.bfs" };
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: [published] } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Authoring", exact: true }).click();
+  await page.getByRole("button", { name: "Browse published units" }).click();
+  await page.locator(".problem-row [data-practice-library-id]").click();
+
+  await expect(page.locator("#problem-library")).toBeHidden();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await expect(page.locator("#practice-unit")).toHaveValue("graph.bfs");
+  await expect(page.locator("#practice-message")).toContainText("choose a mode to start");
+});

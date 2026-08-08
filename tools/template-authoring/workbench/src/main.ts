@@ -69,7 +69,7 @@ root.innerHTML = `
     <section class="workspace-grid">
       <form class="panel form-panel" id="draft-form">
         <div class="panel-heading"><div><p class="eyebrow">01 / Input</p><h2>New generation draft</h2></div><span class="required">Required</span></div>
-        <label class="field-label" for="problem">Algorithm problem</label>
+        <div class="field-head"><label class="field-label" for="problem">Algorithm problem</label><button class="inline-action" type="button" id="browse-problems">Browse published units</button></div>
         <textarea id="problem" rows="6" placeholder="Describe the problem, expected behavior, constraints, and boundaries."></textarea>
         <div class="field-row">
           <label class="field"><span>Provider</span><select id="provider"><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="moonshotai">Moonshot</option><option value="xiaomi">Xiaomi MiMo</option></select></label>
@@ -155,6 +155,14 @@ root.innerHTML = `
       </div>
     </div>
   </div>
+  <div class="modal-overlay" id="problem-library" hidden>
+    <div class="problem-library" role="dialog" aria-modal="true" aria-labelledby="problem-library-title">
+      <div class="panel-heading"><div><p class="eyebrow">Problem library</p><h3 id="problem-library-title">Load a published unit</h3></div><button class="inline-action" type="button" id="close-problem-library">Close</button></div>
+      <input id="problem-library-search" class="filter-search library-search" type="search" placeholder="Search title, problem, or unit id…" aria-label="Search published units" />
+      <p class="library-note">Published units carry their full form configuration; loading one lets you revise it as a new revision.</p>
+      <div id="problem-library-list" class="problem-library-list"></div>
+    </div>
+  </div>
   <section class="artifact-inspector" id="artifact-inspector" hidden>
     <div class="artifact-modal">
       <div class="panel-heading"><div><p class="eyebrow">Artifact inspection</p><h3 id="artifact-title">Generated template</h3></div><span><button class="inline-action approval-action" type="button" id="save-artifact">Save revision</button> <button class="inline-action" type="button" id="close-artifact">Close</button></span></div>
@@ -229,6 +237,7 @@ let historyLanguage = "all";
 let practiceLanguage = "";
 let practiceUnitSearch = "";
 let draftSearch = "";
+let problemLibraryQuery = "";
 
 type PaginationKind = PracticeListName | "drafts" | "history";
 
@@ -721,6 +730,7 @@ interface DraftRecord {
   createdAt: string;
   artifactPath?: string;
   publishedPath?: string;
+  unitId?: string;
 }
 interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; reportPath?: string; createdAt: string; }
 interface ArtifactPayload { draft: DraftRecord; files: Record<string, string>; reviews: Array<ReviewRecord & { report?: { verdict?: string; findings?: Array<{ rule_id: string; severity: string; path: string; problem: string; evidence: string; suggested_change: string }> } }> }
@@ -804,6 +814,42 @@ function loadDraftIntoForm(draft: DraftRecord): void {
   draftPersistence = "saved";
   submitDraft.innerHTML = `Update draft <span aria-hidden="true">&#8594;</span>`;
   renderWorkflow();
+}
+function renderProblemLibrary(): void {
+  const list = document.querySelector<HTMLElement>("#problem-library-list");
+  if (!list) return;
+  const published = readDrafts().filter((draft) => draft.status === "accepted");
+  const query = problemLibraryQuery.trim().toLowerCase();
+  const items = published.filter((draft) => !query || draft.title.toLowerCase().includes(query) || draft.problem.toLowerCase().includes(query) || String(draft.unitId ?? draft.id).toLowerCase().includes(query));
+  list.innerHTML = items.length
+    ? items.map((draft) => `<div class="problem-row" role="button" tabindex="0" data-library-id="${draft.id}" aria-label="Load ${draft.title}"><span class="problem-row-main"><strong>${escapeHtml(draft.title)}</strong><small>${escapeHtml(draft.language)} · ${draft.modes.length} projection${draft.modes.length === 1 ? "" : "s"} · ${formatDate(draft.createdAt)}${draft.unitId ? ` · ${escapeHtml(draft.unitId)}` : ""}</small></span><button class="inline-action" type="button" data-practice-library-id="${draft.id}" aria-label="Practice ${draft.title}">Practice</button></div>`).join("")
+    : `<p class="compact-empty">${published.length ? "No published unit matches the search." : "No published units yet — approve a draft to make it reusable here."}</p>`;
+}
+function openProblemLibrary(): void {
+  problemLibraryQuery = "";
+  const search = document.querySelector<HTMLInputElement>("#problem-library-search");
+  if (search) search.value = "";
+  renderProblemLibrary();
+  document.querySelector<HTMLElement>("#problem-library")!.hidden = false;
+}
+function closeProblemLibrary(): void {
+  document.querySelector<HTMLElement>("#problem-library")!.hidden = true;
+}
+function practicePublishedUnit(draft: DraftRecord): void {
+  closeProblemLibrary();
+  if (draft.language) practiceLanguage = draft.language;
+  showView("practice");
+  void refreshPracticeData().then(() => {
+    const select = document.querySelector<HTMLSelectElement>("#practice-unit");
+    const unit = practiceUnits.find((item) => item.id === draft.unitId);
+    if (select && unit) {
+      select.value = unit.id;
+      renderPracticeOptions();
+      practiceMessage(`Loaded "${unit.title}" — choose a mode to start.`);
+    } else {
+      practiceMessage(`Unit "${draft.title}" is not loaded in the Core; start the Core with the published content root to practice it.`, true);
+    }
+  });
 }
 function draftStage(status: DraftRecord["status"]): number {
   return status === "queued" || status === "revision_requested" ? 1 : status === "generated" ? 2 : status === "validated" || status === "needs_revision" ? 3 : status === "llm_reviewed" ? 4 : status === "accepted" ? 5 : 0;
@@ -1234,6 +1280,31 @@ document.querySelector<HTMLInputElement>("#draft-search")!.addEventListener("inp
   draftSearch = (event.target as HTMLInputElement).value;
   draftPage = 0;
   renderDrafts();
+});
+document.querySelector<HTMLButtonElement>("#browse-problems")!.addEventListener("click", openProblemLibrary);
+document.querySelector<HTMLButtonElement>("#close-problem-library")!.addEventListener("click", closeProblemLibrary);
+document.querySelector<HTMLElement>("#problem-library")!.addEventListener("click", (event) => {
+  if (event.target === event.currentTarget) closeProblemLibrary();
+});
+document.querySelector<HTMLInputElement>("#problem-library-search")!.addEventListener("input", (event) => {
+  problemLibraryQuery = (event.target as HTMLInputElement).value;
+  renderProblemLibrary();
+});
+document.querySelector<HTMLElement>("#problem-library-list")!.addEventListener("click", (event) => {
+  const practiceButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-practice-library-id]");
+  if (practiceButton) {
+    event.stopPropagation();
+    const draft = readDrafts().find((item) => item.id === practiceButton.dataset.practiceLibraryId);
+    if (draft) practicePublishedUnit(draft);
+    return;
+  }
+  const row = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-library-id]");
+  if (!row) return;
+  const draft = readDrafts().find((item) => item.id === row.dataset.libraryId);
+  if (!draft) return;
+  closeProblemLibrary();
+  loadDraftIntoForm(draft);
+  showView("new");
 });
 document.querySelector<HTMLSelectElement>("#history-language")!.addEventListener("change", (event) => {
   historyLanguage = (event.target as HTMLSelectElement).value;
