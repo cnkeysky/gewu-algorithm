@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Refresh tools/template-authoring/hot100.json from the official LeetCode
-// "Top 100 Liked" study plan (leetcode.cn). The catalog is Python-targeted:
-// every entry pins language: "python", so batch runs never generate other
-// implementation languages.
+// "Top 100 Liked" study plan (leetcode.cn). Every generated entry pins the
+// requested language (default python, matching the shipped catalog), so a
+// future Java/Go catalog can be produced with --language java while the
+// committed hot100.json stays Python-targeted.
 //
-// Usage: npm run fetch:hot100
+// Usage: npm run fetch:hot100 [-- --language python] [-- --out hot100.json]
 import { writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
@@ -15,7 +16,10 @@ const TurndownModule = require("turndown");
 const TurndownService = TurndownModule.default ?? TurndownModule;
 
 const here = dirname(fileURLToPath(import.meta.url));
-const outPath = resolve(here, "..", "hot100.json");
+const languageArg = process.argv.indexOf("--language");
+const language = (languageArg >= 0 ? process.argv[languageArg + 1] : undefined) || "python";
+const outArg = process.argv.indexOf("--out");
+const outPath = resolve(here, "..", outArg >= 0 ? process.argv[outArg + 1] : "hot100.json");
 const api = "https://leetcode.cn/graphql";
 const planQuery = `
 query studyPlanDetail($slug: String!) {
@@ -71,7 +75,7 @@ async function fetchQuestion(titleSlug) {
     difficulty: question.difficulty,
     problem: turndown.turndown(question.translatedContent || question.content).trim(),
     sourceUrl: `https://leetcode.cn/problems/${question.titleSlug}/`,
-    language: "python",
+    language,
   };
 }
 
@@ -100,7 +104,7 @@ async function main() {
 
   entries.sort((a, b) => Number(a.id) - Number(b.id));
   await writeFile(outPath, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
-  console.log(`wrote ${entries.length} problems to ${outPath} (python only)`);
+  console.log(`wrote ${entries.length} problems to ${outPath} (language=${language})`);
 }
 
 main().catch((error) => {

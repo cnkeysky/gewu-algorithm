@@ -154,6 +154,19 @@ export function coverageKey(problem: string, language: string): string {
   return `${problem}\u0000${language}`;
 }
 
+/**
+ * Language resolution for one problem: an explicit --language is a global
+ * override; otherwise the catalog entry's own `language` wins; the final
+ * fallback is the CLI default (python). This keeps per-entry languages and
+ * the global override decoupled, so a catalog may mix languages.
+ */
+export function resolveLanguage(
+  options: Pick<Options, "language" | "languageProvided">,
+  problem: BatchProblem,
+): string {
+  return options.languageProvided ? options.language : (problem.language ?? options.language);
+}
+
 type ApiResult = { ok: true; status: number; body: unknown } | { ok: false; status: number; body: unknown };
 
 async function apiRequest(options: Options, method: string, path: string, payload?: unknown): Promise<ApiResult> {
@@ -274,9 +287,7 @@ async function processProblem(
   const base: ItemResult = { title: problem.title, status: "failed" };
   let duplicatePolicy = context.duplicatePolicy;
   try {
-    // An explicit --language always wins; otherwise the catalog entry (for
-    // example hot100.json pins python) is the default.
-    const language = options.languageProvided ? options.language : (problem.language ?? options.language);
+    const language = resolveLanguage(options, problem);
     const accepted = acceptedMap.get(coverageKey(problem.problem, language));
     const covered = accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     if (accepted && covered && !options.force) {

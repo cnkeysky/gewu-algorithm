@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { coverageKey, loadProblems, parseOptions, selectProblems } from "./batch-authoring.js";
+import { coverageKey, loadProblems, parseOptions, resolveLanguage, selectProblems } from "./batch-authoring.js";
 
 test("parseOptions applies defaults and overrides", () => {
   const defaults = parseOptions(["--problems", "hot100.json"]);
@@ -91,4 +91,19 @@ test("coverageKey separates problems by language", () => {
   assert.equal(coverageKey(statement, "python"), coverageKey(statement, "python"));
   assert.notEqual(coverageKey(statement, "python"), coverageKey(statement, "java"));
   assert.notEqual(coverageKey("a", "python"), coverageKey("b", "python"));
+});
+
+test("resolveLanguage decouples per-entry language from the global override", () => {
+  const pythonEntry = { title: "Two Sum", problem: "x", language: "python" };
+  const javaEntry = { title: "Two Sum", problem: "x", language: "java" };
+  const noEntry = { title: "Two Sum", problem: "x" };
+  const defaults = { language: "python", languageProvided: false };
+  const javaOverride = { language: "java", languageProvided: true };
+
+  assert.equal(resolveLanguage(defaults, pythonEntry), "python");
+  assert.equal(resolveLanguage(defaults, javaEntry), "java");
+  assert.equal(resolveLanguage(defaults, noEntry), "python");
+  assert.equal(resolveLanguage(javaOverride, pythonEntry), "java");
+  assert.equal(resolveLanguage(javaOverride, javaEntry), "java");
+  assert.equal(resolveLanguage(javaOverride, noEntry), "java");
 });

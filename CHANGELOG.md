@@ -12,7 +12,9 @@ allowed only with explicit migration notes (see
   LeetCode Hot 100 from the official study plan (Chinese statements, clean
   Markdown), with every entry pinned to `language: "python"` so batch runs
   only generate Python templates. `npm run fetch:hot100` refreshes the catalog
-  from LeetCode.
+  from LeetCode, and accepts `--language <slug>` / `--out <path>` to generate
+  catalogs in other languages (for example
+  `npm run fetch:hot100 -- --language java --out hot100-java.json`).
 
 ### Changed
 

@@ -210,9 +210,12 @@ Problems file (JSON):
 ```json
 [
   {
+    "id": "1",
+    "slug": "two-sum",
     "title": "Two Sum",
     "problem": "Given an array of integers nums and an integer target ...",
-    "source_url": "https://leetcode.com/problems/two-sum/"
+    "source_url": "https://leetcode.com/problems/two-sum/",
+    "language": "python"
   }
 ]
 ```
@@ -220,15 +223,22 @@ Problems file (JSON):
 TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 
 - `--steps draft,generate,validate,review,accept` — run a subset (default all).
+- `--select 1,15,two-sum` — run only the given ids / slugs / titles.
 - `--force` — regenerate problems even when an accepted unit covers them
   (published as a new revision).
+- `--yes` — skip the duplicate prompts (default when the CLI is not a TTY).
 - `--repair-rounds n` — after a failed LLM pre-review, regenerate from the
   review feedback up to `n` times (default 1).
 - `--auto-accept` — publish drafts that still need revision after the repair
   rounds, recording an explicit `human_acceptance` rationale in the audit
   trail (LLM pre-review verdicts stay visible in Review history).
-- `--concurrency n`, `--provider`, `--model`, `--language`, `--variants`,
-  `--modes`, `--assistance`, `--report path`.
+- `--concurrency n`, `--provider`, `--model`, `--variants`, `--modes`,
+  `--assistance`, `--report path`.
+- `--language <slug>` — global override. Without it each catalog entry's
+  `language` applies (hot100.json pins python); catalogs may mix languages by
+  giving entries different `language` values, and dedup stays per
+  problem + language + modes. Generate a non-Python Hot 100 catalog with
+  `cd tools/template-authoring && npm run fetch:hot100 -- --language java --out hot100-java.json`.
 
 Published units land in `tools/template-authoring/drafts/.workbench/published`
 and become available to a Core started with that content root.
