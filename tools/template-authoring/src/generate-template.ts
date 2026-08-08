@@ -10,30 +10,30 @@ import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationPro
  * contract shape; every algorithm decision (domain, strategy, signatures,
  * complexity, patterns, projections) must be inferred from the author's input.
  */
-export const GENERIC_INSTRUCTION = `Create one AlgorithmUnit for the given problem. Infer domain, category, prerequisites, implementations, complexity, assumptions, tests, patterns, relationships, and practice projections from the problem text; do not invent an algorithm or signature beyond it.
+export const GENERIC_INSTRUCTION = `Create one AlgorithmUnit for the problem. Infer domain, category, prerequisites, implementations, complexity, assumptions, tests, patterns, relationships, and practice projections from the text; do not invent an algorithm or signature beyond it.
 
 Statement:
-- problem.statement is the complete learner-facing Markdown problem, never a summary; keep formulas exactly as written ($...$, $$...$$, \\(...\\), \\[...\\]) and never leak the solution.
-- Keep Markdown image references (https URLs or relative asset paths) when part of the problem.
+- problem.statement: complete learner-facing Markdown in your own words - paraphrase third-party pages (LeetCode) rather than reproducing verbatim; keep all constraints, example values, formulas ($...$, $$...$$, \\(...\\), \\[...\\]), and image references; never leak the solution.
+- Keep Markdown image references (https URLs or relative paths).
 
 Identifiers:
 - manifest id: dotted lowercase, at least one dot (array.two-sum).
 - implementation keys and language ids: lowercase slugs (python-teaching, python).
 - position.domain/category: lowercase slugs (array, two-pointers).
 - position.prerequisites: dotted algorithm unit ids (array.two-sum).
-- Every shadow_typing/code_recall implementation reference must match a declared implementations[].key.
+- shadow_typing/code_recall implementation references must match implementations[].key.
 
 Sources:
-- Implementation source is code/python.py; tests are tests/python_test.py; include both in sources and reference tests in test_references.
+- Implementation source: code/python.py; tests: tests/python_test.py; include both in sources, reference tests in test_references.
 - normalization: line_endings "lf", whitespace "strict".
 - tests/python_test.py loads the implementation via importlib.util.spec_from_file_location from the unit root; never "from code.python import ...".
 
 Practice:
 - code_recall layouts: full_recall reconstructs the code; cloze/comment_guided use slots whose expected code appears verbatim in code/python.py (source_template is server-derived); comment_to_code provides ordered comments.
-- assistance "none" requires an empty scaffold; otherwise nonempty.
-- Variants: only genuinely distinct strategies (different approaches or clear complexity trade-offs); usually one canonical solution, at most three, never cosmetic-only.
-- shadow_typing has exactly one item per strategy; flow_recall, code_recall, reasoning_recall, transfer_practice bind to the first-declared implementation only - their variants are exercise formats, not new implementations.
-- provenance.sources must cite the statement's actual origin (title, URL, accessed_at) with role "primary", "synthesis", or "lead"; choose a license compatible with that source - never claim MIT for verbatim third-party problem text (LeetCode); "all-rights-reserved" is the safe default.
+- assistance "none": empty scaffold; otherwise nonempty.
+- Variants: distinct strategies only (different approaches or complexity trade-offs); usually one canonical solution, at most three; never cosmetic-only.
+- shadow_typing: one item per strategy; flow_recall/code_recall/reasoning_recall/transfer_practice bind to the first implementation only - their variants are exercise formats, not new implementations.
+- provenance.sources: cite the actual origin (title, URL, accessed_at) with role "primary", "synthesis", or "lead"; transfer/example arithmetic and indices must be correct.
 
 Return only the schema fields.`;
 

@@ -47,6 +47,7 @@ try { database.exec("ALTER TABLE drafts ADD COLUMN unit_id TEXT"); } catch { /* 
 try { database.exec("ALTER TABLE reviews ADD COLUMN rationale TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE reviews ADD COLUMN report_path TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE drafts ADD COLUMN error TEXT"); } catch { /* Existing database already has the column. */ }
+try { database.exec("ALTER TABLE drafts ADD COLUMN slug TEXT"); } catch { /* Existing database already has the column. */ }
 database.exec("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
 database.prepare("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)").run("authoring_schema", "2");
 
@@ -54,6 +55,7 @@ type DraftStatus = "draft" | "queued" | "generated" | "validated" | "llm_reviewe
 type DraftRecord = {
   id: string;
   taskId?: string;
+  slug?: string;
   title: string;
   problem: string;
   provider: string;
@@ -105,10 +107,10 @@ class DraftInputError extends Error {
 }
 
 function loadState(): State {
-  const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error FROM drafts ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
+  const drafts = database.prepare("SELECT id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error FROM drafts ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
   const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at FROM reviews ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
   return {
-    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), unitId: row.unit_id ? String(row.unit_id) : undefined, artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined, error: row.error ? String(row.error) : undefined })),
+    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, slug: row.slug ? String(row.slug) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), unitId: row.unit_id ? String(row.unit_id) : undefined, artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined, error: row.error ? String(row.error) : undefined })),
     reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, reportPath: row.report_path ? String(row.report_path) : undefined, rationale: row.rationale ? String(row.rationale) : undefined, createdAt: String(row.created_at) })),
   };
 }
@@ -117,8 +119,8 @@ function saveState(state: State): void {
   database.exec("BEGIN");
   try {
     database.exec("DELETE FROM reviews; DELETE FROM drafts;");
-    const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.unitId ?? null, draft.artifactPath ?? null, draft.publishedPath ?? null, draft.error ?? null);
+    const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.slug ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.unitId ?? null, draft.artifactPath ?? null, draft.publishedPath ?? null, draft.error ?? null);
     const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.reportPath ?? null, review.rationale ?? null, review.createdAt);
     database.exec("COMMIT");
@@ -477,6 +479,7 @@ function draftFrom(value: unknown): DraftRecord {
   return {
     id: crypto.randomUUID(),
     taskId: typeof value.taskId === "string" ? value.taskId : undefined,
+    slug: typeof value.slug === "string" && value.slug.trim() ? value.slug.trim().toLowerCase() : undefined,
     title: value.title,
     problem: value.problem,
     provider: typeof value.provider === "string" ? value.provider : "deepseek",

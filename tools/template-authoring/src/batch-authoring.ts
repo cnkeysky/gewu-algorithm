@@ -189,6 +189,19 @@ export function coverageKey(problem: string, language: string): string {
   return `${problem}\u0000${language}`;
 }
 
+/** Problem identity for deduplication: canonical slug/id when available,
+ * else the statement text. Same-slug problems never create duplicates even
+ * when their statement wording or title differs. */
+export function problemKey(problem: BatchProblem, language: string): string {
+  const identity = problem.slug ?? (problem.id ? `lc-${problem.id}` : problem.problem);
+  return coverageKey(identity, language);
+}
+
+/** Mirrors problemKey for stored drafts: slug when present, else text. */
+function draftKey(draft: { slug?: string; problem: string }, language: string): string {
+  return coverageKey(draft.slug ?? draft.problem, language);
+}
+
 /**
  * Language resolution for one problem: an explicit --language is a global
  * override; otherwise the catalog entry's own `language` wins; the final
@@ -292,7 +305,7 @@ async function loadDraftIndexes(options: Options): Promise<DraftIndexes> {
     const problem = String(draft.problem ?? "").trim();
     if (!problem) continue;
     const language = String(draft.language ?? "python").trim() || "python";
-    const key = coverageKey(problem, language);
+    const key = draftKey(draft, language);
     if (draft.status === "accepted") {
       const modes = new Set(draft.modes ?? []);
       const previous = accepted.get(key);
@@ -350,7 +363,8 @@ async function processProblem(
   let duplicatePolicy = context.duplicatePolicy;
   try {
     const language = resolveLanguage(options, problem);
-    const accepted = indexes.accepted.get(coverageKey(problem.problem, language));
+    const key = problemKey(problem, language);
+    const accepted = indexes.accepted.get(key);
     const covered = accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     if (accepted && covered && !options.force && !matchesRequested(problem, options.regenerate)) {
       if (duplicatePolicy === "ask") {
@@ -392,6 +406,7 @@ async function processProblem(
       const patch = await apiRequest(options, "PATCH", `/api/drafts/${draftId}`, {
         title: problem.title,
         problem: problem.problem,
+        slug: problem.slug,
         provider: options.provider ?? "deepseek",
         model: options.model ?? "deepseek-v4-flash",
         language,
@@ -401,14 +416,15 @@ async function processProblem(
       });
       if (!patch.ok) return { ...base, status: "failed", error: `fork update: ${draftError(patch)}` };
       base.draftSource = accepted.unitId ? `revision of ${accepted.unitId}` : `revision of ${accepted.draftId}`;
-    } else if (indexes.existing.has(coverageKey(problem.problem, language))) {
+    } else if (indexes.existing.has(key)) {
       // Reuse the newest non-accepted draft for this problem+language: reset it
       // to queued with the current run's configuration and retry, instead of
       // creating a duplicate entry on every re-run.
-      const existing = indexes.existing.get(coverageKey(problem.problem, language))!;
+      const existing = indexes.existing.get(key)!;
       const patch = await apiRequest(options, "PATCH", `/api/drafts/${existing.id}`, {
         title: problem.title,
         problem: problem.problem,
+        slug: problem.slug,
         provider: options.provider ?? "deepseek",
         model: options.model ?? "deepseek-v4-flash",
         language,
@@ -423,6 +439,7 @@ async function processProblem(
       const draftResult = await apiRequest(options, "POST", "/api/drafts", {
         title: problem.title,
         problem: problem.problem,
+        slug: problem.slug,
         provider: options.provider ?? "deepseek",
         model: options.model ?? "deepseek-v4-flash",
         language,
@@ -580,7 +597,7 @@ async function main(): Promise<void> {
   } else {
     const covered = problems.filter((problem) => {
       const language = resolveLanguage(options, problem);
-      const accepted = indexes.accepted.get(coverageKey(problem.problem, language));
+      const accepted = indexes.accepted.get(problemKey(problem, language));
       return accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     });
     if (covered.length > 0) {

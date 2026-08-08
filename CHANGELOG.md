@@ -8,6 +8,10 @@ allowed only with explicit migration notes (see
 
 ### Added
 
+- Drafts carry an optional canonical `slug`; batch deduplication is identity
+  aware (`slug`/id + language, falling back to statement text), so the same
+  problem never accumulates duplicates across runs even when wording or title
+  differs.
 - Batch authoring retries a failed generation on the same draft (up to
   `--repair-rounds` additional attempts), and its HTTP client now uses
   `node:http` with no internal header/body timeouts, so long reasoning-mode
@@ -43,6 +47,9 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Generation instruction requires paraphrasing third-party problem pages
+  (keep constraints, examples, formulas, and image references; never copy
+  verbatim), removing the redistribution-license blocker from review.
 - Batch authoring retries gateway rate limits (HTTP 429) with exponential
   backoff (5s up to 60s, six attempts), so shared relays that throttle
   concurrent LLM-backed requests no longer fail whole generations.

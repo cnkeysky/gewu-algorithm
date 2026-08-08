@@ -783,6 +783,7 @@ function renderPracticeUnits(): void {
 interface DraftRecord {
   id: string;
   taskId?: string;
+  slug?: string;
   title: string;
   problem: string;
   provider: string;
