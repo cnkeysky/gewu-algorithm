@@ -66,12 +66,17 @@
     "format:write": "prettier --write src test",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node dist/test/interaction.js && node dist/test/core-session.js && node dist/test/checkpoints.js"
+    "test": "npm run build && node dist/test/interaction.js && node dist/test/core-session.js && node dist/test/checkpoints.js && node dist/test/statement-renderer.js"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/sanitize-html": "^2.16.1",
     "@types/vscode": "^1.125.0",
     "prettier": "^3.6.0",
     "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "marked": "^18.0.9",
+    "sanitize-html": "^2.17.6"
   }
 }

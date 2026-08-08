@@ -10,6 +10,10 @@
     "dev:prepare": "node scripts/gewu-dev.mjs prepare",
     "dev:stop": "node scripts/gewu-dev.mjs stop",
     "dev:restart": "node scripts/gewu-dev.mjs restart",
-    "dev:status": "node scripts/gewu-dev.mjs status"
+    "dev:status": "node scripts/gewu-dev.mjs status",
+    "batch": "node scripts/gewu-batch.mjs",
+    "batch:run": "node scripts/gewu-batch.mjs run",
+    "batch:status": "node scripts/gewu-batch.mjs status",
+    "batch:stop": "node scripts/gewu-batch.mjs stop"
   }
 }

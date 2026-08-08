@@ -163,10 +163,17 @@ modes (shadow typing, flow recall, code recall with every layout, reasoning
 recall, transfer practice).
 
 ```sh
-cd tools/template-authoring
-npm run workbench:api:local        # terminal 1: the authoring API
-npm run batch -- --problems hot100.json --resume --concurrency 1
+npm run batch                      # interactive menu (starts the API if needed)
+npm run batch:run -- --problems hot100.json --resume --auto-accept
 ```
+
+`npm run batch` mirrors the one-command dev runner: it starts the authoring
+API when it is down, asks the batch questions interactively (problems file,
+concurrency, repair rounds, auto-accept), runs the batch, and reports.
+Non-interactive flags are supported (`run --problems FILE --steps ...`);
+`npm run batch:status` shows API health and the last report, and
+`npm run batch:stop` stops the API that the script started. The raw CLI still
+lives in `tools/template-authoring` (`npm run batch -- --problems FILE ...`).
 
 Problems file (JSON):
 
@@ -194,6 +201,12 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 
 Published units land in `tools/template-authoring/drafts/.workbench/published`
 and become available to a Core started with that content root.
+
+Problem statements are Markdown and images are **URL references by default**
+(https/data URIs): the web workbench and the VS Code flow panel render the
+same statement, including images, when online. Bundling images as local unit
+assets is a planned additive path for offline-first packs; URL references
+remain supported and are preferred to keep storage local-first.
 
 ### Run the end-to-end tests
 

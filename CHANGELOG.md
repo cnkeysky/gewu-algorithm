@@ -30,6 +30,14 @@ allowed only with explicit migration notes (see
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.
+- The VS Code flow panel renders the problem statement as Markdown with the
+  same safe subset as the web workbench (headings, lists, code, tables, links,
+  and https/data images; CSP now allows `img-src https: data:`), so the same
+  unit shows consistent content in both clients online. Images are URL
+  references by default to keep storage local-first; local unit assets are a
+  planned additive path.
+- The template authoring instruction tells the LLM to keep original Markdown
+  image references (https URLs or relative asset paths) in `problem.statement`.
 
 ## [0.1.7] - 2026-08-08
 

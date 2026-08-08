@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { CoreSession } from "./core-client.js";
+import { renderStatement } from "./statement-renderer.js";
 
 export interface FlowPanelActions {
   submit(answer: string): Promise<void>;
@@ -113,7 +114,7 @@ export class FlowRecallPanel implements vscode.Disposable {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src https: data:;">
   <title>Flow Recall</title>
   <style>
     body { padding: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); }
@@ -127,7 +128,8 @@ export class FlowRecallPanel implements vscode.Disposable {
     li { color: var(--vscode-descriptionForeground); }
     .check { color: var(--vscode-testing-iconPassed); display: inline-block; width: 20px; }
     .prompt { margin: 0; line-height: 1.5; }
-    .problem-statement { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .problem-statement { overflow-wrap: anywhere; }
+    .problem-statement img { display: block; max-width: 100%; height: auto; margin: 12px 0; border-radius: 4px; }
     .muted, .message { color: var(--vscode-descriptionForeground); }
     textarea { box-sizing: border-box; width: 100%; min-height: 116px; resize: vertical; padding: 10px; border: 1px solid var(--vscode-input-border); color: var(--vscode-input-foreground); background: var(--vscode-input-background); font: inherit; }
     textarea:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
@@ -142,7 +144,7 @@ export class FlowRecallPanel implements vscode.Disposable {
 <body>
   <header><h1>${escapeHtml(session.unit_title)}</h1><span class="progress">Step ${current} of ${session.total_steps}</span></header>
   <main>
-    <section><h2>Problem context</h2><p class="prompt problem-statement">${escapeHtml(session.problem_statement)}</p></section>
+    <section><h2>Problem context</h2><div class="prompt problem-statement">${renderStatement(session.problem_statement)}</div></section>
     <section><h2>Completed flow</h2><ol>${completed || '<li class="muted">No steps reconstructed yet</li>'}</ol></section>
     <section><h2>Reviewed prompt</h2>${prompt}</section>
     <section>
