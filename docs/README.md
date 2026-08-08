@@ -15,3 +15,6 @@ Normative documents should have one clear responsibility. README files may summa
 Stable domain names and serialized values are defined in [architecture/terminology.md](architecture/terminology.md).
 Platform-independent mode content is defined in
 [architecture/practice-content-contracts.md](architecture/practice-content-contracts.md).
+The reusable agent development playbook (design-first, cascade changes,
+real testing, UI polish, versioning, and release discipline) is in
+[development/agent-playbook.md](development/agent-playbook.md).
