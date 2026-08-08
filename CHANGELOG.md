@@ -76,8 +76,9 @@ allowed only with explicit migration notes (see
   appears for units whose recorded tier is `llm_acceptance`. The draft
   pipeline chips now light 03 Review from the validated/needs_revision stage
   (it previously only lit after review passed), so 01 Generate → 02 Validate
-  → 03 Review → 04 Approve matches the states. The state flow is now also
-  summarized in the README.
+  → 03 Review → 04 Approve matches the states; the detailed state flow,
+  hierarchy, and correction model live in
+  `docs/architecture/approval-flow.md` (the README links to it).
 - Draft pipeline chips follow standard stepper semantics: completed steps are
   green, the current step is highlighted as a pill, and upcoming steps are
   muted gray (for example a validated draft shows 01/02 done, 03 current, 04
