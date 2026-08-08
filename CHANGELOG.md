@@ -8,6 +8,13 @@ allowed only with explicit migration notes (see
 
 ### Added
 
+- Batch authoring retries a failed generation on the same draft (up to
+  `--repair-rounds` additional attempts), and its HTTP client now uses
+  `node:http` with no internal header/body timeouts, so long reasoning-mode
+  relay generations no longer drop connections.
+- Generated manifests receive trusted provenance defaults when the model
+  omits them (`provenance.authors: ["GEWU"]`, `license: "MIT"`), and the
+  generation instruction now requires a non-empty authors list.
 - Batch authoring pre-checks whether every requested practice mode is already
   covered by an accepted unit: fully covered problems are reported up front
   and skipped (interactive choice in a TTY), and `--regenerate <ids>` forces

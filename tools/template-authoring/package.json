@@ -22,8 +22,7 @@
     "workbench:build": "npm --prefix workbench run build"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "0.83.0",
-    "undici": "^8.10.0"
+    "@earendil-works/pi-ai": "0.83.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

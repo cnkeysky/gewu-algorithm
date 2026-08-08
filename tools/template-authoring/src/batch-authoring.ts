@@ -1,15 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
-import { Agent, setGlobalDispatcher } from "undici";
-
-// LLM-backed authoring requests can take many minutes (especially with
-// reasoning-mode relays). Node's default fetch (undici) drops connections
-// that do not receive response headers within 5 minutes; disable those
-// internal timeouts and let the explicit --timeout-minutes signal bound work.
-setGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 }));
 
 /**
  * Batch authoring CLI. Drives the same workbench API used by the web UI so
@@ -211,22 +205,30 @@ export function resolveLanguage(
 type ApiResult = { ok: true; status: number; body: unknown } | { ok: false; status: number; body: unknown };
 
 async function apiRequest(options: Options, method: string, path: string, payload?: unknown): Promise<ApiResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMinutes * 60_000);
-  try {
-    const response = await fetch(`${options.api}${path}`, {
+  // node:http has no internal header/body timeouts (undici's fetch drops
+  // connections that take more than ~5 minutes to respond, which LLM-backed
+  // authoring requests routinely exceed). The AbortSignal below is the only
+  // bound, driven by --timeout-minutes.
+  const url = new URL(`${options.api}${path}`);
+  return new Promise<ApiResult>((resolveRequest, rejectRequest) => {
+    const req = httpRequest(url, {
       method,
       headers: payload === undefined ? undefined : { "content-type": "application/json" },
-      body: payload === undefined ? undefined : JSON.stringify(payload),
-      signal: controller.signal,
+      signal: AbortSignal.timeout(options.timeoutMinutes * 60_000),
+    }, (response) => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk: string) => { text += chunk; });
+      response.on("end", () => {
+        let body: unknown = null;
+        try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+        resolveRequest({ ok: response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300, status: response.statusCode ?? 0, body });
+      });
     });
-    const text = await response.text();
-    let body: unknown = null;
-    try { body = text ? JSON.parse(text) : null; } catch { body = text; }
-    return { ok: response.ok, status: response.status, body };
-  } finally {
-    clearTimeout(timer);
-  }
+    req.on("error", rejectRequest);
+    if (payload !== undefined) req.write(JSON.stringify(payload));
+    req.end();
+  });
 }
 
 function draftError(result: ApiResult): string {
@@ -405,7 +407,15 @@ async function processProblem(
       apiRequest(options, "POST", `/api/drafts/${draftId}/generate`, Object.keys(generationBody).length ? generationBody : undefined);
 
     if (options.steps.has("generate")) {
-      const generated = await generateDraft();
+      let generated = await generateDraft();
+      let retries = 0;
+      // A failed generation (LLM error or contract validation) is retried on
+      // the same draft: the backend allows generate from the failed state.
+      while (!generated.ok && retries < options.repairRounds) {
+        retries += 1;
+        generated = await generateDraft();
+      }
+      if (retries > 0) base.repairRoundsUsed = (base.repairRoundsUsed ?? 0) + retries;
       if (!generated.ok) return { ...base, status: "failed", error: `generate: ${draftError(generated)}` };
     }
     if (options.steps.has("validate")) {
