@@ -49,6 +49,8 @@ flags:
   --concurrency N   parallel problems (default 1)
   --repair-rounds N regenerate from review feedback after needs_revision (default 1)
   --auto-accept     publish drafts still needing revision after repair rounds
+  --llm-approve SPEC run the LLM final approval gate before publishing (provider:model, default deepseek:deepseek-v4-flash)
+  --creator-models LIST rotate creator models across problems (provider:model,provider:model)
   --force           regenerate problems even when an accepted unit covers them
   --yes             skip duplicate prompts (default when the CLI is not a TTY)
   --select LIST     run only the given ids/slugs/titles (comma list)
@@ -80,6 +82,8 @@ let repairRounds = "1";
 let autoAccept = false;
 let force = false;
 let yes = false;
+let llmApprove;
+let creatorModels;
 let select;
 let provider;
 let model;
@@ -101,6 +105,8 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--concurrency") concurrency = args[++i];
   else if (arg === "--repair-rounds") repairRounds = args[++i];
   else if (arg === "--auto-accept") autoAccept = true;
+  else if (arg === "--llm-approve") llmApprove = args[++i] ?? "deepseek:deepseek-v4-flash";
+  else if (arg === "--creator-models") creatorModels = args[++i];
   else if (arg === "--force") force = true;
   else if (arg === "--yes") yes = true;
   else if (arg === "--select") select = args[++i];
@@ -278,6 +284,8 @@ async function doRun() {
   ];
   if (steps) extraArgs.push("--steps", steps);
   if (accept) extraArgs.push("--auto-accept");
+  if (llmApprove) extraArgs.push("--llm-approve", llmApprove);
+  if (creatorModels) extraArgs.push("--creator-models", creatorModels);
   if (force) extraArgs.push("--force");
   if (yes) extraArgs.push("--yes");
   if (select) extraArgs.push("--select", select);

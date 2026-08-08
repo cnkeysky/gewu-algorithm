@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { PiGenerator, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
-import { reviewTemplateDraft } from "./review-template.js";
+import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
 import {
@@ -153,9 +153,17 @@ async function revisionFeedbackFor(draft: DraftRecord, reviews: ReviewRecord[]):
   return chunks.join("\n");
 }
 
-async function generateDraft(draft: DraftRecord, reviews: ReviewRecord[]): Promise<{ provider: string; model: string; artifactPath: string }> {
+async function generateDraft(
+  draft: DraftRecord,
+  reviews: ReviewRecord[],
+  overrides?: { provider?: string; model?: string },
+): Promise<{ provider: string; model: string; artifactPath: string }> {
   const definition = builtinTaskRegistry.resolve(draft.taskId, draft.problem);
-  const options = optionsFromEnvironment();
+  const options = optionsFromEnvironment(
+    overrides?.provider || overrides?.model
+      ? { ...process.env, GEWU_LLM_PROVIDER: overrides.provider, GEWU_LLM_MODEL: overrides.model }
+      : undefined,
+  );
   const generatedAt = new Date().toISOString();
   const profile = {
     practice_modes: draft.modes as PracticeModeSelection[],
@@ -230,6 +238,64 @@ async function generateDraft(draft: DraftRecord, reviews: ReviewRecord[]): Promi
 }
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Final acceptance gate driven by a designated approver model. The model reads
+ * the problem, the manifest, and every LLM pre-review finding, then returns
+ * pass or needs_revision. The verdict is recorded as an `llm_acceptance`
+ * review so the audit trail shows the approval came from an LLM gate.
+ */
+async function runModelAcceptance(
+  draft: DraftRecord,
+  reviews: ReviewRecord[],
+  overrides?: { provider?: string; model?: string },
+): Promise<{ review: ReviewRecord; rationale: string }> {
+  const root = artifactAbsolutePath(draft);
+  const manifest = await readFile(join(root, "unit.json"), "utf8");
+  const reports = await Promise.all(
+    reviews
+      .filter((review) => review.draftId === draft.id && review.reportPath)
+      .map(async (review) => {
+        const report = JSON.parse(await readFile(resolve(here, "../..", "..", review.reportPath!), "utf8")) as unknown;
+        return { role: review.role, verdict: review.verdict, report: isRecord(report) ? report : {} };
+      }),
+  );
+  const options = optionsFromEnvironment(
+    overrides?.provider || overrides?.model
+      ? { ...process.env, GEWU_LLM_PROVIDER: overrides.provider, GEWU_LLM_MODEL: overrides.model }
+      : undefined,
+  );
+  const task = buildAcceptanceTask(draft.problem, manifest, reports);
+  const artifact = await new PiGenerator(options).generate(task);
+  if (!isRecord(artifact.manifest) || typeof artifact.manifest.verdict !== "string") throw new Error("acceptance review returned an invalid response");
+  const verdict = artifact.manifest.verdict === "pass" ? "pass" : "needs_revision";
+  const rationale = typeof artifact.manifest.rationale === "string" ? artifact.manifest.rationale : "";
+  const report = {
+    rubric_version: "acceptance-v1",
+    role: "llm_acceptance",
+    provider: artifact.provider,
+    model: artifact.model,
+    verdict,
+    rationale,
+    findings: Array.isArray(artifact.manifest.findings) ? artifact.manifest.findings : [],
+  };
+  const reviewsDir = join(root, "reviews");
+  await mkdir(reviewsDir, { recursive: true });
+  await writeFile(join(reviewsDir, "llm_acceptance.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  return {
+    rationale,
+    review: {
+      id: crypto.randomUUID(),
+      draftId: draft.id,
+      role: "llm_acceptance",
+      verdict,
+      artifactHash: latestArtifactHash(reviews, draft.id),
+      reportPath: relative(resolve(here, "../..", ".."), join(reviewsDir, "llm_acceptance.json")),
+      createdAt: new Date().toISOString(),
+    },
+  };
+}
+
 async function validateArtifactWithRust(artifactPath: string, cleanupOnFailure = true): Promise<void> {
   const repoRoot = resolve(here, "../..", "..");
   const validator = join(repoRoot, "target/debug/validate");
@@ -436,9 +502,15 @@ const server = createServer(async (request, response) => {
       const draft = state.drafts.find((item) => item.id === generationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
       if (!["queued", "revision_requested"].includes(draft.status)) return send(response, 409, { error: "only a queued or revision-requested draft can be generated" });
-      const generated = await generateDraft(draft, state.reviews);
+      const generationPayload = await body(request).catch(() => ({}));
+      const generationOverrides = isRecord(generationPayload) && (typeof generationPayload.provider === "string" || typeof generationPayload.model === "string")
+        ? { provider: typeof generationPayload.provider === "string" ? generationPayload.provider : undefined, model: typeof generationPayload.model === "string" ? generationPayload.model : undefined }
+        : undefined;
+      const generated = await generateDraft(draft, state.reviews, generationOverrides);
       draft.status = "generated";
       draft.artifactPath = generated.artifactPath;
+      draft.provider = generated.provider;
+      draft.model = generated.model;
       await pruneUnreferencedArtifacts(draft, state.reviews);
       await saveState(state);
       return send(response, 200, { status: "generated", provider: generated.provider, model: generated.model, artifactPath: generated.artifactPath });
@@ -455,12 +527,29 @@ const server = createServer(async (request, response) => {
       await saveState(state);
       return send(response, 200, { status: "passed", draft });
     }
-    const acceptanceMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/accept$/);
+    const acceptanceMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/acceptance$/);
     if (request.method === "POST" && acceptanceMatch) {
       const draft = state.drafts.find((item) => item.id === acceptanceMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
+      if (!draft.artifactPath || !["validated", "llm_reviewed", "needs_revision"].includes(draft.status)) {
+        return send(response, 409, { error: "model acceptance requires a validated and reviewed draft" });
+      }
+      const payload = await body(request).catch(() => ({}));
+      const overrides = isRecord(payload) && (typeof payload.provider === "string" || typeof payload.model === "string")
+        ? { provider: typeof payload.provider === "string" ? payload.provider : undefined, model: typeof payload.model === "string" ? payload.model : undefined }
+        : undefined;
+      const { review, rationale } = await runModelAcceptance(draft, state.reviews, overrides);
+      state.reviews = [review, ...state.reviews];
+      await saveState(state);
+      return send(response, 200, { verdict: review.verdict, rationale, review });
+    }
+    const acceptMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/accept$/);
+    if (request.method === "POST" && acceptMatch) {
+      const draft = state.drafts.find((item) => item.id === acceptMatch[1]);
+      if (!draft) return send(response, 404, { error: "draft not found" });
       const payload = await body(request).catch(() => ({}));
       const humanOverride = isRecord(payload) && payload.override === true && typeof payload.rationale === "string" && payload.rationale.trim().length > 0;
+      const acceptanceRole = isRecord(payload) && payload.acceptanceRole === "llm_acceptance" ? "llm_acceptance" : "human_acceptance";
       const humanEdited = state.reviews.some((review) => review.draftId === draft.id && review.role === "human_revision" && review.verdict === "pass");
       if (!["llm_reviewed", "needs_revision"].includes(draft.status) && !(draft.status === "validated" && humanEdited)) {
         return send(response, 409, { error: "LLM pre-review must pass or the artifact must be human-edited and reviewed before acceptance" });
@@ -470,11 +559,12 @@ const server = createServer(async (request, response) => {
       if (!passedReview && !humanOverride) {
         return send(response, 409, { error: "a passing pre-review for the current artifact is required before human acceptance; send {override:true, rationale} only after explicit human review" });
       }
-      if (!passedReview && humanOverride) {
+      const existingAcceptance = state.reviews.some((review) => review.draftId === draft.id && review.role === acceptanceRole && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
+      if (!passedReview && humanOverride && !existingAcceptance) {
         const acceptanceReview: ReviewRecord = {
           id: crypto.randomUUID(),
           draftId: draft.id,
-          role: "human_acceptance",
+          role: acceptanceRole,
           verdict: "pass",
           artifactHash: latestArtifactHash(state.reviews, draft.id),
           createdAt: new Date().toISOString(),
@@ -521,7 +611,11 @@ const server = createServer(async (request, response) => {
       if (!REVIEW_ROLES.has(payload.role)) return send(response, 422, { error: "review role is not registered" });
       const draft = state.drafts.find((item) => item.id === reviewMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (draft.status !== "validated" || !draft.artifactPath) return send(response, 409, { error: "validate the generated draft before requesting review" });
+      // A failing role flips the draft to needs_revision; the remaining roles
+      // must still be able to complete so the review report is whole.
+      if (!draft.artifactPath || !["validated", "needs_revision"].includes(draft.status)) {
+        return send(response, 409, { error: "validate the generated draft before requesting review" });
+      }
       const repoRoot = resolve(here, "../..", "..");
       const artifactAbsolutePath = resolve(repoRoot, draft.artifactPath);
       await reviewTemplateDraft(relative(repoRoot, artifactAbsolutePath), payload.role);

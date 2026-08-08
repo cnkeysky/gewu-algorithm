@@ -6,6 +6,40 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+### Added
+
+- Batch authoring supports a fully LLM-driven pipeline with an **LLM approve**
+  gate: `--llm-approve provider:model` runs a final acceptance review where
+  the approver model reads the artifact and every LLM pre-review finding,
+  returns pass / needs_revision, and on pass publishes with the approval
+  recorded as `llm_acceptance` in the audit trail (rendered as "LLM approve"
+  and "LLM approved" in Review history and Drafts, distinct from human
+  approval). Problems may pin `provider` / `model` to dispatch creation to
+  different LLM APIs per problem; the workbench generate endpoint accepts a
+  per-draft model override, and a new `/api/drafts/:id/acceptance` endpoint
+  drives the gate. `--creator-models provider:model,...` rotates the creator
+  model round-robin across problems, and the draft's recorded provider/model
+  metadata now reflects the model that actually generated it.
+- The draft status after a passing LLM pre-review is labeled **LLM approved**
+  (previously "LLM pre-reviewed"), so the LLM approval marker appears as soon
+  as all review roles pass; final publication is then recorded as Human
+  approved or LLM approved.
+
+### Changed
+
+- Web LLM pre-review now runs the three roles concurrently, and the backend
+  lets the remaining roles complete after one fails, so a failing review no
+  longer aborts the whole pre-review with a partial report.
+- "Request revision" in the web is one action: it rolls back and immediately
+  regenerates with the latest review feedback (no lingering "revision
+  requested" waiting state), and the approval button on a `needs_revision`
+  draft is labeled **Approve anyway** in an override style, distinct from the
+  normal green "Human approve".
+- Draft rows no longer shrink inside the fixed list area, so action buttons
+  never overflow the card; the Drafts area returns to 600px so six worst-case
+  rows fit without internal scroll (History stays 560px, Units 406px), with
+  the scroll safety net retained.
+
 ## [0.1.8] - 2026-08-08
 
 ### Added

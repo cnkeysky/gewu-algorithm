@@ -19,6 +19,8 @@ test("parseOptions applies defaults and overrides", () => {
   assert.equal(defaults.language, "python");
   assert.equal(defaults.languageProvided, false);
   assert.equal(defaults.variants, 0);
+  assert.equal(defaults.llmApprove, undefined);
+  assert.deepEqual(defaults.creatorModels, []);
   assert.deepEqual(defaults.modes, ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"]);
   assert.deepEqual(defaults.assistance, ["comments", "cloze"]);
 
@@ -26,7 +28,7 @@ test("parseOptions applies defaults and overrides", () => {
     "--problems", "hot100.json", "--api", "http://127.0.0.1:9999/",
     "--steps", "generate,review", "--concurrency", "4", "--resume",
     "--force", "--yes", "--select", "two-sum,3sum", "--repair-rounds", "2", "--auto-accept", "--language", "java",
-    "--variants", "2", "--modes", "shadow_typing,code_recall", "--assistance", "comments",
+    "--variants", "2", "--llm-approve", "openai:gpt-4.1", "--creator-models", "deepseek:deepseek-v4-flash,openai:gpt-4.1", "--modes", "shadow_typing,code_recall", "--assistance", "comments",
   ]);
   assert.equal(custom.api, "http://127.0.0.1:9999");
   assert.deepEqual([...custom.steps], ["generate", "review"]);
@@ -39,6 +41,8 @@ test("parseOptions applies defaults and overrides", () => {
   assert.equal(custom.autoAccept, true);
   assert.equal(custom.language, "java");
   assert.equal(custom.languageProvided, true);
+  assert.equal(custom.llmApprove, "openai:gpt-4.1");
+  assert.deepEqual(custom.creatorModels, ["deepseek:deepseek-v4-flash", "openai:gpt-4.1"]);
   assert.equal(custom.variants, 2);
   assert.deepEqual(custom.modes, ["shadow_typing", "code_recall"]);
   assert.deepEqual(custom.assistance, ["comments"]);
@@ -49,7 +53,7 @@ test("loadProblems parses JSON arrays and TSV", async () => {
   try {
     const jsonPath = join(directory, "problems.json");
     await writeFile(jsonPath, JSON.stringify([
-      { id: "1", slug: "two-sum", title: "Two Sum", problem: "Given nums and target...", sourceUrl: "https://leetcode.com/problems/two-sum/", language: "python" },
+      { id: "1", slug: "two-sum", title: "Two Sum", problem: "Given nums and target...", sourceUrl: "https://leetcode.com/problems/two-sum/", language: "python", provider: "openai", model: "gpt-4.1" },
       { id: "20", slug: "valid-parentheses", title: "Valid Parentheses", problem: "Given a string s..." },
     ]), "utf8");
     const jsonProblems = await loadProblems(jsonPath);
@@ -58,6 +62,8 @@ test("loadProblems parses JSON arrays and TSV", async () => {
     assert.equal(jsonProblems[0].sourceUrl, "https://leetcode.com/problems/two-sum/");
     assert.equal(jsonProblems[0].language, "python");
     assert.equal(jsonProblems[0].slug, "two-sum");
+    assert.equal(jsonProblems[0].provider, "openai");
+    assert.equal(jsonProblems[0].model, "gpt-4.1");
     assert.equal(jsonProblems[1].language, undefined);
 
     const tsvPath = join(directory, "problems.tsv");

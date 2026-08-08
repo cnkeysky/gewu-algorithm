@@ -243,6 +243,19 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 - `--auto-accept` — publish drafts that still need revision after the repair
   rounds, recording an explicit `human_acceptance` rationale in the audit
   trail (LLM pre-review verdicts stay visible in Review history).
+- `--llm-approve provider:model` — run a model-driven final approval gate
+  (`llm_acceptance`): the approver model reads the artifact and every LLM
+  pre-review finding, returns pass / needs_revision, and on pass the draft is
+  published with the approval recorded as **LLM approve** in the audit trail
+  (distinct from human approval). The whole batch chain — draft, generation,
+  deterministic validation, LLM pre-review, and approval — is LLM-driven.
+  Problems may pin their own creator model (`provider` / `model` fields in
+  the problems file), so different problems can be dispatched to different
+  LLM APIs while a single approver model gates publication.
+- `--creator-models deepseek:deepseek-v4-flash,openai:gpt-4.1` — rotate the
+  creator model round-robin across problems (per-problem `provider` / `model`
+  pins win; without either, all problems use the authoring server's configured
+  model).
 - `--concurrency n`, `--provider`, `--model`, `--modes`, `--assistance`,
   `--report path`.
 - `--variants N` — explicit implementation strategy count. Default is auto:

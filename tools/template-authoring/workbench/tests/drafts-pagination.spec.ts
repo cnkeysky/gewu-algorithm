@@ -153,15 +153,18 @@ test("requesting a revision keeps the page, the row, and shows a toast", async (
     createdAt: new Date(Date.UTC(2026, 7, 5, 8, index)).toISOString(),
   });
   let rolled = false;
+  let regenerated = false;
   // Rollback target is last so it lands on page 2 (8 drafts, 6 per page).
   const draftsAt = () => {
     const ordered = Array.from({ length: 8 }, (_, index) => ({ ...base(index + 2), status: "queued" }));
-    ordered[7] = { ...base(1), status: rolled ? "revision_requested" : "generated", artifactPath: rolled ? undefined : base(1).artifactPath };
+    const status = regenerated ? "generated" : rolled ? "revision_requested" : "generated";
+    ordered[7] = { ...base(1), status, artifactPath: status === "generated" ? base(1).artifactPath : undefined };
     return ordered;
   };
   await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: draftsAt() } }));
   await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
   await page.route("**/api/drafts/rollback-1/rollback", (route) => { rolled = true; return route.fulfill({ json: { status: "revision_requested" } }); });
+  await page.route("**/api/drafts/rollback-1/generate", (route) => { regenerated = true; return route.fulfill({ json: { status: "generated" } }); });
 
   await openDrafts(page);
   await expect(page.locator(".draft-row")).toHaveCount(6);
@@ -171,9 +174,9 @@ test("requesting a revision keeps the page, the row, and shows a toast", async (
   await expect(row).toBeVisible();
   const rowY = await row.evaluate((el) => el.getBoundingClientRect().y);
   await row.locator("[data-rollback-id]").click();
-  await expect(page.locator("#app-toast")).toContainText("Revision requested");
+  await expect(page.locator("#app-toast")).toContainText("Revision regenerated");
   await expect(row).toBeVisible();
-  await expect(row.locator(".draft-status")).toHaveText("Revision requested");
+  await expect(row.locator(".draft-status")).toHaveText("Generated");
   const pageInfo = await page.locator(".draft-list .pagination-info").textContent();
   expect(pageInfo).toContain("7–8 of 8");
   const afterY = await row.evaluate((el) => el.getBoundingClientRect().y);
@@ -219,7 +222,7 @@ test("status filters group drafts with live counts and empty states", async ({ p
   await expect(page.locator(".draft-row")).toHaveCount(3);
   await expect(page.locator(".draft-list .list-pagination")).toBeHidden();
   const statusesShown = await page.locator(".draft-row .draft-status").allTextContents();
-  expect(statusesShown.every((value) => ["Needs revision", "LLM pre-reviewed"].includes(value))).toBe(true);
+  expect(statusesShown.every((value) => ["Needs revision", "LLM approved"].includes(value))).toBe(true);
 
   await pill("Published").click();
   await expect(page.locator(".draft-row")).toHaveCount(2);

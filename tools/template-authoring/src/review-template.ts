@@ -33,6 +33,32 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
   },
 };
 
+const ACCEPTANCE_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  additionalProperties: false,
+  required: ["verdict", "rationale", "findings"],
+  properties: {
+    verdict: { enum: ["pass", "needs_revision"] },
+    rationale: { type: "string" },
+    findings: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["rule_id", "severity", "path", "problem", "evidence", "suggested_change"],
+        properties: {
+          rule_id: { type: "string" },
+          severity: { enum: ["info", "minor", "major", "critical"] },
+          path: { type: "string" },
+          problem: { type: "string" },
+          evidence: { type: "string" },
+          suggested_change: { type: "string" },
+        },
+      },
+    },
+  },
+};
+
 type ModelReport = {
   verdict: "pass" | "needs_revision" | "reject" | "human_review_required";
   findings: Array<{
@@ -47,6 +73,35 @@ type ModelReport = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Builds the final acceptance task for a reviewed draft. The acceptance model
+ * acts as the publication gate: it reads the problem, the manifest, and every
+ * LLM pre-review finding, then returns pass or needs_revision with a concise
+ * rationale. This is a pure builder so the prompt can be unit-tested.
+ */
+export function buildAcceptanceTask(
+  problem: string,
+  manifest: string,
+  reviews: Array<{
+    role: string;
+    verdict: string;
+    report?: { findings?: Array<{ rule_id: string; severity: string; path?: string; problem: string; evidence: string; suggested_change?: string }> };
+  }>,
+): DraftTask {
+  const findings = reviews
+    .flatMap((review) => (review.report?.findings ?? []).map((finding) => `[${review.role}] ${finding.severity} ${finding.rule_id}: ${finding.problem} — ${finding.evidence}`))
+    .join("\n");
+  return {
+    taskId: "algorithm-unit-acceptance",
+    taskVersion: "acceptance-v1",
+    selectedInputHash: createHash("sha256").update(`${problem}\n${manifest}\n${findings}`).digest("hex"),
+    instruction: `You are the final acceptance reviewer (publication gate) for this GEWU algorithm unit. Decide whether this reviewed artifact may be accepted as a practice template.
+Return pass only when the artifact is a faithful, correct, complete template for the problem and every material pre-review finding has been addressed. Otherwise return needs_revision with a concise rationale naming the blocking issue.
+Return only the JSON report shape requested.\n\nProblem:\n${problem}\n\nManifest:\n${manifest}\n\nLLM pre-review findings:\n${findings || "No findings."}`,
+    outputSchema: ACCEPTANCE_SCHEMA,
+  };
 }
 
 function parseRole(value: string | undefined): ReviewRole {

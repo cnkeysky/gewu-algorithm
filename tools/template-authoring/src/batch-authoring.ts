@@ -27,6 +27,8 @@ import { fileURLToPath } from "node:url";
  *   --repair-rounds <n>  regenerate from review feedback after needs_revision (default 1)
  *   --auto-accept        accept needs_revision drafts with an explicit rationale record
  *   --provider, --model  recorded metadata on the draft (generation uses server env)
+ *   --llm-approve [provider:model]  run the LLM final approval gate before publishing
+ *   --creator-models <list>  round-robin creator models across problems (provider:model,provider:model)
  *   --language <slug>    implementation language (default python; overrides the catalog entry)
  *   --variants <n>       implementation strategy count (default auto: the model decides 1-3 meaningful strategies)
  *   --modes <list>       practice modes (default all five)
@@ -52,6 +54,8 @@ type BatchProblem = {
   id?: string;
   slug?: string;
   language?: string;
+  provider?: string;
+  model?: string;
 };
 
 type Options = {
@@ -65,6 +69,8 @@ type Options = {
   select: string[];
   repairRounds: number;
   autoAccept: boolean;
+  llmApprove?: string;
+  creatorModels: string[];
   provider?: string;
   model?: string;
   language: string;
@@ -84,6 +90,13 @@ function fail(message: string): never {
 function optionValue(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   return index >= 0 && index + 1 < args.length ? args[index + 1] : undefined;
+}
+
+/** Parses `provider:model` (a bare value means model with the default provider). */
+function parseModelSpec(spec: string): [string, string] {
+  const index = spec.indexOf(":");
+  if (index <= 0 || index === spec.length - 1) return ["deepseek", spec];
+  return [spec.slice(0, index), spec.slice(index + 1)];
 }
 
 export function parseOptions(args: string[]): Options {
@@ -108,6 +121,8 @@ export function parseOptions(args: string[]): Options {
     select: selectValue ? selectValue.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean) : [],
     repairRounds: Number(optionValue(args, "--repair-rounds") ?? "1"),
     autoAccept: args.includes("--auto-accept"),
+    llmApprove: optionValue(args, "--llm-approve"),
+    creatorModels: optionValue(args, "--creator-models")?.split(",").map((item) => item.trim()).filter(Boolean) ?? [],
     provider: optionValue(args, "--provider"),
     model: optionValue(args, "--model"),
     language: optionValue(args, "--language") ?? "python",
@@ -360,8 +375,16 @@ async function processProblem(
     }
     base.draftId = draftId;
 
+    // Per-problem creator model distribution: entries may pin provider/model,
+    // overriding the authoring server's configured model for this draft only.
+    const generationBody: Record<string, unknown> = {};
+    if (problem.provider) generationBody.provider = problem.provider;
+    if (problem.model) generationBody.model = problem.model;
+    const generateDraft = (): Promise<ApiResult> =>
+      apiRequest(options, "POST", `/api/drafts/${draftId}/generate`, Object.keys(generationBody).length ? generationBody : undefined);
+
     if (options.steps.has("generate")) {
-      const generated = await apiRequest(options, "POST", `/api/drafts/${draftId}/generate`);
+      const generated = await generateDraft();
       if (!generated.ok) return { ...base, status: "failed", error: `generate: ${draftError(generated)}` };
     }
     if (options.steps.has("validate")) {
@@ -380,7 +403,7 @@ async function processProblem(
         if (allPassed || repairs >= options.repairRounds || !options.steps.has("generate")) break;
         const rollback = await apiRequest(options, "POST", `/api/drafts/${draftId}/rollback`);
         if (!rollback.ok) break;
-        const regenerated = await apiRequest(options, "POST", `/api/drafts/${draftId}/generate`);
+        const regenerated = await generateDraft();
         if (!regenerated.ok) break;
         const revalidated = await apiRequest(options, "POST", `/api/drafts/${draftId}/validate`);
         if (!revalidated.ok) break;
@@ -388,6 +411,42 @@ async function processProblem(
       }
       base.repairRoundsUsed = repairs;
       base.reviewVerdicts = reviewVerdicts;
+    }
+
+    if (options.steps.has("accept") && options.llmApprove) {
+      // The LLM approval gate completes the fully-automated pipeline: the
+      // approver model reads the artifact and all pre-review findings, decides
+      // pass or needs_revision, and the audit trail records `llm_acceptance`
+      // (explicitly an LLM approval, never labeled as human).
+      const [approverProvider, approverModel] = parseModelSpec(options.llmApprove);
+      let verdict = "needs_revision";
+      let rationale = "";
+      let approvals = 0;
+      for (; ; ) {
+        const acceptance = await apiRequest(options, "POST", `/api/drafts/${draftId}/acceptance`, { provider: approverProvider, model: approverModel });
+        if (!acceptance.ok) return { ...base, status: "failed", error: `llm approval: ${draftError(acceptance)}` };
+        const body = acceptance.body as { verdict?: string; rationale?: string };
+        verdict = body.verdict ?? "needs_revision";
+        rationale = body.rationale ?? "";
+        if (verdict === "pass") break;
+        if (approvals >= options.repairRounds || !options.steps.has("generate") || !options.steps.has("validate") || !options.steps.has("review")) break;
+        const rollback = await apiRequest(options, "POST", `/api/drafts/${draftId}/rollback`);
+        if (!rollback.ok) break;
+        if (!(await generateDraft()).ok || !(await apiRequest(options, "POST", `/api/drafts/${draftId}/validate`)).ok) break;
+        await runReviews(options, draftId);
+        approvals += 1;
+      }
+      if (verdict === "pass") {
+        const accepted = await apiRequest(options, "POST", `/api/drafts/${draftId}/accept`, {
+          override: true,
+          rationale: `LLM approve by ${approverProvider}/${approverModel}: ${rationale}`,
+          acceptanceRole: "llm_acceptance",
+        });
+        if (!accepted.ok) return { ...base, status: "failed", error: `accept(llm): ${draftError(accepted)}` };
+        const body = accepted.body as { publishedPath?: string; draft?: { unitId?: string } };
+        return { ...base, status: "accepted", unitId: body.draft?.unitId, publishedPath: body.publishedPath, repairRoundsUsed: base.repairRoundsUsed, reviewVerdicts: base.reviewVerdicts };
+      }
+      return { ...base, status: "needs_review", error: `llm approval: ${rationale || verdict}` };
     }
 
     if (options.steps.has("accept")) {
@@ -430,6 +489,15 @@ async function main(): Promise<void> {
   if (empty > 0) console.log(`batch-authoring: skipped ${empty} entries without a problem statement`);
   if (deselected > 0) console.log(`batch-authoring: selected ${problems.length} of ${withStatements.length} problems (--select)`);
   if (problems.length === 0) fail("problems file contains no entries");
+  if (options.creatorModels.length > 0) {
+    problems.forEach((problem, index) => {
+      if (problem.provider || problem.model) return;
+      const [provider, model] = parseModelSpec(options.creatorModels[index % options.creatorModels.length]);
+      problem.provider = provider;
+      problem.model = model;
+    });
+    console.log(`batch-authoring: creator models rotate across ${options.creatorModels.length} model(s)`);
+  }
   console.log(`batch-authoring: ${problems.length} problems, steps=[${[...options.steps].join(",")}], concurrency=${options.concurrency}${options.force ? ", force" : ", dedupe-covered"}${options.select.length > 0 ? `, select=[${options.select.join(",")}]` : ""}`);
 
   const acceptedMap = await acceptedByProblem(options);
