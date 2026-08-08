@@ -22,6 +22,11 @@ allowed only with explicit migration notes (see
   every spawned background service) and rule 1 now requires
   `docs/roadmap.md` updates when a stage or capability completes; the playbook
   cross-references both rules in §8/§11/§12.
+- The project-independent rules template gains an adoption guide (which files
+  are required per tool, layering, and atomic sync across copies) and is
+  aligned with the repo rules: rule numbering reordered to match, rule 1
+  covers roadmap records, rule 3 covers LLM-generated-content acceptance, and
+  rule 10 covers DX and CI parity.
 - Coding standards now link the resident agent rules for on-demand reading and
   explicitly cover the web workbench and template-authoring CLI; persistence
   and async sections gain idempotent-migration and write-throttling rules.
