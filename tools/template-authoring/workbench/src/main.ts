@@ -806,7 +806,7 @@ function practiceOptionLabel(unitId: string | undefined, mode: PracticeMode | un
 function variantLabel(value: { unit_id?: string; mode?: string; implementation?: string; practice_id?: string }): string {
   return practiceOptionLabel(value.unit_id, value.mode as PracticeMode | undefined, value.practice_id, value.implementation);
 }
-function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM approved", needs_revision: "Needs revision", revision_requested: "Revision requested", accepted: "Human approved" })[status]; }
+function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM approved", needs_revision: "Needs revision", revision_requested: "Awaiting regeneration", accepted: "Human approved" })[status]; }
 function acceptanceLabel(draft: DraftRecord): string {
   if (draft.status !== "accepted") return statusLabel(draft.status);
   return readReviews().some((review) => review.draftId === draft.id && review.role === "llm_acceptance") ? "LLM approved" : "Human approved";
@@ -945,9 +945,9 @@ function renderDrafts(): void {
       draft.artifactPath ? `<button class="inline-action${draft.status === "needs_revision" ? " revision-action" : ""}" type="button" data-view-artifact-id="${draft.id}">${draft.status === "needs_revision" ? "Revise artifact" : "View artifact"}</button>` : "",
       canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">Generate template</button>` : "",
       canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
-      canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}">LLM pre-review</button>` : "",
+      canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}" title="Run the three role reviews (algorithm correctness, learning design, provenance). All pass marks the draft LLM approved.">LLM pre-review</button>` : "",
       canAccept ? `<button class="inline-action approval-action${draft.status === "needs_revision" ? " override-action" : ""}" type="button" data-accept-id="${draft.id}">${draft.status === "needs_revision" ? "Approve anyway" : "Human approve"}</button>` : "",
-      canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}">Request revision</button>` : "",
+      canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}" title="Roll back and regenerate the artifact using the latest review feedback.">Regenerate</button>` : "",
       canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}">Extend unit</button>` : "",
       canDelete ? `<button class="inline-action danger-action" type="button" data-delete-id="${draft.id}">Delete</button>` : "",
     ].filter(Boolean).join("");
@@ -974,14 +974,19 @@ function renderWorkflow(): void {
   state.textContent = draftDirty ? "Unsaved changes" : draftPersistence === "local" ? "Local only / sync pending" : statusLabel(draft.status);
   const contractValid = ["validated", "llm_reviewed", "accepted"].includes(draft.status);
   const readyToValidate = draft.status === "generated";
-  setStatus(validation, contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : draft.status === "needs_revision" ? "Blocked by revision" : "Pending", contractValid ? "passed" : readyToValidate ? "ready" : draft.status === "needs_revision" ? "blocked" : "pending");
+  const awaitingRegeneration = draft.status === "revision_requested";
+  setStatus(
+    validation,
+    awaitingRegeneration ? "Awaiting regeneration" : contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : draft.status === "needs_revision" ? "Blocked by revision" : "Pending",
+    awaitingRegeneration ? "ready" : contractValid ? "passed" : readyToValidate ? "ready" : draft.status === "needs_revision" ? "blocked" : "pending",
+  );
   const allDraftReviews = draftPersistence === "local" ? [] : readReviews().filter((item) => item.draftId === draft.id);
   const roleReviews = allDraftReviews.filter((item) => item.role !== "human_revision");
   const humanReviewed = allDraftReviews.some((item) => item.role === "human_revision" && item.verdict === "pass");
   const blockedReview = roleReviews.find((item) => item.verdict === "needs_revision" || item.verdict === "reject");
   const allRolesPassed = roleReviews.length === 3 && roleReviews.every((item) => item.verdict === "pass");
-  const reviewValue = allRolesPassed ? "All roles passed" : humanReviewed ? "Human revision recorded" : blockedReview ? "Needs revision" : draft.status === "validated" ? "Ready to run" : "Pending";
-  const reviewKind = allRolesPassed ? "passed" : humanReviewed ? "passed" : blockedReview ? "blocked" : draft.status === "validated" ? "ready" : "pending";
+  const reviewValue = awaitingRegeneration ? "Regenerate to re-review" : allRolesPassed ? "All roles passed" : humanReviewed ? "Human revision recorded" : blockedReview ? "Needs revision" : draft.status === "validated" ? "Ready to run" : "Pending";
+  const reviewKind = awaitingRegeneration ? "ready" : allRolesPassed ? "passed" : humanReviewed ? "passed" : blockedReview ? "blocked" : draft.status === "validated" ? "ready" : "pending";
   setStatus(review, reviewValue, reviewKind);
   const acceptanceReady = draft.status === "llm_reviewed" || draft.status === "needs_revision" || (draft.status === "validated" && humanReviewed);
   setStatus(acceptance, draft.status === "accepted" ? "Human approved" : acceptanceReady ? "Ready for you" : "Pending", draft.status === "accepted" ? "passed" : acceptanceReady ? "ready" : "pending");

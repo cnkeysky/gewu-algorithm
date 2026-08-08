@@ -35,6 +35,14 @@ allowed only with explicit migration notes (see
   requested" waiting state), and the approval button on a `needs_revision`
   draft is labeled **Approve anyway** in an override style, distinct from the
   normal green "Human approve".
+- The revision workflow reads coherently end to end: the status is now
+  **Awaiting regeneration** (not the passive "Revision requested"), the
+  rollback action is labeled **Regenerate** with a tooltip explaining it
+  reuses the latest review feedback, and the review-gate panel shows
+  "Awaiting regeneration / Regenerate to re-review" instead of stale
+  "Pending" steps for that state. "LLM pre-review" and "Regenerate" carry
+  tooltips that spell out their difference (review the artifact vs rebuild it
+  with feedback).
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with
