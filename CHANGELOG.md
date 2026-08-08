@@ -38,6 +38,10 @@ allowed only with explicit migration notes (see
   planned additive path.
 - The template authoring instruction tells the LLM to keep original Markdown
   image references (https URLs or relative asset paths) in `problem.statement`.
+- The practice start form labels every mode's choice the same way:
+  "Practice variant" (shadow typing previously showed "Implementation
+  variant"). The internal selector distinction is unchanged — shadow typing
+  still requests by implementation key, other modes by practice id.
 
 ## [0.1.7] - 2026-08-08
 

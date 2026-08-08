@@ -632,7 +632,7 @@ function renderPracticeOptions(): void {
   const options = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.filter((option) => option.mode === mode) ?? [];
   const selector = options[0]?.selector;
   const previous = select.value;
-  label.firstChild!.textContent = selector === "implementation" ? "Implementation variant " : "Practice variant ";
+  label.firstChild!.textContent = "Practice variant ";
   select.innerHTML = options.length ? options.map((option) => `<option value="${option.id}">${option.label}</option>`).join("") : "<option value=\"\">Default reviewed configuration</option>";
   select.disabled = options.length === 0;
   select.dataset.selector = selector ?? "practice_id";
