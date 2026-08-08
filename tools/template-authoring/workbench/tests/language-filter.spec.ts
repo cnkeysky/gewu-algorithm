@@ -161,3 +161,21 @@ test("Units page offers Practice that preselects the published unit", async ({ p
   await expect(page.locator("#practice-unit")).toHaveValue("graph.bfs");
   await expect(page.locator("#practice-message")).toContainText("choose a mode to start");
 });
+
+test("units list uses a fixed area with pagination like Drafts", async ({ page }) => {
+  const units = Array.from({ length: 8 }, (_, index) => ({ ...draft(`Unit ${index + 1}`, "python", index), status: "accepted", unitId: `unit.${index + 1}` }));
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: units } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Units/ }).click();
+
+  const rows = page.locator(".unit-row");
+  await expect(rows).toHaveCount(6);
+  const area = page.locator("#units-list .paged-scroll");
+  const heightBefore = await area.evaluate((el) => el.clientHeight);
+  await page.locator("#units-list [data-page-next='units']").click();
+  await expect(rows).toHaveCount(2);
+  await expect(page.locator("#units-list .pagination-info")).toContainText("of 8");
+  const heightAfter = await area.evaluate((el) => el.clientHeight);
+  expect(heightAfter).toBe(heightBefore);
+});

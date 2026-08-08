@@ -178,7 +178,9 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .draft-buttons .inline-action:nth-child(1) { width: 78px; }
 .draft-buttons .inline-action:nth-child(2) { width: 78px; }
 .draft-buttons .inline-action:nth-child(3) { width: 62px; }
-.units-list { border-top: 1px solid var(--line); }
+.units-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.units-list .paged-scroll { height: 600px; overflow: hidden; }
+.units-list .empty-state { min-height: 600px; }
 .unit-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 4px; border-bottom: 1px solid var(--line); }
 .unit-main { min-width: 0; }
 .unit-main strong { font-size: 13px; }

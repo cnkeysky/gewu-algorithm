@@ -124,8 +124,10 @@ allowed only with explicit migration notes (see
   revision) with language, projections, and a Core-aware Practice button that
   preselects the unit in the workspace; problem statements and Edit actions
   are not duplicated there because Drafts (Published filter / Extend unit) and
-  the authoring picker already cover revision creation. Drafts keeps the full
-  approval lifecycle including Human approved rows.
+  the authoring picker already cover revision creation. The list uses the same
+  fixed-height area and pagination pattern as Drafts, so the page does not
+  reflow as entries change. Drafts keeps the full approval lifecycle including
+  Human approved rows.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.
