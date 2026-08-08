@@ -11,7 +11,10 @@ GEWU-specific detail, so collaborators can reuse it as-is:
 
 Maintenance note (for maintainers, not part of the agent rules): keep this
 file in sync with the global `~/.codex/AGENTS.md` and each repo's `AGENTS.md`;
-rule changes must stay consistent across all three in the same commit.
+rule changes must stay consistent across all three in the same commit. When
+the same rules must apply in other tools (Claude Code / Cursor), write them
+into the files those tools read (`CLAUDE.md` / `.cursorrules`) and keep them
+consistent too.
 
 ---
 

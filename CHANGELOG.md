@@ -15,6 +15,13 @@ allowed only with explicit migration notes (see
   the Drafts / Units / Practice lists; it stacks with the verdict and language
   filters.
 
+### Changed
+
+- The development playbook is now repo-scoped detail: its meta intro and
+  maintainer-only maintenance note were removed from the agent-facing file,
+  and the cross-tool sync guidance moved into the project-independent rules
+  template (`docs/development/global-agent-rules.md`).
+
 ## [0.1.9] - 2026-08-08
 
 ### Added

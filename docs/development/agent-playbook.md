@@ -1,16 +1,5 @@
 # 通用开发 Agent 提示词（Playbook）
 
-从 GEWU 项目开发中沉淀的通用提示词与工作法，可直接用于其他项目的 Agent
-开发会话。上半部分是可粘贴的提示词模板，下半部分是对每条规则的展开与
-真实教训（例子里会提到 GEWU 的具体场景，替换成你项目的对应场景即可）。
-
-维护说明（供维护者阅读，不是 Agent 的开发规则）：核心规则常驻仓库级
-`AGENTS.md`、全局 AGENTS.md 与项目无关的全局规则模板
-`docs/development/global-agent-rules.md`，细则按需读取；修改规则时，需在
-同一次提交里同步 `AGENTS.md`、本 playbook、全局规则模板与 CHANGELOG；跨
-工具（Claude Code / Cursor）时把同一核心规则写入它们各自读取的文件
-（`CLAUDE.md` / `.cursorrules`）保持一致。
-
 ---
 
 ## 一、可直接粘贴的提示词（System Prompt 模板）
