@@ -81,7 +81,7 @@ function validateDraft(draft: DraftRecord): string[] {
   if (draft.problem.trim().length < 20) errors.push("problem must contain at least 20 characters");
   if (draft.modes.length === 0) errors.push("at least one practice mode is required");
   if (!draft.modes.includes("code_recall") && draft.assistance.length > 0) errors.push("code recall assistance requires code_recall");
-  if (draft.variants < 1 || draft.variants > 5) errors.push("variants must be between 1 and 5");
+  if (draft.variants < 0 || draft.variants > 5) errors.push("variants must be 0 (auto) or between 1 and 5");
   return errors;
 }
 
@@ -373,7 +373,7 @@ function draftFrom(value: unknown): DraftRecord {
     return result;
   };
   const variants = value.variants;
-  if (!Number.isInteger(variants) || Number(variants) < 1 || Number(variants) > 5) throw new Error("variants must be between 1 and 5");
+  if (!Number.isInteger(variants) || Number(variants) < 0 || Number(variants) > 5) throw new Error("variants must be 0 (auto) or between 1 and 5");
   const now = new Date().toISOString();
   return {
     id: crypto.randomUUID(),

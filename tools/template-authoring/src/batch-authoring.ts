@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
  *   --auto-accept        accept needs_revision drafts with an explicit rationale record
  *   --provider, --model  recorded metadata on the draft (generation uses server env)
  *   --language <slug>    implementation language (default python; overrides the catalog entry)
- *   --variants <n>       implementation variants per unit (default 1)
+ *   --variants <n>       implementation strategy count (default auto: the model decides 1-3 meaningful strategies)
  *   --modes <list>       practice modes (default all five)
  *   --assistance <list>  code recall assistance (default comments,cloze)
  *   --report <path>      JSON report output (default batch-report.json)
@@ -107,7 +107,7 @@ export function parseOptions(args: string[]): Options {
     model: optionValue(args, "--model"),
     language: optionValue(args, "--language") ?? "python",
     languageProvided: optionValue(args, "--language") !== undefined,
-    variants: Number(optionValue(args, "--variants") ?? "1"),
+    variants: Number(optionValue(args, "--variants") ?? "0"),
     modes,
     assistance,
     report: optionValue(args, "--report") ?? "batch-report.json",
@@ -416,7 +416,7 @@ async function processProblem(
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   if (!Number.isInteger(options.concurrency) || options.concurrency < 1) fail("--concurrency must be a positive integer");
-  if (!Number.isInteger(options.variants) || options.variants < 1) fail("--variants must be a positive integer");
+  if (!Number.isInteger(options.variants) || options.variants < 0) fail("--variants must be 0 (auto) or a positive integer");
   const loaded = await loadProblems(options.problemsFile);
   const withStatements = loaded.filter((problem) => problem.problem.length > 0);
   const empty = loaded.length - withStatements.length;

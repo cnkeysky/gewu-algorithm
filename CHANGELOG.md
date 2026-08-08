@@ -61,6 +61,14 @@ allowed only with explicit migration notes (see
   catch-all), so starting practice is unambiguous, and the workspace status
   line summarizes the real Interrupted / Spaced review / Recent attempts state
   instead of a stale action message.
+- Implementation strategy count is automatic: the web authoring form no longer
+  asks how many variants to generate (`variants: 0` means auto), and the
+  generation instructions produce 1–3 genuinely distinct strategies only when
+  the problem warrants them, preferring a single canonical strategy and never
+  padding with artificial variants. The batch CLI keeps `--variants N` as an
+  explicit override (default auto). The practice projections note explains
+  that each selected mode binds to the unit's implementation strategies, and
+  the generation-profile summary shows `Implementation strategies: auto`.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

@@ -232,8 +232,12 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 - `--auto-accept` — publish drafts that still need revision after the repair
   rounds, recording an explicit `human_acceptance` rationale in the audit
   trail (LLM pre-review verdicts stay visible in Review history).
-- `--concurrency n`, `--provider`, `--model`, `--variants`, `--modes`,
-  `--assistance`, `--report path`.
+- `--concurrency n`, `--provider`, `--model`, `--modes`, `--assistance`,
+  `--report path`.
+- `--variants N` — explicit implementation strategy count. Default is auto:
+  the model generates 1–3 genuinely distinct strategies only when the problem
+  warrants them (batch overrides the automatic behavior; the web authoring
+  form always uses auto).
 - `--language <slug>` — global override. Without it each catalog entry's
   `language` applies (hot100.json pins python); catalogs may mix languages by
   giving entries different `language` values, and dedup stays per

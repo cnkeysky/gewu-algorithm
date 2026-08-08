@@ -23,8 +23,8 @@ export interface GenerationProfile {
 
 export function validateGenerationProfile(profile: GenerationProfile): void {
   if (profile.practice_modes.length === 0) throw new Error("at least one practice mode is required");
-  if (profile.implementation_languages.length === 0 || !Number.isInteger(profile.implementation_variants) || profile.implementation_variants < 1) {
-    throw new Error("at least one implementation language and variant are required");
+  if (profile.implementation_languages.length === 0 || !Number.isInteger(profile.implementation_variants) || profile.implementation_variants < 0) {
+    throw new Error("at least one implementation language is required; variants must be 0 (auto) or a positive integer");
   }
   if (!profile.practice_modes.includes("code_recall") && profile.code_recall_assistance.length > 0) {
     throw new Error("code recall assistance requires the code_recall mode");

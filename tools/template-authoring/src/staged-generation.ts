@@ -57,8 +57,10 @@ function modePropertySchema(mode: ExtraPracticeMode): Record<string, unknown> {
 
 export function coreStageInstruction(baseInstruction: string, variants: number): string {
   const variantRule = variants > 1
-    ? ` Generate exactly ${variants} distinct implementation variants, each with its own lowercase-slug key and a strategy describing that variant. practice.shadow_typing must include exactly one item per implementation, each referencing its key.`
-    : " Generate exactly one implementation variant.";
+    ? ` Generate exactly ${variants} distinct implementation strategies, each with its own lowercase-slug key and a strategy describing that variant. practice.shadow_typing must include exactly one item per implementation, each referencing its key.`
+    : variants === 0
+      ? " Generate 1-3 genuinely distinct implementation strategies only when the problem warrants them (different algorithmic approaches or clear complexity trade-offs); prefer a single canonical strategy by default and never pad with artificial variants. practice.shadow_typing must include exactly one item per implementation, each referencing its key."
+      : " Generate exactly one implementation strategy.";
   return `${baseInstruction}\n\nThis is the CORE stage of a staged generation.${variantRule} tests/python_test.py must load the implementation with importlib.util.spec_from_file_location from the unit root; never use "from code.python import ..." because the Python standard library "code" module shadows the local package. Generate the complete manifest with shadow typing and flow recall populated, but leave practice.code_recall, practice.reasoning_recall, and practice.transfer_practice as empty arrays. Those projections are generated in separate follow-up stages.`;
 }
 

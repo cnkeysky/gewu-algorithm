@@ -55,7 +55,7 @@ flags:
   --provider ID     recorded provider metadata (default deepseek)
   --model ID        recorded model metadata (default deepseek-v4-flash)
   --language SLUG   implementation language (default python; overrides the catalog entry, e.g. --language java)
-  --variants N      implementation variants per unit (default 1)
+  --variants N      implementation strategy count (default auto: the model decides 1-3 meaningful strategies)
   --modes LIST      practice modes (default all five)
   --assistance LIST code recall assistance (default comments,cloze)
   --report PATH     JSON report output (default batch-report.json)
@@ -81,7 +81,8 @@ let provider;
 let model;
 let language = "python";
 let languageGiven = false;
-let variants = "1";
+let variants = "0";
+let variantsGiven = false;
 let modes;
 let assistance;
 let report = "batch-report.json";
@@ -103,7 +104,7 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--provider") provider = args[++i];
   else if (arg === "--model") model = args[++i];
   else if (arg === "--language") { language = args[++i]; languageGiven = true; }
-  else if (arg === "--variants") variants = args[++i];
+  else if (arg === "--variants") { variants = args[++i]; variantsGiven = true; }
   else if (arg === "--modes") modes = args[++i];
   else if (arg === "--assistance") assistance = args[++i];
   else if (arg === "--report") report = args[++i];
@@ -279,7 +280,7 @@ async function doRun() {
   if (provider) extraArgs.push("--provider", provider);
   if (model) extraArgs.push("--model", model);
   if (languageGiven) extraArgs.push("--language", language);
-  if (variants !== "1") extraArgs.push("--variants", variants);
+  if (variantsGiven) extraArgs.push("--variants", variants);
   if (modes) extraArgs.push("--modes", modes);
   if (assistance) extraArgs.push("--assistance", assistance);
 

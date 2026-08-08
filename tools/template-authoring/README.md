@@ -52,7 +52,7 @@ text or malformed arguments are rejected, with at most one bounded repair
 attempt.
 
 Generation requests may include a `GenerationProfile` to select several
-practice projections and implementation variants for one algorithm unit. The
+practice projections and implementation strategies for one algorithm unit. The
 profile is a request contract, not a second template format. The planned local
 authoring workbench is documented in
 [`docs/architecture/template-authoring-workbench.md`](../../docs/architecture/template-authoring-workbench.md).

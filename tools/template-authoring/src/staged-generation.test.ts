@@ -21,7 +21,9 @@ const CONTEXT = {
 test("core stage instruction keeps practice extras empty", () => {
   assert.match(coreStageInstruction("base", 1), /CORE stage/);
   assert.match(coreStageInstruction("base", 1), /leave practice\.code_recall/);
-  assert.match(coreStageInstruction("base", 2), /exactly 2 distinct implementation variants/);
+  assert.match(coreStageInstruction("base", 1), /exactly one implementation strategy/);
+  assert.match(coreStageInstruction("base", 0), /1-3 genuinely distinct implementation strategies/);
+  assert.match(coreStageInstruction("base", 2), /exactly 2 distinct implementation strategies/);
 });
 
 test("code recall stage embeds the canonical code and enforces verbatim slots", () => {

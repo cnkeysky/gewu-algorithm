@@ -65,7 +65,7 @@ root.innerHTML = `
       <div>
         <p class="eyebrow">Template authoring</p>
         <h1>Shape the next practice unit.</h1>
-        <p class="lede">Describe the algorithm once. GEWU will build one canonical unit with the practice projections you select.</p>
+        <p class="lede">Describe the algorithm once. GEWU will build one canonical unit with the practice projections you select; implementation strategies are inferred automatically (1–3 meaningful approaches only when the problem warrants them).</p>
       </div>
       <div class="stage-chip"><span>01</span><strong>Draft</strong><small>Not published</small></div>
     </section>
@@ -80,11 +80,11 @@ root.innerHTML = `
         </div>
         <div class="field-row">
           <label class="field"><span>Languages</span><input id="languages" value="python" /></label>
-          <label class="field"><span>Implementation variants <small class="catalog-note">Distinct strategies per unit</small></span><input id="variants" type="number" min="1" max="5" value="1" /></label>
         </div>
         <fieldset>
           <legend>Practice projections <label class="select-all"><input type="checkbox" id="select-all-modes" /><span>All modes</span></label></legend>
           <div class="mode-list">${modes.map((mode) => { const locked = mode.id === "shadow_typing" || mode.id === "flow_recall"; return `<label class="mode-option" title="${locked ? "Required by the unit contract" : ""}"><input type="checkbox" name="mode" value="${mode.id}" ${locked ? "checked disabled" : ""} /><span class="checkmark"></span><span><strong>${mode.label}</strong><small>${mode.hint}${locked ? " · core" : ""}</small></span></label>`; }).join("")}</div>
+          <p class="field-note">Each selected mode binds to the unit's implementation strategies — shadow typing exposes one option per strategy.</p>
         </fieldset>
         <fieldset id="assistance-fieldset" class="assistance-fieldset">
           <legend>Code recall assistance</legend>
@@ -777,7 +777,6 @@ function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "
 function loadDraftIntoForm(draft: DraftRecord): void {
   (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
   (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
-  (document.querySelector<HTMLInputElement>("#variants")!).value = String(draft.variants);
   (document.querySelector<HTMLSelectElement>("#provider")!).value = draft.provider;
   document.querySelector<HTMLSelectElement>("#provider")!.dispatchEvent(new Event("change"));
   (document.querySelector<HTMLSelectElement>("#model")!).value = draft.model;
@@ -1170,10 +1169,9 @@ function updateProfile(): void {
   const selectedAssistance = codeRecall ? selectedValues<Assistance>("assistance") : [];
   assistanceNote.textContent = codeRecall ? "These hints will be included in the code recall projection." : "Select Code recall above to enable these hints.";
   const language = (document.querySelector<HTMLInputElement>("#languages")!.value || "python").split(",").map((value) => value.trim()).filter(Boolean);
-  const variants = Math.min(5, Math.max(1, Number(document.querySelector<HTMLInputElement>("#variants")?.value ?? "1") || 1));
-  profileState.textContent = selectedModes.length > 0 && language.length > 0 && variants > 0 ? "Ready" : "Needs input";
+  profileState.textContent = selectedModes.length > 0 && language.length > 0 ? "Ready" : "Needs input";
   profileState.className = `valid-badge ${profileState.textContent === "Ready" ? "" : "warning"}`;
-  profileSummary.innerHTML = `<div class="summary-block"><span>Modes</span><div class="tag-list">${selectedModes.length ? selectedModes.map((mode) => `<span class="tag">${mode.replaceAll("_", " ")}</span>`).join("") : "<em>None selected</em>"}</div></div><div class="summary-block"><span>Assistance</span><div class="tag-list">${selectedAssistance.length ? selectedAssistance.map((item) => `<span class="tag muted">${item}</span>`).join("") : "<em>No hints selected</em>"}</div><small class="profile-note">${codeRecall ? "Applied to code recall." : "Configured, but inactive until code recall is selected."}</small></div><div class="summary-meta"><span>${language.join(", ")}</span><span>${variants} variant${variants > 1 ? "s" : ""}</span></div>`;
+  profileSummary.innerHTML = `<div class="summary-block"><span>Modes</span><div class="tag-list">${selectedModes.length ? selectedModes.map((mode) => `<span class="tag">${mode.replaceAll("_", " ")}</span>`).join("") : "<em>None selected</em>"}</div></div><div class="summary-block"><span>Assistance</span><div class="tag-list">${selectedAssistance.length ? selectedAssistance.map((item) => `<span class="tag muted">${item}</span>`).join("") : "<em>No hints selected</em>"}</div><small class="profile-note">${codeRecall ? "Applied to code recall." : "Configured, but inactive until code recall is selected."}</small></div><div class="summary-meta"><span>${language.join(", ")}</span><span>Implementation strategies: auto</span></div>`;
   const totalModes = document.querySelectorAll<HTMLInputElement>("input[name=mode]").length;
   const allSelected = totalModes > 0 && selectedModes.length === totalModes;
   selectAllModes.checked = allSelected;
@@ -1231,7 +1229,7 @@ form.addEventListener("submit", async (event) => {
     provider: document.querySelector<HTMLSelectElement>("#provider")!.value,
     model: document.querySelector<HTMLSelectElement>("#model")!.value,
     language: document.querySelector<HTMLInputElement>("#languages")!.value || "python",
-    variants: Math.min(5, Math.max(1, Number(document.querySelector<HTMLInputElement>("#variants")?.value ?? "1") || 1)),
+    variants: 0,
     modes: selectedModes,
     assistance: selectedModes.includes("code_recall") ? selectedValues<Assistance>("assistance") : [],
     status: "queued",

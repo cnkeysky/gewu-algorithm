@@ -18,7 +18,7 @@ test("parseOptions applies defaults and overrides", () => {
   assert.equal(defaults.autoAccept, false);
   assert.equal(defaults.language, "python");
   assert.equal(defaults.languageProvided, false);
-  assert.equal(defaults.variants, 1);
+  assert.equal(defaults.variants, 0);
   assert.deepEqual(defaults.modes, ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"]);
   assert.deepEqual(defaults.assistance, ["comments", "cloze"]);
 
