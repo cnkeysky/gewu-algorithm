@@ -8,6 +8,13 @@ allowed only with explicit migration notes (see
 
 ### Added
 
+- Batch authoring's per-request timeout is configurable via `--timeout-minutes`
+  (or `GEWU_BATCH_TIMEOUT_MINUTES`, default 60), because slow reasoning-mode
+  relays can exceed the previous fixed 10-minute limit.
+- Drafts gain a `failed` lifecycle status: a failed generation or contract
+  validation marks the draft failed with a stored error, the Drafts list shows
+  the error with Retry generation / Delete actions, and retrying is allowed
+  from the failed state.
 - LLM requests can be routed through a custom OpenAI-compatible relay/proxy:
   set `GEWU_LLM_PROVIDER=relay`, `GEWU_LLM_MODEL`, `GEWU_LLM_BASE_URL`, and
   `GEWU_LLM_API_KEY` (or reuse `DEEPSEEK_API_KEY`); the dev script and the

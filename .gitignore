@@ -72,6 +72,7 @@ Thumbs.db
 
 # Local dev runtime state
 .gewu-dev/
+batch-report.json
 
 # Keep application lockfiles committed:
 # Cargo.lock, package-lock.json, pnpm-lock.yaml, and yarn.lock.

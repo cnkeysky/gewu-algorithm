@@ -267,7 +267,7 @@ type PaginationKind = PracticeListName | "drafts" | "history" | "units";
 
 function filterDrafts(drafts: DraftRecord[]): DraftRecord[] {
   let filtered = drafts;
-  if (draftFilter === "attention") filtered = filtered.filter((draft) => draft.status === "needs_revision" || draft.status === "llm_reviewed");
+  if (draftFilter === "attention") filtered = filtered.filter((draft) => draft.status === "needs_revision" || draft.status === "llm_reviewed" || draft.status === "failed");
   if (draftFilter === "progress") filtered = filtered.filter((draft) => ["queued", "generated", "validated", "revision_requested"].includes(draft.status));
   if (draftFilter === "published") filtered = filtered.filter((draft) => draft.status === "accepted");
   if (draftLanguage !== "all") filtered = filtered.filter((draft) => draft.language === draftLanguage);
@@ -307,7 +307,7 @@ function renderLanguageOptions(select: HTMLSelectElement, languages: string[]): 
 function renderDraftFilters(allDrafts: DraftRecord[]): void {
   const groups: Array<{ key: DraftFilter; label: string; match: (draft: DraftRecord) => boolean }> = [
     { key: "all", label: "All", match: () => true },
-    { key: "attention", label: "Needs attention", match: (draft) => draft.status === "needs_revision" || draft.status === "llm_reviewed" },
+    { key: "attention", label: "Needs attention", match: (draft) => draft.status === "needs_revision" || draft.status === "llm_reviewed" || draft.status === "failed" },
     { key: "progress", label: "In progress", match: (draft) => ["queued", "generated", "validated", "revision_requested"].includes(draft.status) },
     { key: "published", label: "Published", match: (draft) => draft.status === "accepted" },
   ];
@@ -791,11 +791,12 @@ interface DraftRecord {
   variants: number;
   modes: PracticeMode[];
   assistance: Assistance[];
-  status: "draft" | "queued" | "generated" | "validated" | "llm_reviewed" | "needs_revision" | "revision_requested" | "accepted";
+  status: "draft" | "queued" | "generated" | "validated" | "llm_reviewed" | "needs_revision" | "revision_requested" | "accepted" | "failed";
   createdAt: string;
   artifactPath?: string;
   publishedPath?: string;
   unitId?: string;
+  error?: string;
 }
 interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; reportPath?: string; rationale?: string; createdAt: string; }
 interface ArtifactPayload { draft: DraftRecord; files: Record<string, string>; reviews: Array<ReviewRecord & { report?: { verdict?: string; findings?: Array<{ rule_id: string; severity: string; path: string; problem: string; evidence: string; suggested_change: string }> } }> }
@@ -858,7 +859,7 @@ function practiceOptionLabel(unitId: string | undefined, mode: PracticeMode | un
 function variantLabel(value: { unit_id?: string; mode?: string; implementation?: string; practice_id?: string }): string {
   return practiceOptionLabel(value.unit_id, value.mode as PracticeMode | undefined, value.practice_id, value.implementation);
 }
-function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM approved", needs_revision: "Needs revision", revision_requested: "Awaiting regeneration", accepted: "Human approved" })[status]; }
+function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM approved", needs_revision: "Needs revision", revision_requested: "Awaiting regeneration", accepted: "Human approved", failed: "Generation failed" })[status]; }
 function acceptanceLabel(draft: DraftRecord): string {
   if (draft.status !== "accepted") return statusLabel(draft.status);
   const reviews = readReviews().filter((review) => review.draftId === draft.id);
@@ -979,7 +980,7 @@ function renderUnits(): void {
     : `<div class="empty-state"><strong>${unitsSearch || unitsLanguage !== "all" ? "No published units match" : "No published units yet"}</strong><span>${unitsSearch || unitsLanguage !== "all" ? "Try another search or language filter." : "Approve a draft to publish it here."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
 }
 function draftStage(status: DraftRecord["status"]): number {
-  return status === "queued" || status === "revision_requested" ? 1 : status === "generated" ? 2 : status === "validated" || status === "needs_revision" ? 3 : status === "llm_reviewed" ? 4 : status === "accepted" ? 5 : 0;
+  return status === "queued" || status === "revision_requested" || status === "failed" ? 1 : status === "generated" ? 2 : status === "validated" || status === "needs_revision" ? 3 : status === "llm_reviewed" ? 4 : status === "accepted" ? 5 : 0;
 }
 function renderDrafts(): void {
   const allDrafts = readDrafts();
@@ -991,7 +992,7 @@ function renderDrafts(): void {
   const visibleDrafts = drafts.slice(draftPage * DRAFT_PAGE_SIZE, (draftPage + 1) * DRAFT_PAGE_SIZE);
   const empty = draftFilter === "attention" ? ["Nothing needs attention", "You are all caught up."] : draftFilter === "progress" ? ["No drafts in progress", "Start a draft to see it here."] : draftFilter === "published" ? ["No published units yet", "Approve a draft to publish it."] : draftLanguage !== "all" ? ["No drafts in this language", "Try another language filter."] : draftSearch ? ["No drafts match the search", "Try another title or problem query."] : ["No local drafts yet", "Create a draft to see it here."];
   draftList.innerHTML = drafts.length ? `<div class="paged-scroll">${visibleDrafts.map((draft) => {
-    const canGenerate = ["queued", "revision_requested"].includes(draft.status);
+    const canGenerate = ["queued", "revision_requested", "failed"].includes(draft.status);
     const canValidate = draft.status === "generated";
     const canReview = draft.status === "validated";
     const canAccept = draft.status === "llm_reviewed" || draft.status === "needs_revision" || (draft.status === "validated" && readReviews().some((review) => review.draftId === draft.id && review.role === "human_revision"));
@@ -1004,7 +1005,7 @@ function renderDrafts(): void {
     const stage = draftStage(draft.status);
     const actions = [
       draft.artifactPath ? `<button class="inline-action${draft.status === "needs_revision" ? " revision-action" : ""}" type="button" data-view-artifact-id="${draft.id}">${draft.status === "needs_revision" ? "Revise artifact" : "View artifact"}</button>` : "",
-      canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">${draft.status === "revision_requested" ? "Regenerate" : "Generate template"}</button>` : "",
+      canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">${draft.status === "revision_requested" ? "Regenerate" : draft.status === "failed" ? "Retry generation" : "Generate template"}</button>` : "",
       canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}" title="Run the three role reviews (algorithm correctness, learning design, provenance). All pass marks the draft LLM approved.">LLM pre-review</button>` : "",
       canAccept ? `<button class="inline-action approval-action${draft.status === "needs_revision" ? " override-action" : ""}" type="button" data-accept-id="${draft.id}">${draft.status === "needs_revision" ? "Approve anyway" : "Human approve"}</button>` : "",
@@ -1018,7 +1019,7 @@ function renderDrafts(): void {
     ].filter(Boolean).join("");
     const chip = (label: string, step: number) => `<b class="pipeline-${step < stage ? "done" : step === stage ? "current" : "pending"}">${label}</b>`;
     const separator = `<span class="pipeline-sep" aria-hidden="true">&#8250;</span>`;
-    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow">${chip("01 Generate", 1)}${separator}${chip("02 Validate", 2)}${separator}${chip("03 Review", 3)}${separator}${chip("04 Approve", 4)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${acceptanceLabel(draft)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
+    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small>${draft.error ? `<small class="draft-error" title="${escapeHtml(draft.error)}">${escapeHtml(draft.error)}</small>` : ""}<small class="draft-pipeline" aria-label="Draft workflow">${chip("01 Generate", 1)}${separator}${chip("02 Validate", 2)}${separator}${chip("03 Review", 3)}${separator}${chip("04 Approve", 4)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${acceptanceLabel(draft)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
   }).join("")}</div>${paginationHtml("drafts", draftPage, totalPages, drafts.length, DRAFT_PAGE_SIZE)}` : `<div class="empty-state"><strong>${empty[0]}</strong><span>${empty[1]}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
   renderWorkflow();
 }
@@ -1040,10 +1041,11 @@ function renderWorkflow(): void {
   const contractValid = ["validated", "llm_reviewed", "accepted"].includes(draft.status);
   const readyToValidate = draft.status === "generated";
   const awaitingRegeneration = draft.status === "revision_requested";
+  const generationFailed = draft.status === "failed";
   setStatus(
     validation,
-    awaitingRegeneration ? "Awaiting regeneration" : contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : draft.status === "needs_revision" ? "Blocked by revision" : "Pending",
-    awaitingRegeneration ? "ready" : contractValid ? "passed" : readyToValidate ? "ready" : draft.status === "needs_revision" ? "blocked" : "pending",
+    generationFailed ? "Blocked by failure" : awaitingRegeneration ? "Awaiting regeneration" : contractValid ? "Contract valid" : readyToValidate ? "Ready to validate" : draft.status === "needs_revision" ? "Blocked by revision" : "Pending",
+    generationFailed ? "blocked" : awaitingRegeneration ? "ready" : contractValid ? "passed" : readyToValidate ? "ready" : draft.status === "needs_revision" ? "blocked" : "pending",
   );
   const allDraftReviews = draftPersistence === "local" ? [] : readReviews().filter((item) => item.draftId === draft.id);
   const roleReviews = allDraftReviews.filter((item) => item.role !== "human_revision");

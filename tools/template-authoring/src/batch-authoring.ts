@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
  *   --variants <n>       implementation strategy count (default auto: the model decides 1-3 meaningful strategies)
  *   --modes <list>       practice modes (default all five)
  *   --assistance <list>  code recall assistance (default comments,cloze)
+ *   --timeout-minutes <n> per-request timeout for LLM-backed API calls (default 60)
  *   --report <path>      JSON report output (default batch-report.json)
  *
  * Defaults: all five practice modes are generated. Code recall expands to
@@ -78,6 +79,7 @@ type Options = {
   variants: number;
   modes: string[];
   assistance: string[];
+  timeoutMinutes: number;
   report: string;
 };
 
@@ -109,6 +111,8 @@ export function parseOptions(args: string[]): Options {
   if (steps.has("draft") && !steps.has("generate")) fail("draft without generate is not useful; include generate or drop draft");
   const modes = optionValue(args, "--modes")?.split(",").map((mode) => mode.trim()) ?? [...ALL_MODES];
   const assistance = optionValue(args, "--assistance")?.split(",").map((item) => item.trim()) ?? [...ALL_ASSISTANCE];
+  const timeoutMinutes = Number(optionValue(args, "--timeout-minutes") ?? process.env.GEWU_BATCH_TIMEOUT_MINUTES ?? "60");
+  if (!Number.isInteger(timeoutMinutes) || timeoutMinutes < 1) fail("--timeout-minutes must be a positive integer");
   const selectValue = optionValue(args, "--select");
   return {
     problemsFile,
@@ -130,6 +134,7 @@ export function parseOptions(args: string[]): Options {
     variants: Number(optionValue(args, "--variants") ?? "0"),
     modes,
     assistance,
+    timeoutMinutes,
     report: optionValue(args, "--report") ?? "batch-report.json",
   };
 }
@@ -191,7 +196,7 @@ type ApiResult = { ok: true; status: number; body: unknown } | { ok: false; stat
 
 async function apiRequest(options: Options, method: string, path: string, payload?: unknown): Promise<ApiResult> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10 * 60_000);
+  const timer = setTimeout(() => controller.abort(), options.timeoutMinutes * 60_000);
   try {
     const response = await fetch(`${options.api}${path}`, {
       method,

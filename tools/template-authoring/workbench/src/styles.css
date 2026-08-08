@@ -76,6 +76,8 @@ footer { display: flex; justify-content: space-between; margin-top: auto; paddin
 .status-llm_reviewed { color: #9b642f; background: #f8ecd9; }
 .status-needs_revision { color: #a85126; background: #fbe7dc; }
 .status-accepted { color: #1f7a4d; background: #dcf2e5; }
+.status-failed { color: #b3261e; background: #fde8e7; }
+.draft-error { color: #b3261e; font-size: 10px; margin-top: 4px; }
 .draft-list .empty-state { display: grid; place-content: center; gap: 6px; }
 
 /* Pagination polish: rounded controls, filled current page, clean jump */
@@ -217,6 +219,7 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .status-validated { color: #28654d; background: #e5f3eb; }
 .status-llm_reviewed { color: #356b82; background: #e8f2f6; }
 .status-needs_revision { color: #a85126; background: #fff0e5; }
+.status-failed { color: #b3261e; background: #fde8e7; }
 .status-accepted { color: #fff; background: var(--green); }
 .primary-action { border-color: #8dbca5; background: #e9f6ee; }
 .approval-action { border-color: var(--green); background: var(--green); color: #fff; }

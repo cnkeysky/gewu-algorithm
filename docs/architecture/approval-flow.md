@@ -17,6 +17,12 @@ revision.
 | `revision_requested` | Rolled back; awaiting regeneration with feedback | Awaiting regeneration |
 | `llm_reviewed` | All three pre-review roles passed (content gate) | LLM approved |
 | `accepted` | Published; approval tier recorded in the audit trail | Human approved / LLM approved |
+| `failed` | Generation or contract validation failed; error recorded | Generation failed |
+
+`failed` is a terminal error state outside the approval flow: it cannot enter
+validation, review, or approval. The only transitions are retry (generate),
+regenerate (rollback), or delete. The stored error message is shown in the
+Drafts list and is the diagnostic record for a failed run.
 
 Accepted drafts without a recorded acceptance tier default to **Human
 approved** (historically acceptance required a human); the upgrade button
@@ -27,15 +33,17 @@ only appears for units whose approval tier is `llm_acceptance`.
 The workbench API is the source of truth for the state machine — the UI only
 mirrors it. Every endpoint rejects invalid transitions:
 
-- `generate` only from `queued` / `revision_requested`;
+- `generate` only from `queued` / `revision_requested` / `failed`;
 - `validate` only from `generated`;
+- a failed `generate` or `validate` marks the draft `failed` and records the
+  error (the backend is the source of truth; the UI only mirrors it);
 - `reviews` only from `validated` (or `needs_revision` while completing the
   remaining roles for the same artifact);
 - `accept` only from `llm_reviewed`, `needs_revision` with an explicit
   `override` plus rationale, `validated` with a human revision, or the human
   upgrade of an already-`accepted` unit;
-- `rollback` (regenerate) only from `generated`, `llm_reviewed`, or
-  `needs_revision`.
+- `rollback` (regenerate) only from `generated`, `llm_reviewed`,
+  `needs_revision`, or `failed`.
 
 ## Transitions
 
@@ -53,6 +61,12 @@ queued ──generate──▶ generated ──validate──▶ validated ─�
 llm_reviewed / needs_revision ──accept──▶ accepted (published)
 accepted ──human upgrade──▶ Human approved   (human > llm; rationale recorded)
 accepted ──fork (Extend unit)──▶ new draft ──fix──▶ accept ──▶ new revision (r2)
+
+queued ──generate failure──▶ failed
+generated ──validate failure──▶ failed
+failed ──retry generate──▶ generated
+failed ──rollback──▶ revision_requested
+failed ──delete──▶ (removed)
 ```
 
 ## Approval hierarchy

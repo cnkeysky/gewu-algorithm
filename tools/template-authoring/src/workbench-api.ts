@@ -46,10 +46,11 @@ try { database.exec("ALTER TABLE drafts ADD COLUMN published_path TEXT"); } catc
 try { database.exec("ALTER TABLE drafts ADD COLUMN unit_id TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE reviews ADD COLUMN rationale TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE reviews ADD COLUMN report_path TEXT"); } catch { /* Existing database already has the column. */ }
+try { database.exec("ALTER TABLE drafts ADD COLUMN error TEXT"); } catch { /* Existing database already has the column. */ }
 database.exec("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
 database.prepare("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)").run("authoring_schema", "2");
 
-type DraftStatus = "draft" | "queued" | "generated" | "validated" | "llm_reviewed" | "needs_revision" | "revision_requested" | "accepted";
+type DraftStatus = "draft" | "queued" | "generated" | "validated" | "llm_reviewed" | "needs_revision" | "revision_requested" | "accepted" | "failed";
 type DraftRecord = {
   id: string;
   taskId?: string;
@@ -66,6 +67,7 @@ type DraftRecord = {
   unitId?: string;
   artifactPath?: string;
   publishedPath?: string;
+  error?: string;
 };
 type ReviewRecord = {
   id: string;
@@ -103,10 +105,10 @@ class DraftInputError extends Error {
 }
 
 function loadState(): State {
-  const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path FROM drafts ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
+  const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error FROM drafts ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
   const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at FROM reviews ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
   return {
-    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), unitId: row.unit_id ? String(row.unit_id) : undefined, artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined })),
+    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), unitId: row.unit_id ? String(row.unit_id) : undefined, artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined, error: row.error ? String(row.error) : undefined })),
     reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, reportPath: row.report_path ? String(row.report_path) : undefined, rationale: row.rationale ? String(row.rationale) : undefined, createdAt: String(row.created_at) })),
   };
 }
@@ -115,8 +117,8 @@ function saveState(state: State): void {
   database.exec("BEGIN");
   try {
     database.exec("DELETE FROM reviews; DELETE FROM drafts;");
-    const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.unitId ?? null, draft.artifactPath ?? null, draft.publishedPath ?? null);
+    const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.unitId ?? null, draft.artifactPath ?? null, draft.publishedPath ?? null, draft.error ?? null);
     const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.reportPath ?? null, review.rationale ?? null, review.createdAt);
     database.exec("COMMIT");
@@ -494,6 +496,7 @@ const server = createServer(async (request, response) => {
       updated.status = "queued";
       updated.artifactPath = undefined;
       updated.publishedPath = undefined;
+      updated.error = undefined;
       validatePersistedDraft(updated);
       state.drafts = state.drafts.map((item) => item.id === draft.id ? updated : item);
       state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
@@ -504,19 +507,28 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && generationMatch) {
       const draft = state.drafts.find((item) => item.id === generationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (!["queued", "revision_requested"].includes(draft.status)) return send(response, 409, { error: "only a queued or revision-requested draft can be generated" });
+      if (!["queued", "revision_requested", "failed"].includes(draft.status)) return send(response, 409, { error: "only a queued, failed, or revision-requested draft can be generated" });
       const generationPayload = await body(request).catch(() => ({}));
       const generationOverrides = isRecord(generationPayload) && (typeof generationPayload.provider === "string" || typeof generationPayload.model === "string")
         ? { provider: typeof generationPayload.provider === "string" ? generationPayload.provider : undefined, model: typeof generationPayload.model === "string" ? generationPayload.model : undefined }
         : undefined;
-      const generated = await generateDraft(draft, state.reviews, generationOverrides);
-      draft.status = "generated";
-      draft.artifactPath = generated.artifactPath;
-      draft.provider = generated.provider;
-      draft.model = generated.model;
-      await pruneUnreferencedArtifacts(draft, state.reviews);
-      await saveState(state);
-      return send(response, 200, { status: "generated", provider: generated.provider, model: generated.model, artifactPath: generated.artifactPath });
+      try {
+        const generated = await generateDraft(draft, state.reviews, generationOverrides);
+        draft.status = "generated";
+        draft.artifactPath = generated.artifactPath;
+        draft.provider = generated.provider;
+        draft.model = generated.model;
+        draft.error = undefined;
+        await pruneUnreferencedArtifacts(draft, state.reviews);
+        await saveState(state);
+        return send(response, 200, { status: "generated", provider: generated.provider, model: generated.model, artifactPath: generated.artifactPath });
+      } catch (error) {
+        draft.status = "failed";
+        draft.error = error instanceof Error ? error.message : String(error);
+        draft.artifactPath = undefined;
+        await saveState(state);
+        return send(response, 422, { status: "failed", error: draft.error, draft });
+      }
     }
     const validationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/validate$/);
     if (request.method === "POST" && validationMatch) {
@@ -524,9 +536,20 @@ const server = createServer(async (request, response) => {
       if (!draft) return send(response, 404, { error: "draft not found" });
       if (!draft.artifactPath || draft.status !== "generated") return send(response, 409, { error: "generate the draft before deterministic validation" });
       const errors = validateDraft(draft);
-      if (errors.length > 0) return send(response, 422, { status: "failed", errors });
-      try { await validateArtifactWithRust(artifactAbsolutePath(draft), false); } catch (error) { return send(response, 422, { status: "failed", errors: [error instanceof Error ? error.message : String(error)] }); }
+      if (errors.length > 0) {
+        draft.status = "failed";
+        draft.error = errors.join("; ");
+        await saveState(state);
+        return send(response, 422, { status: "failed", errors, draft });
+      }
+      try { await validateArtifactWithRust(artifactAbsolutePath(draft), false); } catch (error) {
+        draft.status = "failed";
+        draft.error = error instanceof Error ? error.message : String(error);
+        await saveState(state);
+        return send(response, 422, { status: "failed", errors: [draft.error], draft });
+      }
       draft.status = "validated";
+      draft.error = undefined;
       await saveState(state);
       return send(response, 200, { status: "passed", draft });
     }
@@ -718,12 +741,13 @@ const server = createServer(async (request, response) => {
       // The backend is the source of truth for the state machine: regenerate
       // is only valid from a fresh generation, an LLM-approved draft, or a
       // draft whose pre-review failed — matching the UI.
-      if (!["generated", "llm_reviewed", "needs_revision"].includes(draft.status)) {
-        return send(response, 409, { error: "regenerate is only available after generation, after LLM approval, or after a failed pre-review" });
+      if (!["generated", "llm_reviewed", "needs_revision", "failed"].includes(draft.status)) {
+        return send(response, 409, { error: "regenerate is only available after generation, after LLM approval, after a failed pre-review, or after a failed generation" });
       }
       draft.status = "revision_requested";
       draft.artifactPath = undefined;
       draft.publishedPath = undefined;
+      draft.error = undefined;
       await saveState(state);
       return send(response, 200, { status: "revision_requested", draft });
     }
