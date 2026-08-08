@@ -100,7 +100,7 @@ root.innerHTML = `
     <section id="practice-view" class="app-view panel page-panel" hidden>
       <div class="practice-heading panel-heading"><div><p class="eyebrow">Core practice / local first</p><h2>Practice workspace</h2><p class="page-subtitle">Choose a unit, start one projection, and keep the current state visible while you work.</p></div><span class="connection-badge" id="practice-connection">Core offline</span></div>
       <form id="practice-start" class="practice-controls">
-        <label class="field"><span>Algorithm unit</span><select id="practice-unit"><option>Loading units...</option></select></label>
+        <label class="field"><span>Algorithm unit</span><input id="practice-unit-search" class="unit-search" type="search" placeholder="Search title or id…" aria-label="Search practice units" /><select id="practice-unit"><option>Loading units...</option></select></label>
         <label class="field"><span>Language</span><select id="practice-language"><option value="">Language…</option></select></label>
         <label class="field"><span>Practice mode</span><select id="practice-mode">${modes.map((mode) => `<option value="${mode.id}">${mode.label}</option>`).join("")}</select></label>
         <label class="field"><span id="practice-option-label">Practice variant <small class="catalog-note">Reviewed choices from this unit</small></span><select id="practice-id"><option value="">Default reviewed variant</option></select></label>
@@ -132,7 +132,7 @@ root.innerHTML = `
     </section>
     <section id="drafts-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
-      <div class="filter-row"><div class="filter-pills" id="draft-filters"></div><select id="draft-language" class="filter-select" aria-label="Filter drafts by language"><option value="all">All languages</option></select></div>
+      <div class="filter-row"><div class="filter-pills" id="draft-filters"></div><span class="filter-tools"><input id="draft-search" class="filter-search" type="search" placeholder="Search title or problem…" aria-label="Search drafts" /><select id="draft-language" class="filter-select" aria-label="Filter drafts by language"><option value="all">All languages</option></select></span></div>
       <div class="draft-list" id="draft-list"></div>
       <p class="view-note">Generated artifacts and LLM pre-review reports remain inspectable; only Human approve promotes a draft.</p>
     </section>
@@ -227,6 +227,8 @@ let historyFilter: HistoryFilter = "all";
 let draftLanguage = "all";
 let historyLanguage = "all";
 let practiceLanguage = "";
+let practiceUnitSearch = "";
+let draftSearch = "";
 
 type PaginationKind = PracticeListName | "drafts" | "history";
 
@@ -236,6 +238,10 @@ function filterDrafts(drafts: DraftRecord[]): DraftRecord[] {
   if (draftFilter === "progress") filtered = filtered.filter((draft) => ["queued", "generated", "validated", "revision_requested"].includes(draft.status));
   if (draftFilter === "published") filtered = filtered.filter((draft) => draft.status === "accepted");
   if (draftLanguage !== "all") filtered = filtered.filter((draft) => draft.language === draftLanguage);
+  if (draftSearch) {
+    const query = draftSearch.trim().toLowerCase();
+    filtered = filtered.filter((draft) => draft.title.toLowerCase().includes(query) || draft.problem.toLowerCase().includes(query) || draft.id.toLowerCase().includes(query));
+  }
   return filtered;
 }
 function filterReviews(reviews: ReviewRecord[]): ReviewRecord[] {
@@ -688,14 +694,15 @@ function renderPracticeUnits(): void {
   const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit");
   if (!unitSelect) return;
   const previous = unitSelect.value;
-  // Units without any practice option in the selected language are hidden so
-  // starting practice can never be blocked by an empty variant list.
-  const units = practiceLanguage
-    ? practiceUnits.filter((unit) => unit.practice_options.some((option) => option.language === practiceLanguage))
-    : practiceUnits;
+  // The unit list only ever contains units the Core serves (published units
+  // and valid content roots), so the search filters practicable units only.
+  const query = practiceUnitSearch.trim().toLowerCase();
+  const units = practiceUnits
+    .filter((unit) => !practiceLanguage || unit.practice_options.some((option) => option.language === practiceLanguage))
+    .filter((unit) => !query || unit.title.toLowerCase().includes(query) || unit.id.toLowerCase().includes(query));
   unitSelect.innerHTML = units.length
     ? units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("")
-    : `<option value="">No units in ${practiceLanguage}</option>`;
+    : `<option value="">${query ? "No units match the search" : `No units in ${practiceLanguage}`}</option>`;
   if (units.some((unit) => unit.id === previous)) unitSelect.value = previous;
 }
 
@@ -809,7 +816,7 @@ function renderDrafts(): void {
   const totalPages = Math.max(1, Math.ceil(drafts.length / DRAFT_PAGE_SIZE));
   draftPage = Math.min(draftPage, totalPages - 1);
   const visibleDrafts = drafts.slice(draftPage * DRAFT_PAGE_SIZE, (draftPage + 1) * DRAFT_PAGE_SIZE);
-  const empty = draftFilter === "attention" ? ["Nothing needs attention", "You are all caught up."] : draftFilter === "progress" ? ["No drafts in progress", "Start a draft to see it here."] : draftFilter === "published" ? ["No published units yet", "Approve a draft to publish it."] : draftLanguage !== "all" ? ["No drafts in this language", "Try another language filter."] : ["No local drafts yet", "Create a draft to see it here."];
+  const empty = draftFilter === "attention" ? ["Nothing needs attention", "You are all caught up."] : draftFilter === "progress" ? ["No drafts in progress", "Start a draft to see it here."] : draftFilter === "published" ? ["No published units yet", "Approve a draft to publish it."] : draftLanguage !== "all" ? ["No drafts in this language", "Try another language filter."] : draftSearch ? ["No drafts match the search", "Try another title or problem query."] : ["No local drafts yet", "Create a draft to see it here."];
   draftList.innerHTML = drafts.length ? `<div class="paged-scroll">${visibleDrafts.map((draft) => {
     const canGenerate = ["queued", "revision_requested"].includes(draft.status);
     const canValidate = draft.status === "generated";
@@ -1213,8 +1220,18 @@ document.querySelector<HTMLSelectElement>("#practice-language")!.addEventListene
   renderPracticeUnits();
   renderPracticeOptions();
 });
+document.querySelector<HTMLInputElement>("#practice-unit-search")!.addEventListener("input", (event) => {
+  practiceUnitSearch = (event.target as HTMLInputElement).value;
+  renderPracticeUnits();
+  renderPracticeOptions();
+});
 document.querySelector<HTMLSelectElement>("#draft-language")!.addEventListener("change", (event) => {
   draftLanguage = (event.target as HTMLSelectElement).value;
+  draftPage = 0;
+  renderDrafts();
+});
+document.querySelector<HTMLInputElement>("#draft-search")!.addEventListener("input", (event) => {
+  draftSearch = (event.target as HTMLInputElement).value;
   draftPage = 0;
   renderDrafts();
 });

@@ -107,6 +107,12 @@ allowed only with explicit migration notes (see
   model, and the README now states that batch authoring needs only the
   authoring API and LLM key — the web client and Rust Core are not required
   for generation.
+- The practice workspace gains a unit search box that filters the units the
+  Core serves (published units and valid content roots — unpublished drafts
+  never appear), and the Drafts view gains a title / problem / id search that
+  stacks with the status and language filters. The authoring intro lede now
+  wraps instead of forcing horizontal overflow (the global `white-space:
+  nowrap` on `.lede` broke the view once the copy grew).
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

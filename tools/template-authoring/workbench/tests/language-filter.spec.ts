@@ -69,3 +69,41 @@ test("review history language filter joins drafts for labels and narrowing", asy
   await expect(rows.first()).toContainText("Java unit");
   await expect(rows.first()).toContainText("java");
 });
+
+test("practice unit search only filters units the Core serves", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+
+  const unitSelect = page.locator("#practice-unit");
+  await expect(unitSelect.locator("option")).toHaveCount(4);
+  await page.locator("#practice-unit-search").fill("binary");
+  await expect(unitSelect.locator("option")).toHaveCount(1);
+  await expect(unitSelect.locator("option")).toHaveText(/Binary Search/);
+
+  await page.locator("#practice-unit-search").fill("no-such-unit");
+  await expect(unitSelect.locator("option")).toHaveText("No units match the search");
+});
+
+test("drafts search filters by title, problem, or id", async ({ page }) => {
+  const drafts = [
+    draft("Two Sum", "python", 0),
+    draft("Valid Parentheses", "python", 1),
+    draft("Course Schedule", "java", 2),
+  ];
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Drafts/ }).click();
+
+  const rows = page.locator(".draft-row");
+  await expect(rows).toHaveCount(3);
+  await page.locator("#draft-search").fill("valid");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Valid Parentheses");
+  await page.locator("#draft-search").fill("draft-2");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("Course Schedule");
+  await page.locator("#draft-search").fill("missing");
+  await expect(rows).toHaveCount(0);
+});
