@@ -34,6 +34,10 @@ project-specific lessons.
    with notes. Small changes stay in `[Unreleased]`.
 8. **Confirm before acting** on breaking changes, API changes, UI overhauls,
    releases, and data deletion; otherwise proceed and report.
+9. **Security and data.** Never commit secrets; audit `.gitignore` before
+   committing. Use idempotent migrations for schema changes and define
+   fallbacks for existing data. Throttle high-frequency persistence in
+   local-first apps.
 
 ## Required closure after every change
 
