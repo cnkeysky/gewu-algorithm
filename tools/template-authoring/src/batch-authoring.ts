@@ -1,5 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -18,7 +20,10 @@ import { fileURLToPath } from "node:url";
  *   --api <url>          workbench API base (default http://127.0.0.1:4174)
  *   --steps <list>       comma list of draft,generate,validate,review,accept (default all)
  *   --concurrency <n>    parallel problems (default 1)
- *   --resume             skip problems already accepted in the store
+ *   --resume             kept for compatibility; deduplication is the default
+ *   --force              regenerate problems even when an accepted unit covers them
+ *   --yes                skip duplicate prompts (default when not a TTY)
+ *   --select <ids>       run only the given ids/slugs/titles (comma list)
  *   --repair-rounds <n>  regenerate from review feedback after needs_revision (default 1)
  *   --auto-accept        accept needs_revision drafts with an explicit rationale record
  *   --provider, --model  recorded metadata on the draft (generation uses server env)
@@ -40,6 +45,8 @@ type BatchProblem = {
   problem: string;
   sourceUrl?: string;
   id?: string;
+  slug?: string;
+  language?: string;
 };
 
 type Options = {
@@ -48,6 +55,9 @@ type Options = {
   steps: Set<Step>;
   concurrency: number;
   resume: boolean;
+  force: boolean;
+  yes: boolean;
+  select: string[];
   repairRounds: number;
   autoAccept: boolean;
   provider?: string;
@@ -61,7 +71,7 @@ type Options = {
 
 function fail(message: string): never {
   console.error(`batch-authoring: ${message}`);
-  console.error("usage: node dist/batch-authoring.js --problems <file.json|tsv> [--api url] [--steps draft,generate,validate,review,accept] [--concurrency n] [--resume] [--repair-rounds n] [--auto-accept] [--language python] [--variants 1] [--modes ...] [--assistance ...] [--report path]");
+  console.error("usage: node dist/batch-authoring.js --problems <file.json|tsv> [--api url] [--steps draft,generate,validate,review,accept] [--concurrency n] [--force] [--yes] [--select id1,id2] [--repair-rounds n] [--auto-accept] [--language python] [--variants 1] [--modes ...] [--assistance ...] [--report path]");
   process.exit(2);
 }
 
@@ -77,14 +87,19 @@ export function parseOptions(args: string[]): Options {
   const stepsValue = optionValue(args, "--steps");
   const steps = new Set<Step>(stepsValue ? stepsValue.split(",").map((step) => step.trim() as Step) : [...ALL_STEPS]);
   for (const step of steps) if (!(ALL_STEPS as readonly string[]).includes(step)) fail(`unknown step: ${step}`);
+  if (steps.has("draft") && !steps.has("generate")) fail("draft without generate is not useful; include generate or drop draft");
   const modes = optionValue(args, "--modes")?.split(",").map((mode) => mode.trim()) ?? [...ALL_MODES];
   const assistance = optionValue(args, "--assistance")?.split(",").map((item) => item.trim()) ?? [...ALL_ASSISTANCE];
+  const selectValue = optionValue(args, "--select");
   return {
     problemsFile,
     api: api.replace(/\/+$/, ""),
     steps,
     concurrency: Number(optionValue(args, "--concurrency") ?? "1"),
     resume: args.includes("--resume"),
+    force: args.includes("--force"),
+    yes: args.includes("--yes"),
+    select: selectValue ? selectValue.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean) : [],
     repairRounds: Number(optionValue(args, "--repair-rounds") ?? "1"),
     autoAccept: args.includes("--auto-accept"),
     provider: optionValue(args, "--provider"),
@@ -103,12 +118,28 @@ export async function loadProblems(path: string): Promise<BatchProblem[]> {
   if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
     const parsed = JSON.parse(trimmed) as BatchProblem[] | BatchProblem;
     const list = Array.isArray(parsed) ? parsed : [parsed];
-    return list.map((item) => ({ ...item, problem: String(item.problem).trim() }));
+    return list.map((item) => ({ ...item, problem: String(item.problem ?? "").trim() }));
   }
-  return trimmed.split("\n").filter(Boolean).map((line) => {
+  const lines = trimmed.split("\n").filter(Boolean).map((line) => {
     const [title, problem, sourceUrl] = line.split("\t").map((part) => part.trim());
     if (!title || !problem) throw new Error(`invalid TSV line: ${line.slice(0, 80)}`);
     return { title, problem, sourceUrl };
+  });
+  return lines;
+}
+
+/**
+ * Restrict a problem list to the requested ids/slugs/titles. Matching is
+ * case-insensitive: exact on `id` and `slug`, exact-or-substring on `title`.
+ * An empty selection returns the full list.
+ */
+export function selectProblems(problems: BatchProblem[], select: string[]): BatchProblem[] {
+  if (select.length === 0) return problems;
+  return problems.filter((problem) => {
+    const id = String(problem.id ?? "").toLowerCase();
+    const slug = String(problem.slug ?? "").toLowerCase();
+    const title = String(problem.title ?? "").toLowerCase();
+    return select.some((wanted) => id === wanted || slug === wanted || title === wanted || title.includes(wanted));
   });
 }
 
@@ -139,19 +170,61 @@ function draftError(result: ApiResult): string {
   return body.error ?? body.errors?.join("; ") ?? `HTTP ${result.status}`;
 }
 
-async function listAcceptedProblems(options: Options): Promise<Set<string>> {
+type AcceptedUnit = { draftId: string; unitId?: string; modes: Set<string> };
+
+class RunAborted extends Error {}
+
+type RunContext = {
+  duplicatePolicy: "ask" | "skip" | "force";
+  promptChain: Promise<void>;
+  aborted: boolean;
+};
+
+async function askDuplicate(problem: BatchProblem, accepted: AcceptedUnit): Promise<"skip" | "force" | "forceAll" | "quit"> {
+  const rl = createInterface({ input, output });
+  try {
+    const answer = (await rl.question(
+      `\n[duplicate] "${problem.title}" is already covered by an accepted unit (modes: ${[...accepted.modes].join(", ")}).\n` +
+        "  s) skip (default)\n" +
+        "  r) regenerate this problem as a new revision\n" +
+        "  a) regenerate all remaining duplicates\n" +
+        "  q) quit\n" +
+        "choose [s/r/a/q]: ",
+    )).trim().toLowerCase();
+    if (answer === "r") return "force";
+    if (answer === "a") return "forceAll";
+    if (answer === "q") return "quit";
+    return "skip";
+  } finally {
+    rl.close();
+  }
+}
+
+async function acceptedByProblem(options: Options): Promise<Map<string, AcceptedUnit>> {
   const result = await apiRequest(options, "GET", "/api/drafts");
   if (!result.ok) throw new Error(`cannot list drafts: ${draftError(result)}`);
-  const body = result.body as { drafts?: Array<{ problem: string; status: string }> };
-  return new Set((body.drafts ?? []).filter((draft) => draft.status === "accepted").map((draft) => draft.problem.trim()));
+  const drafts = (result.body as { drafts?: Array<{ id: string; problem: string; status: string; modes?: string[]; unitId?: string }> }).drafts ?? [];
+  const map = new Map<string, AcceptedUnit>();
+  for (const draft of drafts) {
+    if (draft.status !== "accepted") continue;
+    const problem = String(draft.problem ?? "").trim();
+    if (!problem) continue;
+    const modes = new Set(draft.modes ?? []);
+    const existing = map.get(problem);
+    if (existing) for (const mode of existing.modes) modes.add(mode);
+    map.set(problem, { draftId: draft.id, unitId: draft.unitId, modes });
+  }
+  return map;
 }
 
 type ItemResult = {
   title: string;
   status: "accepted" | "needs_review" | "failed" | "skipped";
   draftId?: string;
+  draftSource?: string;
   unitId?: string;
   publishedPath?: string;
+  reason?: string;
   error?: string;
   reviewVerdicts?: Record<string, string>;
   repairRoundsUsed?: number;
@@ -179,25 +252,81 @@ async function runReviews(options: Options, draftId: string): Promise<{ verdicts
   return { verdicts, allPassed: Object.values(verdicts).every((verdict) => verdict === "pass") };
 }
 
-async function processProblem(options: Options, problem: BatchProblem): Promise<ItemResult> {
+async function processProblem(
+  options: Options,
+  problem: BatchProblem,
+  acceptedMap: Map<string, AcceptedUnit>,
+  context: RunContext,
+): Promise<ItemResult> {
   const base: ItemResult = { title: problem.title, status: "failed" };
+  let duplicatePolicy = context.duplicatePolicy;
   try {
-    if (options.resume && (await listAcceptedProblems(options)).has(problem.problem)) {
-      return { ...base, status: "skipped" };
+    const accepted = acceptedMap.get(problem.problem);
+    const covered = accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
+    if (accepted && covered && !options.force) {
+      if (duplicatePolicy === "ask") {
+        const outcome = await new Promise<"skip" | "force" | "forceAll" | "quit">((resolveOutcome) => {
+          context.promptChain = context.promptChain.then(async () => {
+            if (context.aborted) {
+              resolveOutcome("quit");
+              return;
+            }
+            try {
+              resolveOutcome(await askDuplicate(problem, accepted));
+            } catch {
+              resolveOutcome("skip");
+            }
+          });
+        });
+        if (outcome === "force" || outcome === "forceAll") {
+          if (outcome === "forceAll") context.duplicatePolicy = "force";
+          duplicatePolicy = "force";
+        } else if (outcome === "quit") {
+          context.aborted = true;
+          throw new RunAborted("aborted by user");
+        } else {
+          duplicatePolicy = "skip";
+        }
+      }
+      if (duplicatePolicy === "skip") {
+        return { ...base, status: "skipped", reason: "already covered by accepted unit (use --force to regenerate)" };
+      }
     }
     if (!options.steps.has("draft")) fail("draft step must be enabled to resolve a draft id");
-    const draftResult = await apiRequest(options, "POST", "/api/drafts", {
-      title: problem.title,
-      problem: problem.problem,
-      provider: options.provider ?? "deepseek",
-      model: options.model ?? "deepseek-v4-flash",
-      language: options.language,
-      variants: options.variants,
-      modes: options.modes,
-      assistance: options.modes.includes("code_recall") ? options.assistance : [],
-    });
-    if (!draftResult.ok) return { ...base, status: "failed", error: `draft: ${draftError(draftResult)}` };
-    const draftId = String((draftResult.body as { draft?: { id?: string } }).draft?.id ?? "");
+
+    let draftId: string;
+    const language = problem.language ?? options.language;
+    if (accepted !== undefined && (options.force || duplicatePolicy === "force" || !covered)) {
+      // Regenerate or extend the existing unit as a new revision.
+      const fork = await apiRequest(options, "POST", `/api/drafts/${accepted.draftId}/fork`);
+      if (!fork.ok) return { ...base, status: "failed", error: `fork: ${draftError(fork)}` };
+      draftId = String((fork.body as { draft?: { id?: string } }).draft?.id ?? "");
+      const patch = await apiRequest(options, "PATCH", `/api/drafts/${draftId}`, {
+        title: problem.title,
+        problem: problem.problem,
+        provider: options.provider ?? "deepseek",
+        model: options.model ?? "deepseek-v4-flash",
+        language,
+        variants: options.variants,
+        modes: options.modes,
+        assistance: options.modes.includes("code_recall") ? options.assistance : [],
+      });
+      if (!patch.ok) return { ...base, status: "failed", error: `fork update: ${draftError(patch)}` };
+      base.draftSource = accepted.unitId ? `revision of ${accepted.unitId}` : `revision of ${accepted.draftId}`;
+    } else {
+      const draftResult = await apiRequest(options, "POST", "/api/drafts", {
+        title: problem.title,
+        problem: problem.problem,
+        provider: options.provider ?? "deepseek",
+        model: options.model ?? "deepseek-v4-flash",
+        language,
+        variants: options.variants,
+        modes: options.modes,
+        assistance: options.modes.includes("code_recall") ? options.assistance : [],
+      });
+      if (!draftResult.ok) return { ...base, status: "failed", error: `draft: ${draftError(draftResult)}` };
+      draftId = String((draftResult.body as { draft?: { id?: string } }).draft?.id ?? "");
+    }
     base.draftId = draftId;
 
     if (options.steps.has("generate")) {
@@ -253,6 +382,7 @@ async function processProblem(options: Options, problem: BatchProblem): Promise<
     }
     return { ...base, status: "needs_review", reviewVerdicts };
   } catch (error) {
+    if (error instanceof RunAborted) throw error;
     return { ...base, status: "failed", error: error instanceof Error ? error.message : String(error) };
   }
 }
@@ -261,20 +391,41 @@ async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   if (!Number.isInteger(options.concurrency) || options.concurrency < 1) fail("--concurrency must be a positive integer");
   if (!Number.isInteger(options.variants) || options.variants < 1) fail("--variants must be a positive integer");
-  const problems = await loadProblems(options.problemsFile);
+  const loaded = await loadProblems(options.problemsFile);
+  const withStatements = loaded.filter((problem) => problem.problem.length > 0);
+  const empty = loaded.length - withStatements.length;
+  const problems = selectProblems(withStatements, options.select);
+  const deselected = withStatements.length - problems.length;
+  if (empty > 0) console.log(`batch-authoring: skipped ${empty} entries without a problem statement`);
+  if (deselected > 0) console.log(`batch-authoring: selected ${problems.length} of ${withStatements.length} problems (--select)`);
   if (problems.length === 0) fail("problems file contains no entries");
-  console.log(`batch-authoring: ${problems.length} problems, steps=[${[...options.steps].join(",")}], concurrency=${options.concurrency}${options.resume ? ", resume" : ""}`);
+  console.log(`batch-authoring: ${problems.length} problems, steps=[${[...options.steps].join(",")}], concurrency=${options.concurrency}${options.force ? ", force" : ", dedupe-covered"}${options.select.length > 0 ? `, select=[${options.select.join(",")}]` : ""}`);
+
+  const acceptedMap = await acceptedByProblem(options);
+  const context: RunContext = {
+    duplicatePolicy: options.yes || !process.stdin.isTTY ? "skip" : "ask",
+    promptChain: Promise.resolve(),
+    aborted: false,
+  };
 
   const results: ItemResult[] = [];
   const queue = [...problems];
   const workers = Array.from({ length: Math.min(options.concurrency, problems.length) }, async () => {
     for (; ; ) {
+      if (context.aborted) return;
       const problem = queue.shift();
       if (!problem) return;
-      const result = await processProblem(options, problem);
+      let result: ItemResult;
+      try {
+        result = await processProblem(options, problem, acceptedMap, context);
+      } catch (error) {
+        if (error instanceof RunAborted) return;
+        throw error;
+      }
       results.push(result);
       const label = result.status === "accepted" ? "OK" : result.status === "skipped" ? "--" : result.status === "needs_review" ? "!!" : "XX";
-      console.log(`[${label}] ${problem.title}${result.draftId ? ` (draft ${result.draftId})` : ""}${result.error ? ` — ${result.error}` : ""}${result.reviewVerdicts ? ` — ${JSON.stringify(result.reviewVerdicts)}` : ""}`);
+      const source = result.draftSource ? ` (${result.draftSource})` : result.draftId ? ` (draft ${result.draftId})` : "";
+      console.log(`[${label}] ${problem.title}${source}${result.reason ? ` — ${result.reason}` : ""}${result.error ? ` — ${result.error}` : ""}${result.reviewVerdicts ? ` — ${JSON.stringify(result.reviewVerdicts)}` : ""}`);
     }
   });
   await Promise.all(workers);
@@ -290,6 +441,10 @@ async function main(): Promise<void> {
   };
   await writeFile(resolve(options.report), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
   console.log(`batch-authoring: done — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped. Report: ${options.report}`);
+  if (context.aborted) {
+    console.error("batch-authoring: aborted by user; partial results written to the report");
+    process.exitCode = 1;
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

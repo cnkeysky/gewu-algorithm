@@ -6,6 +6,14 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+### Added
+
+- Batch authoring ships `tools/template-authoring/hot100.json`: the current
+  LeetCode Hot 100 from the official study plan (Chinese statements, clean
+  Markdown), with every entry pinned to `language: "python"` so batch runs
+  only generate Python templates. `npm run fetch:hot100` refreshes the catalog
+  from LeetCode.
+
 ### Changed
 
 - Practice variant options use humanized short titles (for example `Comments`,
@@ -26,7 +34,13 @@ allowed only with explicit migration notes (see
   pre-review (all roles concurrently), repair rounds from review feedback, and
   optional automated acceptance with an explicit audit-trail rationale. It
   defaults to all five practice modes and every code recall layout, supports
-  `--resume`, `--concurrency`, `--steps`, `--repair-rounds`, and `--auto-accept`.
+  `--concurrency`, `--steps`, `--repair-rounds`, and `--auto-accept`.
+- Batch authoring duplicate handling is interactive: when a problem is already
+  covered by an accepted unit the CLI asks whether to skip, regenerate this
+  problem, regenerate all remaining duplicates, or quit (`--yes` keeps it
+  silent for CI; `--force` regenerates everything). `--select` runs only the
+  given ids/slugs/titles instead of rescanning the catalog, and problems may
+  pin their own `language` (the Hot 100 catalog pins Python).
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

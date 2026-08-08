@@ -49,10 +49,12 @@ flags:
   --concurrency N   parallel problems (default 1)
   --repair-rounds N regenerate from review feedback after needs_revision (default 1)
   --auto-accept     publish drafts still needing revision after repair rounds
-  --resume          skip problems already accepted in the store
+  --force           regenerate problems even when an accepted unit covers them
+  --yes             skip duplicate prompts (default when the CLI is not a TTY)
+  --select LIST     run only the given ids/slugs/titles (comma list)
   --provider ID     recorded provider metadata (default deepseek)
   --model ID        recorded model metadata (default deepseek-v4-flash)
-  --language SLUG   implementation language (default python)
+  --language SLUG   implementation language (default python; hot100.json pins python)
   --variants N      implementation variants per unit (default 1)
   --modes LIST      practice modes (default all five)
   --assistance LIST code recall assistance (default comments,cloze)
@@ -72,7 +74,9 @@ let steps;
 let concurrency = "1";
 let repairRounds = "1";
 let autoAccept = false;
-let resume = false;
+let force = false;
+let yes = false;
+let select;
 let provider;
 let model;
 let language = "python";
@@ -91,7 +95,10 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--concurrency") concurrency = args[++i];
   else if (arg === "--repair-rounds") repairRounds = args[++i];
   else if (arg === "--auto-accept") autoAccept = true;
-  else if (arg === "--resume") resume = true;
+  else if (arg === "--force") force = true;
+  else if (arg === "--yes") yes = true;
+  else if (arg === "--select") select = args[++i];
+  else if (arg === "--resume") { /* Deduplication is the default; kept for compatibility. */ }
   else if (arg === "--provider") provider = args[++i];
   else if (arg === "--model") model = args[++i];
   else if (arg === "--language") language = args[++i];
@@ -246,7 +253,7 @@ function runBatchCli(extraArgs) {
 async function doRun() {
   await ensureApiRunning();
   let file = problemsFile;
-  if (!file && isTTY) file = await ask("Problems file (JSON or TSV) [hot100.json]", "hot100.json");
+  if (!file && isTTY) file = await ask("Problems file (JSON or TSV) [tools/template-authoring/hot100.json]", "tools/template-authoring/hot100.json");
   if (!file) die("--problems FILE is required");
   const problemsPath = resolve(repo, file);
   if (!existsSync(problemsPath)) die(`problems file not found: ${problemsPath}`);
@@ -265,7 +272,9 @@ async function doRun() {
   ];
   if (steps) extraArgs.push("--steps", steps);
   if (accept) extraArgs.push("--auto-accept");
-  if (resume) extraArgs.push("--resume");
+  if (force) extraArgs.push("--force");
+  if (yes) extraArgs.push("--yes");
+  if (select) extraArgs.push("--select", select);
   if (provider) extraArgs.push("--provider", provider);
   if (model) extraArgs.push("--model", model);
   if (language !== "python") extraArgs.push("--language", language);

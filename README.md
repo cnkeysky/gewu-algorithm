@@ -164,7 +164,7 @@ recall, transfer practice).
 
 ```sh
 npm run batch                      # interactive menu (starts the API if needed)
-npm run batch:run -- --problems hot100.json --resume --auto-accept
+npm run batch:run -- --problems tools/template-authoring/hot100.json --auto-accept
 ```
 
 `npm run batch` mirrors the one-command dev runner: it starts the authoring
@@ -174,6 +174,31 @@ Non-interactive flags are supported (`run --problems FILE --steps ...`);
 `npm run batch:status` shows API health and the last report, and
 `npm run batch:stop` stops the API that the script started. The raw CLI still
 lives in `tools/template-authoring` (`npm run batch -- --problems FILE ...`).
+
+The CLI is problem-agnostic: any algorithm problem text works, not just
+LeetCode. Generation uses the provider/model configured on the authoring API
+(DeepSeek, OpenAI, Moonshot, Xiaomi and any model in their catalogs); switch
+by setting `GEWU_LLM_PROVIDER` / `GEWU_LLM_MODEL` and the matching API key,
+then restart the API (or re-run `npm run dev:prepare`).
+
+Duplicate protection is on by default: a problem whose accepted unit already
+covers the requested modes is skipped — in an interactive terminal you are
+asked first (skip / regenerate this problem / regenerate all remaining
+duplicates / quit), so a re-run never silently overwrites your work. Adding
+modes to an existing problem forks it and publishes a new revision with the
+extended coverage, and `--force` regenerates everything as a new revision.
+`--yes` skips the prompts (the default when the CLI is not a TTY, e.g. CI).
+`--select 1,15,two-sum` runs only the given LeetCode ids / slugs / titles
+instead of rescanning the whole catalog. Entries without a problem statement
+are skipped with a warning.
+
+`tools/template-authoring/hot100.json` ships the current LeetCode Hot 100
+catalog (official study plan, Chinese statements, `language: "python"` on every
+entry), so batch runs only ever generate Python templates from it. Refresh it
+with `cd tools/template-authoring && npm run fetch:hot100`; the catalog is a
+plain list (ids, slugs, titles, statements) — generated units, drafts, and
+review history live in sqlite and per-unit directories, so adding more
+problems never grows a single JSON file without bound.
 
 Problems file (JSON):
 
@@ -190,7 +215,8 @@ Problems file (JSON):
 TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 
 - `--steps draft,generate,validate,review,accept` — run a subset (default all).
-- `--resume` — skip problems that are already accepted in the store.
+- `--force` — regenerate problems even when an accepted unit covers them
+  (published as a new revision).
 - `--repair-rounds n` — after a failed LLM pre-review, regenerate from the
   review feedback up to `n` times (default 1).
 - `--auto-accept` — publish drafts that still need revision after the repair
