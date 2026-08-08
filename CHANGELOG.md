@@ -29,6 +29,11 @@ allowed only with explicit migration notes (see
 - Draft action buttons and practice start/stop ignore rapid repeated clicks
   (in-flight locks), and the code editor auto-activates on start/resume so
   Enter and typing work immediately without a click.
+- Pagination is simplified to numbered buttons with ellipsis plus previous/
+  next; the standalone go-to-page input is removed (data volumes are small and
+  numbered-window navigation is the mainstream pattern). The count reads
+  `1–6 of 24` without the "Showing" prefix, and the practice variant selector
+  keeps its selection when lists refresh.
 - Shadow typing / code recall editors enqueue every content change instead of
   batching: a wrong character is rejected on its own while the correctly typed
   prefix stays accepted (fast typing no longer rolls back the whole batch),

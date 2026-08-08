@@ -15,7 +15,7 @@ test("audit trail verdicts are color-coded with readable labels and paginate", a
   const rows = await page.locator("#history-view .history-row").count();
   if (rows > 6) {
     await expect(page.locator("#history-view .list-pagination")).toBeVisible();
-    await expect(page.locator("#history-view .pagination-info")).toContainText("Showing 1–6 of");
+    await expect(page.locator("#history-view .pagination-info")).toContainText("1–6 of");
     const listHeight = await page.locator("#history-view .history-paged").evaluate((el) => el.getBoundingClientRect().height);
     await page.locator("#history-view [data-page-next='history']").click();
     await page.waitForTimeout(200);
@@ -54,7 +54,7 @@ test("LLM pre-review findings render as severity cards with standard pagination"
   await expect(page.locator(".severity-chip").first()).toBeVisible();
   const pagination = page.locator(".finding-pagination");
   if (await pagination.count()) {
-    await expect(pagination.locator(".pagination-info")).toContainText(/Showing \d+–\d+ of \d+/);
+    await expect(pagination.locator(".pagination-info")).toContainText(/^\d+–\d+ of \d+/);
     const gridHeight = await page.locator(".finding-grid").evaluate((el) => el.getBoundingClientRect().height);
     await page.locator(".finding-pagination [data-review-page-next]").click();
     await page.waitForTimeout(200);

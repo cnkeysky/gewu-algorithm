@@ -240,6 +240,25 @@ test("code recall restart keeps the mode and variant bound", async ({ page }) =>
   await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
 });
 
+test("practice variant selection survives refreshes and starts", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("code_recall");
+  const variant = page.locator("#practice-id");
+  await variant.selectOption("bfs-comment-guided-frontier");
+  // refreshPracticeData runs after starts/stops and on the Interrupted
+  // refresh button; the chosen variant must not reset to the first option.
+  await page.locator("#refresh-checkpoints").click();
+  await page.waitForTimeout(500);
+  await expect(variant).toHaveValue("bfs-comment-guided-frontier");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await page.waitForTimeout(700);
+  await expect(variant).toHaveValue("bfs-comment-guided-frontier");
+  await expect(page.locator("#session-context")).toContainText("comment guided");
+});
+
 test("cloze recall renders fixed context and submits the active slot", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();

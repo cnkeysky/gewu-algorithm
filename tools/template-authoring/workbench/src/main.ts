@@ -284,10 +284,7 @@ function paginationHtml(kind: PaginationKind, page: number, totalPages: number, 
   const pagesHtml = pageNumberItems(page, totalPages).map((item) => item === "…"
     ? `<span class="page-ellipsis" aria-hidden="true">…</span>`
     : `<button class="page-button page-number ${item === page + 1 ? "active" : ""}" type="button" data-page-number="${kind}" data-page-value="${item}" aria-label="Page ${item}" ${item === page + 1 ? 'aria-current="page"' : ""}>${item}</button>`).join("");
-  const jumpHtml = totalPages > 7
-    ? `<label class="page-jump-wrap">Page <input class="page-jump" data-page-jump="${kind}" type="number" min="1" max="${totalPages}" value="${page + 1}" aria-label="Go to page (Enter to jump)" /> / ${totalPages}</label>`
-    : "";
-  return `<div class="list-pagination"><span class="pagination-info">Showing ${start}–${end} of ${totalItems}</span><span class="pagination-controls"><button class="page-button" type="button" data-page-prev="${kind}" aria-label="Previous page" ${page === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-page-next="${kind}" aria-label="Next page" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button>${jumpHtml}</span></div>`;
+  return `<div class="list-pagination"><span class="pagination-info">${start}–${end} of ${totalItems}</span><span class="pagination-controls"><button class="page-button" type="button" data-page-prev="${kind}" aria-label="Previous page" ${page === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-page-next="${kind}" aria-label="Next page" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>`;
 }
 
 function paginationKindTotal(kind: PaginationKind): number {
@@ -641,10 +638,15 @@ function renderPracticeOptions(): void {
   if (!select || !label) return;
   const options = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.filter((option) => option.mode === mode) ?? [];
   const selector = options[0]?.selector;
+  const previous = select.value;
   label.firstChild!.textContent = selector === "implementation" ? "Implementation variant " : "Practice variant ";
   select.innerHTML = options.length ? options.map((option) => `<option value="${option.id}">${option.label}</option>`).join("") : "<option value=\"\">Default reviewed configuration</option>";
   select.disabled = options.length === 0;
   select.dataset.selector = selector ?? "practice_id";
+  // Preserve the user's selection when the options are re-rendered (e.g. by
+  // refreshPracticeData after starting/stopping); fall back to the first only
+  // when the chosen variant no longer exists for this unit/mode.
+  if (options.some((option) => option.id === previous)) select.value = previous;
 }
 
 interface DraftRecord {
@@ -858,7 +860,7 @@ function renderArtifactReviews(): void {
   const pagesHtml = pageNumberItems(artifactReviewPage, totalPages).map((item) => item === "…"
     ? `<span class="page-ellipsis" aria-hidden="true">…</span>`
     : `<button class="page-button page-number ${item === artifactReviewPage + 1 ? "active" : ""}" type="button" data-review-page-number data-review-page-value="${item}" aria-label="Page ${item}" ${item === artifactReviewPage + 1 ? 'aria-current="page"' : ""}>${item}</button>`).join("");
-  const controls = totalPages > 1 ? `<div class="list-pagination finding-pagination"><span class="pagination-info">Showing ${start}–${end} of ${findings.length}</span><span class="pagination-controls"><button class="page-button" type="button" data-review-page-prev aria-label="Previous page" ${artifactReviewPage === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-review-page-next aria-label="Next page" ${artifactReviewPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : "";
+  const controls = totalPages > 1 ? `<div class="list-pagination finding-pagination"><span class="pagination-info">${start}–${end} of ${findings.length}</span><span class="pagination-controls"><button class="page-button" type="button" data-review-page-prev aria-label="Previous page" ${artifactReviewPage === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-review-page-next aria-label="Next page" ${artifactReviewPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : "";
   container.innerHTML = `<div class="role-verdicts">${roleSummary}</div><div class="finding-grid">${cards}</div>${controls}`;
 }
 document.querySelector<HTMLButtonElement>("#close-artifact")!.addEventListener("click", () => { artifactInspector.hidden = true; });
@@ -1090,17 +1092,6 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
-  const jump = (event.target as HTMLElement).closest<HTMLInputElement>(".page-jump");
-  if (jump && event.key === "Enter") {
-    event.preventDefault();
-    const kind = jump.dataset.pageJump as PaginationKind;
-    const value = Number(jump.value);
-    if (Number.isInteger(value)) {
-      setPaginationKindPage(kind, value - 1);
-      renderPaginationKind(kind);
-    }
-    return;
-  }
   const row = (event.target as HTMLElement).closest<HTMLElement>(".draft-row");
   if (!row || (event.target as HTMLElement).closest("button")) return;
   event.preventDefault();
