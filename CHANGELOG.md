@@ -20,6 +20,16 @@ allowed only with explicit migration notes (see
 - The code editor shell respects its hidden state again (the flex display rule
   no longer overrides `hidden`), so answer-based modes no longer leave a
   phantom editor box in the layout.
+- The focused session view starts directly below the top bar: the shared page
+  shell's top padding is cleared in focus mode, removing the dead strip above
+  the Active session toolbar (the viewport height now accounts only for the
+  top bar).
+- The Rust HTTP core no longer exits when a client disconnects mid-request
+  (`broken pipe`): per-connection failures are logged and the server keeps
+  serving. This removes the flaky "core host failed" exit that made the
+  Playwright e2e suite fail partway through in CI.
+- Rust sources are rustfmt-clean again (CI's `cargo fmt --check` was failing
+  on a newly introduced method chain).
 
 ## [0.1.6] - 2026-08-07
 

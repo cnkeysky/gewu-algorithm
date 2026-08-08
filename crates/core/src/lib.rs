@@ -1410,7 +1410,12 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         });
     }
     for definition in &unit.practice.code_recall {
-        let short = unit.id.as_str().rsplit('.').next().unwrap_or(unit.id.as_str());
+        let short = unit
+            .id
+            .as_str()
+            .rsplit('.')
+            .next()
+            .unwrap_or(unit.id.as_str());
         let variant_name = definition
             .id
             .strip_prefix(&format!("{short}-"))

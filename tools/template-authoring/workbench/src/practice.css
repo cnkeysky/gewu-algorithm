@@ -13,7 +13,7 @@
   padding-right: clamp(18px, 3vw, 44px);
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 68px - 54px);
+  height: calc(100vh - 68px);
   background: #fbfcfb;
 }
 #practice-session[hidden] { display: none; }
@@ -26,7 +26,7 @@
 #practice-session .practice-editor-shell[hidden] { display: none; }
 #practice-session .practice-editor-shell .shadow-editor { flex: 1; min-height: 0; height: auto; }
 #practice-session #session-answer { flex: 1; min-height: 0; }
-body:has(#practice-session:not([hidden])) .shell { padding-bottom: 0; }
+body:has(#practice-session:not([hidden])) .shell { padding-top: 0; padding-bottom: 0; }
 body:has(#practice-session:not([hidden])) footer { display: none; }
 
 .practice-heading {

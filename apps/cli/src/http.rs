@@ -15,10 +15,21 @@ pub fn run(content_roots: Vec<PathBuf>, data_root: PathBuf, port: String) -> Res
     let mut core = Core::open_roots(content_roots, data_root).map_err(|error| error.to_string())?;
     let mut handshaken = false;
     for stream in listener.incoming() {
-        let mut stream = stream.map_err(|error| error.to_string())?;
+        let mut stream = match stream {
+            Ok(stream) => stream,
+            Err(error) => {
+                eprintln!("GEWU HTTP accept failed: {error}");
+                continue;
+            }
+        };
         if let Err(error) = handle(&mut stream, &mut core, &mut handshaken) {
+            // The client may have disconnected while we were reading or
+            // writing; a per-connection failure must not take down the whole
+            // server (a broken pipe used to exit the host mid-run).
             let response = JsonRpcResponse::failure(0, RpcError::new("invalid_request", error));
-            write_json(&mut stream, &response).map_err(|error| error.to_string())?;
+            if let Err(write_error) = write_json(&mut stream, &response) {
+                eprintln!("GEWU HTTP error response failed: {write_error}");
+            }
         }
     }
     Ok(())
