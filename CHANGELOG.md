@@ -119,6 +119,13 @@ allowed only with explicit migration notes (see
   becomes a new revision of that unit. Each row also offers a Practice button
   that jumps to the workspace with the unit preselected (the user still picks
   the mode), with a clear message when the Core does not serve that unit.
+- A dedicated Units navigation page lists real published units (accepted
+  drafts bound to a unit id, deduplicated by unit id with the latest accepted
+  revision) with language, projections, and a Core-aware Practice button that
+  preselects the unit in the workspace; problem statements and Edit actions
+  are not duplicated there because Drafts (Published filter / Extend unit) and
+  the authoring picker already cover revision creation. Drafts keeps the full
+  approval lifecycle including Human approved rows.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

@@ -93,8 +93,8 @@ test("capture screenshots for polish", async ({ page }) => {
 test("no horizontal overflow on any view", async ({ page }) => {
   page.on("console", (msg) => { if (msg.type() === "error") console.log(`PAGE_ERROR=${msg.text()}`); });
   await page.goto("/");
-  const dataViews: Record<string, string> = { Home: "home", Practice: "practice", Authoring: "new", Drafts: "drafts", "Review history": "history" };
-  for (const view of ["Home", "Practice", "Authoring", "Drafts", "Review history"]) {
+  const dataViews: Record<string, string> = { Home: "home", Practice: "practice", Units: "units", Authoring: "new", Drafts: "drafts", "Review history": "history" };
+  for (const view of ["Home", "Practice", "Units", "Authoring", "Drafts", "Review history"]) {
     const target = page.locator(`.nav-item[data-view="${dataViews[view]}"]`);
     console.log(`NAV_PAGE_BODY=${view}:${(await page.locator("body").innerText()).slice(0, 120).replace(/\n/g, " | ")}`);
     await target.waitFor({ state: "visible", timeout: 8000 });

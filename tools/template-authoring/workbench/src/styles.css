@@ -178,6 +178,15 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .draft-buttons .inline-action:nth-child(1) { width: 78px; }
 .draft-buttons .inline-action:nth-child(2) { width: 78px; }
 .draft-buttons .inline-action:nth-child(3) { width: 62px; }
+.units-list { border-top: 1px solid var(--line); }
+.unit-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 4px; border-bottom: 1px solid var(--line); }
+.unit-main { min-width: 0; }
+.unit-main strong { font-size: 13px; }
+.unit-main small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.unit-actions { display: inline-flex; flex: none; gap: 8px; }
+.inline-action.practice-action { border-color: #c3cdea; background: #f3f6ff; color: #4656a8; }
+.inline-action.practice-action:hover { border-color: #9fafdf; }
+.action-divider { width: 1px; height: 18px; align-self: center; background: var(--line); }
 .draft-buttons .inline-action:nth-child(4) { width: 70px; }
 @media (max-width: 850px) {
   .draft-row { grid-template-columns: 40px minmax(0, 1fr); }

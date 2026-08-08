@@ -34,9 +34,10 @@ root.innerHTML = `
     <nav aria-label="Primary navigation">
       <button class="nav-item active" data-view="home">Home</button>
       <button class="nav-item" data-view="practice">Practice</button>
+      <button class="nav-item" data-view="units">Units <span class="nav-count" id="units-count">0</span></button>
       <span class="nav-divider" aria-hidden="true"></span>
       <button class="nav-item" data-view="new">Authoring</button>
-      <button class="nav-item" data-view="drafts">Drafts <span class="nav-count">3</span></button>
+      <button class="nav-item" data-view="drafts">Drafts <span class="nav-count" id="drafts-count">0</span></button>
       <button class="nav-item" data-view="history">Review history</button>
     </nav>
     <div class="connection"><span class="status-dot"></span> Local workspace</div>
@@ -129,6 +130,12 @@ root.innerHTML = `
         </section>
         </div>
       </div>
+    </section>
+    <section id="units-view" class="app-view panel page-panel" hidden>
+      <div class="panel-heading"><div><p class="eyebrow">Published content</p><h2>Practice units</h2></div><span class="lock">Approved only</span></div>
+      <div class="filter-row"><span class="filter-tools"><input id="units-search" class="filter-search" type="search" placeholder="Search title, problem, or unit id…" aria-label="Search units" /><select id="units-language" class="filter-select" aria-label="Filter units by language"><option value="all">All languages</option></select></span></div>
+      <div class="units-list" id="units-list"></div>
+      <p class="view-note">Approved units are the only content available for practice. Load one into Authoring to create a new revision.</p>
     </section>
     <section id="drafts-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
@@ -228,6 +235,8 @@ const DRAFT_PAGE_SIZE = 6;
 let draftPage = 0;
 const HISTORY_PAGE_SIZE = 6;
 let historyPage = 0;
+const UNITS_PAGE_SIZE = 6;
+let unitsPage = 0;
 type DraftFilter = "all" | "attention" | "progress" | "published";
 type HistoryFilter = "all" | "pass" | "needs_revision" | "reject";
 let draftFilter: DraftFilter = "all";
@@ -238,8 +247,10 @@ let practiceLanguage = "";
 let practiceUnitSearch = "";
 let draftSearch = "";
 let problemLibraryQuery = "";
+let unitsSearch = "";
+let unitsLanguage = "all";
 
-type PaginationKind = PracticeListName | "drafts" | "history";
+type PaginationKind = PracticeListName | "drafts" | "history" | "units";
 
 function filterDrafts(drafts: DraftRecord[]): DraftRecord[] {
   let filtered = drafts;
@@ -324,17 +335,17 @@ function paginationHtml(kind: PaginationKind, page: number, totalPages: number, 
 }
 
 function paginationKindTotal(kind: PaginationKind): number {
-  return kind === "drafts" ? filterDrafts(readDrafts()).length : kind === "history" ? filterReviews(readReviews()).length : kind === "checkpoints" ? checkpointItems.length : kind === "recommendations" ? recommendationItems.length : attemptItems.length;
+  return kind === "drafts" ? filterDrafts(readDrafts()).length : kind === "history" ? filterReviews(readReviews()).length : kind === "units" ? filterUnits().length : kind === "checkpoints" ? checkpointItems.length : kind === "recommendations" ? recommendationItems.length : attemptItems.length;
 }
-function paginationKindSize(kind: PaginationKind): number { return kind === "drafts" ? DRAFT_PAGE_SIZE : kind === "history" ? HISTORY_PAGE_SIZE : PRACTICE_PAGE_SIZE; }
-function paginationKindPage(kind: PaginationKind): number { return kind === "drafts" ? draftPage : kind === "history" ? historyPage : practicePages[kind]; }
+function paginationKindSize(kind: PaginationKind): number { return kind === "drafts" ? DRAFT_PAGE_SIZE : kind === "history" ? HISTORY_PAGE_SIZE : kind === "units" ? UNITS_PAGE_SIZE : PRACTICE_PAGE_SIZE; }
+function paginationKindPage(kind: PaginationKind): number { return kind === "drafts" ? draftPage : kind === "history" ? historyPage : kind === "units" ? unitsPage : practicePages[kind]; }
 function setPaginationKindPage(kind: PaginationKind, page: number): void {
   const maxPage = Math.max(0, Math.ceil(paginationKindTotal(kind) / paginationKindSize(kind)) - 1);
   const next = Math.min(maxPage, Math.max(0, page));
-  if (kind === "drafts") draftPage = next; else if (kind === "history") historyPage = next; else practicePages[kind] = next;
+  if (kind === "drafts") draftPage = next; else if (kind === "history") historyPage = next; else if (kind === "units") unitsPage = next; else practicePages[kind] = next;
 }
 function renderPaginationKind(kind: PaginationKind): void {
-  if (kind === "drafts") renderDrafts(); else if (kind === "history") renderHistory(); else renderPracticeLists();
+  if (kind === "drafts") renderDrafts(); else if (kind === "history") renderHistory(); else if (kind === "units") renderUnits(); else renderPracticeLists();
 }
 
 let confirmResolve: ((value: boolean) => void) | null = null;
@@ -759,6 +770,7 @@ async function syncFromApi(): Promise<void> {
     }
     renderDrafts();
     renderHistory();
+    renderUnits();
   } catch {
     // The Vite client remains usable with local storage when the API is stopped.
   }
@@ -818,11 +830,14 @@ function loadDraftIntoForm(draft: DraftRecord): void {
 function renderProblemLibrary(): void {
   const list = document.querySelector<HTMLElement>("#problem-library-list");
   if (!list) return;
-  const published = readDrafts().filter((draft) => draft.status === "accepted");
+  const published = publishedUnits();
   const query = problemLibraryQuery.trim().toLowerCase();
   const items = published.filter((draft) => !query || draft.title.toLowerCase().includes(query) || draft.problem.toLowerCase().includes(query) || String(draft.unitId ?? draft.id).toLowerCase().includes(query));
   list.innerHTML = items.length
-    ? items.map((draft) => `<div class="problem-row" role="button" tabindex="0" data-library-id="${draft.id}" aria-label="Load ${draft.title}"><span class="problem-row-main"><strong>${escapeHtml(draft.title)}</strong><small>${escapeHtml(draft.language)} · ${draft.modes.length} projection${draft.modes.length === 1 ? "" : "s"} · ${formatDate(draft.createdAt)}${draft.unitId ? ` · ${escapeHtml(draft.unitId)}` : ""}</small></span><button class="inline-action" type="button" data-practice-library-id="${draft.id}" aria-label="Practice ${draft.title}">Practice</button></div>`).join("")
+    ? items.map((draft) => {
+        const inCore = practiceUnits.some((item) => item.id === draft.unitId);
+        return `<div class="problem-row" role="button" tabindex="0" data-library-id="${draft.id}" aria-label="Load ${draft.title}"><span class="problem-row-main"><strong>${escapeHtml(draft.title)}</strong><small>${escapeHtml(draft.language)} · ${draft.modes.length} projection${draft.modes.length === 1 ? "" : "s"} · ${formatDate(draft.createdAt)}${draft.unitId ? ` · ${escapeHtml(draft.unitId)}` : ""}</small></span><button class="inline-action practice-action" type="button" data-practice-library-id="${draft.id}" aria-label="Practice ${draft.title}" ${inCore ? "" : `disabled title="Not loaded in the Core; add the published content root to practice it"`}>Practice</button></div>`;
+      }).join("")
     : `<p class="compact-empty">${published.length ? "No published unit matches the search." : "No published units yet — approve a draft to make it reusable here."}</p>`;
 }
 function openProblemLibrary(): void {
@@ -831,6 +846,7 @@ function openProblemLibrary(): void {
   if (search) search.value = "";
   renderProblemLibrary();
   document.querySelector<HTMLElement>("#problem-library")!.hidden = false;
+  void ensurePracticeUnitsLoaded().then(renderProblemLibrary);
 }
 function closeProblemLibrary(): void {
   document.querySelector<HTMLElement>("#problem-library")!.hidden = true;
@@ -851,12 +867,61 @@ function practicePublishedUnit(draft: DraftRecord): void {
     }
   });
 }
+/** Real published units: accepted drafts bound to a unit id, deduplicated by
+ * unit id (latest accepted revision wins). Legacy accepted drafts without a
+ * unit binding are not publishable units and stay out of Units and the
+ * problem library. */
+function publishedUnits(): DraftRecord[] {
+  const seen = new Map<string, DraftRecord>();
+  for (const draft of readDrafts()) {
+    if (draft.status !== "accepted" || !draft.unitId) continue;
+    const existing = seen.get(draft.unitId);
+    if (!existing || new Date(draft.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
+      seen.set(draft.unitId, draft);
+    }
+  }
+  return [...seen.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+function filterUnits(): DraftRecord[] {
+  let units = publishedUnits();
+  if (unitsLanguage !== "all") units = units.filter((unit) => unit.language === unitsLanguage);
+  if (unitsSearch) {
+    const query = unitsSearch.trim().toLowerCase();
+    units = units.filter((unit) => unit.title.toLowerCase().includes(query) || unit.problem.toLowerCase().includes(query) || String(unit.unitId ?? unit.id).toLowerCase().includes(query));
+  }
+  return units;
+}
+async function ensurePracticeUnitsLoaded(): Promise<void> {
+  if (practiceUnits.length > 0) return;
+  try {
+    practiceUnits = await practiceRpc<PracticeUnit[]>("gewu/listUnits");
+  } catch {
+    // The Core may be offline; Practice buttons stay disabled with a hint.
+  }
+}
+function renderUnits(): void {
+  document.querySelector<HTMLSpanElement>("#units-count")!.textContent = String(publishedUnits().length);
+  const units = filterUnits();
+  const totalPages = Math.max(1, Math.ceil(units.length / UNITS_PAGE_SIZE));
+  unitsPage = Math.min(unitsPage, totalPages - 1);
+  const visible = units.slice(unitsPage * UNITS_PAGE_SIZE, (unitsPage + 1) * UNITS_PAGE_SIZE);
+  const list = document.querySelector<HTMLElement>("#units-list");
+  if (!list) return;
+  const languageSelect = document.querySelector<HTMLSelectElement>("#units-language");
+  if (languageSelect) renderLanguageOptions(languageSelect, publishedUnits().map((unit) => unit.language));
+  list.innerHTML = units.length
+    ? `<div class="paged-scroll">${visible.map((unit) => {
+        const inCore = practiceUnits.some((item) => item.id === unit.unitId);
+        return `<div class="unit-row"><span class="unit-main"><strong>${escapeHtml(unit.title)}</strong><small>${escapeHtml(unit.unitId ?? unit.id)} · ${escapeHtml(unit.language)} · ${unit.modes.length} projection${unit.modes.length === 1 ? "" : "s"} · ${formatDate(unit.createdAt)}</small></span><span class="unit-actions"><button class="inline-action practice-action" type="button" data-unit-practice-id="${unit.id}" ${inCore ? "" : `disabled title="Not loaded in the Core; add the published content root to practice it"`}>Practice</button></span></div>`;
+      }).join("")}</div>${paginationHtml("units", unitsPage, totalPages, units.length, UNITS_PAGE_SIZE)}`
+    : `<div class="empty-state"><strong>${unitsSearch || unitsLanguage !== "all" ? "No published units match" : "No published units yet"}</strong><span>${unitsSearch || unitsLanguage !== "all" ? "Try another search or language filter." : "Approve a draft to publish it here."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
+}
 function draftStage(status: DraftRecord["status"]): number {
   return status === "queued" || status === "revision_requested" ? 1 : status === "generated" ? 2 : status === "validated" || status === "needs_revision" ? 3 : status === "llm_reviewed" ? 4 : status === "accepted" ? 5 : 0;
 }
 function renderDrafts(): void {
   const allDrafts = readDrafts();
-  document.querySelector<HTMLSpanElement>(".nav-count")!.textContent = String(allDrafts.length);
+  document.querySelector<HTMLSpanElement>("#drafts-count")!.textContent = String(allDrafts.length);
   renderDraftFilters(allDrafts);
   const drafts = filterDrafts(allDrafts);
   const totalPages = Math.max(1, Math.ceil(drafts.length / DRAFT_PAGE_SIZE));
@@ -1006,6 +1071,7 @@ document.querySelector<HTMLButtonElement>("#save-artifact")!.addEventListener("c
 function showView(view: string): void {
   renderDrafts();
   renderHistory();
+  if (view === "units") void ensurePracticeUnitsLoaded().then(renderUnits);
   document.querySelectorAll<HTMLElement>(".app-view").forEach((panel) => { panel.hidden = panel.id !== `${view}-view`; });
   document.querySelectorAll<HTMLButtonElement>(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1281,6 +1347,24 @@ document.querySelector<HTMLInputElement>("#draft-search")!.addEventListener("inp
   draftPage = 0;
   renderDrafts();
 });
+document.querySelector<HTMLInputElement>("#units-search")!.addEventListener("input", (event) => {
+  unitsSearch = (event.target as HTMLInputElement).value;
+  unitsPage = 0;
+  renderUnits();
+});
+document.querySelector<HTMLSelectElement>("#units-language")!.addEventListener("change", (event) => {
+  unitsLanguage = (event.target as HTMLSelectElement).value;
+  unitsPage = 0;
+  renderUnits();
+});
+document.querySelector<HTMLElement>("#units-list")!.addEventListener("click", (event) => {
+  const practiceButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-unit-practice-id]");
+  if (practiceButton) {
+    event.stopPropagation();
+    const draft = readDrafts().find((item) => item.id === practiceButton.dataset.unitPracticeId);
+    if (draft) practicePublishedUnit(draft);
+  }
+});
 document.querySelector<HTMLButtonElement>("#browse-problems")!.addEventListener("click", openProblemLibrary);
 document.querySelector<HTMLButtonElement>("#close-problem-library")!.addEventListener("click", closeProblemLibrary);
 document.querySelector<HTMLElement>("#problem-library")!.addEventListener("click", (event) => {
@@ -1554,6 +1638,7 @@ document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click",
 updateProfile();
 renderDrafts();
 renderHistory();
+renderUnits();
 void syncFromApi();
 void syncProviders();
 

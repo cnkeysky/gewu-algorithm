@@ -146,3 +146,18 @@ test("problem library practice button preselects the published unit in the works
   await expect(page.locator("#practice-unit")).toHaveValue("graph.bfs");
   await expect(page.locator("#practice-message")).toContainText("choose a mode to start");
 });
+
+test("Units page offers Practice that preselects the published unit", async ({ page }) => {
+  const published = { ...draft("Breadth-First Search", "python", 0), status: "accepted", unitId: "graph.bfs" };
+  const drafts = [published, { ...draft("In progress", "python", 1), status: "generated" }];
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Units/ }).click();
+
+  await expect(page.locator(".unit-row")).toHaveCount(1);
+  await page.locator("[data-unit-practice-id]").first().click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await expect(page.locator("#practice-unit")).toHaveValue("graph.bfs");
+  await expect(page.locator("#practice-message")).toContainText("choose a mode to start");
+});
