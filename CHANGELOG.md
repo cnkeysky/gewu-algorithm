@@ -43,6 +43,9 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Batch authoring retries gateway rate limits (HTTP 429) with exponential
+  backoff (5s up to 60s, six attempts), so shared relays that throttle
+  concurrent LLM-backed requests no longer fail whole generations.
 - `provenance.sources[].role` is enum-constrained in the generation schema
   (`primary`/`synthesis`/`lead`) and re-stated in the prompt, fixing a
   regression from the prompt trim that let the model guess source roles.

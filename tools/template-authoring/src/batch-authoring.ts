@@ -210,25 +210,33 @@ async function apiRequest(options: Options, method: string, path: string, payloa
   // authoring requests routinely exceed). The AbortSignal below is the only
   // bound, driven by --timeout-minutes.
   const url = new URL(`${options.api}${path}`);
-  return new Promise<ApiResult>((resolveRequest, rejectRequest) => {
-    const req = httpRequest(url, {
-      method,
-      headers: payload === undefined ? undefined : { "content-type": "application/json" },
-      signal: AbortSignal.timeout(options.timeoutMinutes * 60_000),
-    }, (response) => {
-      let text = "";
-      response.setEncoding("utf8");
-      response.on("data", (chunk: string) => { text += chunk; });
-      response.on("end", () => {
-        let body: unknown = null;
-        try { body = text ? JSON.parse(text) : null; } catch { body = text; }
-        resolveRequest({ ok: response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300, status: response.statusCode ?? 0, body });
+  // Gateway rate limits (429) are retried with exponential backoff: shared
+  // relays throttle concurrent LLM-backed requests, and a hard failure would
+  // waste the whole generation.
+  for (let attempt = 1; ; attempt += 1) {
+    const result = await new Promise<ApiResult>((resolveRequest, rejectRequest) => {
+      const req = httpRequest(url, {
+        method,
+        headers: payload === undefined ? undefined : { "content-type": "application/json" },
+        signal: AbortSignal.timeout(options.timeoutMinutes * 60_000),
+      }, (response) => {
+        let text = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk: string) => { text += chunk; });
+        response.on("end", () => {
+          let body: unknown = null;
+          try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+          resolveRequest({ ok: response.statusCode !== undefined && response.statusCode >= 200 && response.statusCode < 300, status: response.statusCode ?? 0, body });
+        });
       });
+      req.on("error", rejectRequest);
+      if (payload !== undefined) req.write(JSON.stringify(payload));
+      req.end();
     });
-    req.on("error", rejectRequest);
-    if (payload !== undefined) req.write(JSON.stringify(payload));
-    req.end();
-  });
+    if (result.status !== 429 || attempt >= 6) return result;
+    const waitMs = Math.min(60_000, 5_000 * 2 ** (attempt - 1));
+    await new Promise((settle) => setTimeout(settle, waitMs));
+  }
 }
 
 function draftError(result: ApiResult): string {
