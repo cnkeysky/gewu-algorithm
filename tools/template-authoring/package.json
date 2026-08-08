@@ -12,6 +12,7 @@
     "generate-template:local": "npm run build && node --env-file=.env.local dist/generate-template.js",
     "review-template": "npm run build && node dist/review-template.js",
     "review-template:local": "npm run build && node --env-file=.env.local dist/review-template.js",
+    "batch": "npm run build && node dist/batch-authoring.js",
     "rule-dedup": "npm run build && node dist/rule-dedup.js",
     "workbench:api": "npm run build && node dist/workbench-api.js",
     "workbench:api:local": "npm run build && node --env-file=.env.local dist/workbench-api.js",

@@ -20,6 +20,16 @@ allowed only with explicit migration notes (see
 - The core binary version now matches the product release: `gewu-core` and
   `gewu-cli` report `0.1.7`, so the web connection badge reads
   `Core connected · v0.1.7 / protocol 2` instead of the stale `v0.1.0`.
+- Batch authoring CLI (`tools/template-authoring` → `npm run batch`): drives
+  the authoring API for a list of problems (JSON or TSV), running the full
+  pipeline — draft, staged LLM generation, deterministic validation, LLM
+  pre-review (all roles concurrently), repair rounds from review feedback, and
+  optional automated acceptance with an explicit audit-trail rationale. It
+  defaults to all five practice modes and every code recall layout, supports
+  `--resume`, `--concurrency`, `--steps`, `--repair-rounds`, and `--auto-accept`.
+- The PROBLEM statement renderer supports Markdown images: `img` stays
+  allowed through the sanitizer (https/data/relative sources, `alt` preserved)
+  and is constrained to the pane width with a rounded, centered layout.
 
 ## [0.1.7] - 2026-08-08
 

@@ -154,6 +154,47 @@ Ports can be overridden with `GEWU_WORKBENCH_PORT` (authoring API),
 Open `editors/vscode` in VS Code and press `F5`. The extension spawns the Rust
 Core through `cargo`, so `cargo` must be on `PATH`.
 
+### Batch template authoring (CLI)
+
+The batch CLI drives the same authoring API as the web workbench, so every
+draft stays in the local sqlite store, appears in Drafts / Review history, and
+publishes through the normal acceptance gate. It defaults to all five practice
+modes (shadow typing, flow recall, code recall with every layout, reasoning
+recall, transfer practice).
+
+```sh
+cd tools/template-authoring
+npm run workbench:api:local        # terminal 1: the authoring API
+npm run batch -- --problems hot100.json --resume --concurrency 1
+```
+
+Problems file (JSON):
+
+```json
+[
+  {
+    "title": "Two Sum",
+    "problem": "Given an array of integers nums and an integer target ...",
+    "source_url": "https://leetcode.com/problems/two-sum/"
+  }
+]
+```
+
+TSV (`title\tproblem\turl`) is also accepted. Useful flags:
+
+- `--steps draft,generate,validate,review,accept` — run a subset (default all).
+- `--resume` — skip problems that are already accepted in the store.
+- `--repair-rounds n` — after a failed LLM pre-review, regenerate from the
+  review feedback up to `n` times (default 1).
+- `--auto-accept` — publish drafts that still need revision after the repair
+  rounds, recording an explicit `human_acceptance` rationale in the audit
+  trail (LLM pre-review verdicts stay visible in Review history).
+- `--concurrency n`, `--provider`, `--model`, `--language`, `--variants`,
+  `--modes`, `--assistance`, `--report path`.
+
+Published units land in `tools/template-authoring/drafts/.workbench/published`
+and become available to a Core started with that content root.
+
 ### Run the end-to-end tests
 
 ```sh
