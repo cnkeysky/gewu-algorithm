@@ -43,6 +43,19 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- The generation schema now enforces Rust's slug rule for
+  `position.domain`/`category`/`prerequisites` (`^[a-z0-9]+(-[a-z0-9]+)*$`),
+  so schema violations trigger Pi-ai's structured retry instead of failing at
+  Rust validation; the instruction also states the lowercase-slug rule.
+- The relay provider injects `reasoning_effort: "none"` by default
+  (`GEWU_LLM_REASONING_EFFORT`), which disables thinking on reasoning-mode
+  gateways that ignore `thinking: {type:"disabled"}` — cutting a single
+  generation from 30+ minutes to seconds in real probing.
+- Document the relay provider's generality and boundaries (OpenAI-compatible
+  chat completions, Bearer auth, single model per run, DeepSeek-style compat
+  defaults) in the authoring README and the LLM integration architecture doc;
+  reasoning-mode relays should raise `GEWU_LLM_TIMEOUT_MS` above the 2-minute
+  default.
 - Repo AGENTS.md links `docs/development/coding-standards.md` as an on-demand
   detail document alongside the playbook, so code-level standards are fetched
   when writing or reviewing code rather than kept resident.

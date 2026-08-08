@@ -42,6 +42,19 @@ Pi-ai adapter configuration; GEWU does not duplicate those defaults. Provider-
 specific reasoning, tools, audio, web search, and streaming fields must be
 opt-in extensions rather than silently flattened into the common task contract.
 
+### Custom OpenAI-compatible relay
+
+A generic relay provider is enabled by configuration, not code:
+`GEWU_LLM_PROVIDER=relay` plus `GEWU_LLM_BASE_URL` register an
+OpenAI-compatible endpoint at runtime; `GEWU_LLM_MODEL` picks the model and
+`GEWU_LLM_API_KEY` (or a provider key) supplies credentials. It covers the
+common `/v1/chat/completions` gateway shape — Bearer auth, one model id per
+run, and OpenAI-compatible parameters. Anthropic-Messages-only gateways and
+custom auth schemes are out of scope for the generic relay and need a
+dedicated adapter or extension. No endpoint URL is hardcoded; the relay model
+carries DeepSeek-style compatibility defaults, and a relaxed per-call timeout
+(`GEWU_LLM_TIMEOUT_MS`) is recommended for reasoning-mode upstreams.
+
 ## Generation Pipeline
 
 ```text

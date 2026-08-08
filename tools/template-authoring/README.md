@@ -72,6 +72,30 @@ OpenAI SDK fingerprint headers (`x-stainless-*`) and send a neutral user agent
 plus opencode-style `x-opencode-session` / `x-opencode-request` headers,
 because some gateways block SDK fingerprints and prefer that convention.
 
+### Generality and boundaries
+
+The relay provider is generic and configured entirely by environment
+variables; no endpoint URL is hardcoded. It works with any OpenAI-compatible
+`/v1/chat/completions` gateway:
+
+- **Protocol**: OpenAI-compatible chat completions only (Anthropic Messages
+  gateways are not supported by the generic relay);
+- **Auth**: Bearer token via `GEWU_LLM_API_KEY` (or `DEEPSEEK_API_KEY`);
+- **Models**: one model id per run, set via `GEWU_LLM_MODEL`; the relay's
+  model list is not auto-discovered;
+- **Compatibility defaults**: DeepSeek-style (`max_tokens`, no `store`/`strict`,
+  `thinkingFormat: deepseek`) with `toolChoice=auto` and
+  `reasoning_effort: "none"` (thinking disabled via `GEWU_LLM_REASONING_EFFORT`),
+  because reasoning-mode upstreams reject forced tool calls and often ignore
+  `thinking: {type:"disabled"}`; set `GEWU_LLM_TOOL_CHOICE=forced` if the
+  gateway supports strict tool calls, or a higher reasoning effort to
+  re-enable thinking;
+- **Timeout**: the default per-call `GEWU_LLM_TIMEOUT_MS=120000` is too low for
+  slow reasoning-mode relays — raise it (e.g. `600000`) and keep the batch
+  `--timeout-minutes` above the total request duration;
+- **WAF compatibility**: the header behavior above is generic — gateways
+  simply ignore headers they do not recognize.
+
 Structured generation and review use a required Pi-ai tool call. Tool
 arguments are validated against the task schema before GEWU sees them; plain
 text or malformed arguments are rejected, with at most one bounded repair

@@ -72,6 +72,10 @@ export interface PiGeneratorOptions {
   /** "forced" pins the structured tool call; "auto" lets the model decide
    * (required for reasoning-mode relays that reject forced tool_choice). */
   readonly toolChoice?: "auto" | "forced";
+  /** Optional `reasoning_effort` value injected into relay requests. Some
+   * reasoning-mode gateways ignore `thinking: {type:"disabled"}` but honor
+   * `reasoning_effort: "none"`, which is the relay default. */
+  readonly reasoningEffort?: string;
 }
 
 /** Provider id used for a custom OpenAI-compatible relay/proxy endpoint. */
@@ -90,6 +94,7 @@ export function optionsFromEnvironment(
     maxAttempts: parsePositiveInteger(environment.GEWU_LLM_MAX_ATTEMPTS) ?? 2,
     maxStructuredAttempts: parsePositiveInteger(environment.GEWU_LLM_MAX_STRUCTURED_ATTEMPTS) ?? 3,
     toolChoice: parseToolChoice(environment.GEWU_LLM_TOOL_CHOICE) ?? (provider === RELAY_PROVIDER_ID ? "auto" : "forced"),
+    reasoningEffort: nonEmpty(environment.GEWU_LLM_REASONING_EFFORT) ?? (provider === RELAY_PROVIDER_ID ? "none" : undefined),
   };
 }
 
@@ -163,7 +168,17 @@ export class PiGenerator {
     headers.set("x-opencode-session", this.#relaySession);
     this.#relayRequest += 1;
     headers.set("x-opencode-request", String(this.#relayRequest));
-    return fetch(input, { ...init, headers });
+    let body = init?.body;
+    if (this.#options.reasoningEffort && typeof body === "string" && headers.get("content-type")?.includes("application/json")) {
+      try {
+        const parsed = JSON.parse(body) as Record<string, unknown>;
+        if (!("reasoning_effort" in parsed)) parsed.reasoning_effort = this.#options.reasoningEffort;
+        body = JSON.stringify(parsed);
+      } catch {
+        // Leave the body untouched if it is not parseable JSON.
+      }
+    }
+    return fetch(input, { ...init, headers, body });
   };
 
   async generate(task: DraftTask): Promise<DraftArtifact> {
