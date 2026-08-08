@@ -52,6 +52,12 @@ allowed only with explicit migration notes (see
   revision). Acceptance rationales are now persisted in the audit trail
   (`reviews.rationale`) and shown in Review history. The full state machine
   is documented in `docs/architecture/approval-flow.md`.
+- The batch CLI's `accept` step defaults to the **LLM approval gate**:
+  without `--auto-accept`, each draft is finalized by the configured
+  approver model (deepseek by default, overridable with
+  `--llm-approve provider:model`), recording `llm_acceptance`. `--auto-accept`
+  remains the operator (human-tier) override and its rationale is now
+  persisted.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with

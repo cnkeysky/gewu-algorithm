@@ -175,7 +175,7 @@ the published units.
 
 ```sh
 npm run batch                      # interactive menu (starts the API if needed)
-npm run batch:run -- --problems tools/template-authoring/hot100.json --auto-accept
+npm run batch:run -- --problems tools/template-authoring/hot100.json --llm-approve deepseek:deepseek-v4-flash
 ```
 
 `npm run batch` mirrors the one-command dev runner: it starts the authoring
@@ -242,7 +242,9 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
   review feedback up to `n` times (default 1).
 - `--auto-accept` — publish drafts that still need revision after the repair
   rounds, recording an explicit `human_acceptance` rationale in the audit
-  trail (LLM pre-review verdicts stay visible in Review history).
+  trail (LLM pre-review verdicts stay visible in Review history). This is the
+  operator (human-tier) override; the `accept` step otherwise runs the LLM
+  approval gate by default.
 - `--llm-approve provider:model` — run a model-driven final approval gate
   (`llm_acceptance`): the approver model reads the artifact and every LLM
   pre-review finding, returns pass / needs_revision, and on pass the draft is

@@ -498,6 +498,12 @@ async function main(): Promise<void> {
     });
     console.log(`batch-authoring: creator models rotate across ${options.creatorModels.length} model(s)`);
   }
+  if (options.steps.has("accept") && !options.autoAccept && !options.llmApprove) {
+    // The fully-automated batch pipeline approves through the LLM acceptance
+    // gate by default; --auto-accept remains the operator (human-tier) override.
+    options.llmApprove = options.provider && options.model ? `${options.provider}:${options.model}` : "deepseek:deepseek-v4-flash";
+    console.log(`batch-authoring: LLM approval gate enabled by default (approver ${options.llmApprove}); pass --auto-accept for operator approval`);
+  }
   console.log(`batch-authoring: ${problems.length} problems, steps=[${[...options.steps].join(",")}], concurrency=${options.concurrency}${options.force ? ", force" : ", dedupe-covered"}${options.select.length > 0 ? `, select=[${options.select.join(",")}]` : ""}`);
 
   const acceptedMap = await acceptedByProblem(options);
