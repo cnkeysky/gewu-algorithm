@@ -6,6 +6,13 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+### Changed
+
+- Practice variant options use humanized short titles (for example `Comments`,
+  `Comment Guided Frontier`, `No Hints`) instead of raw id/layout/assistance
+  composites. Code recall non-structured sessions no longer show a stale
+  `hints undefined` segment in the session status line.
+
 ## [0.1.7] - 2026-08-08
 
 ### Changed

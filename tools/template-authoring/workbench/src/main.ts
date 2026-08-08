@@ -509,7 +509,7 @@ function renderPracticeSession(session: PracticeSession): void {
   document.querySelector<HTMLElement>("#session-meta")!.textContent = session.mode === "shadow_typing"
     ? `progress ${progressPercent(acceptedChars, targetChars)}% · accepted inputs ${session.accepted_input_count} · rejected inputs ${session.rejected_input_count} · corrections ${session.correction_count}`
     : session.mode === "code_recall" && !isStructuredCode
-    ? `progress ${progressPercent(acceptedChars, targetChars)}% · ${session.code_assistance ?? "no hints"} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count} · hints ${session.scaffold_reveal_count}`
+    ? `progress ${progressPercent(acceptedChars, targetChars)}% · ${session.code_assistance ?? "no hints"} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count}`
     : session.mode === "code_recall"
     ? `slot ${session.completed_steps}/${session.total_steps} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count}`
     : `completed ${session.accepted_input_count} steps · rejected ${session.rejected_input_count} answers · prompts ${session.prompt_count}`;

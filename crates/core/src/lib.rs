@@ -1419,11 +1419,10 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         let variant_name = definition
             .id
             .strip_prefix(&format!("{short}-"))
-            .unwrap_or(definition.id.as_str())
-            .replace('-', " ");
+            .unwrap_or(definition.id.as_str());
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
-            label: variant_name,
+            label: variant_title(variant_name),
             language: unit
                 .implementations
                 .first()
@@ -1442,8 +1441,8 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
             label: match implementation {
-                Some(item) => format!("{} · {}", definition.id.replace('-', " "), item.key),
-                None => definition.id.replace('-', " "),
+                Some(item) => format!("{} · {}", variant_title(&definition.id), item.key),
+                None => variant_title(&definition.id),
             },
             language: implementation
                 .map(|item| item.language.clone())
@@ -1466,8 +1465,8 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
             label: match implementation {
-                Some(item) => format!("{} · {}", definition.id.replace('-', " "), item.key),
-                None => definition.id.replace('-', " "),
+                Some(item) => format!("{} · {}", variant_title(&definition.id), item.key),
+                None => variant_title(&definition.id),
             },
             language: implementation
                 .map(|item| item.language.clone())
@@ -1483,6 +1482,19 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         });
     }
     options
+}
+fn variant_title(id: &str) -> String {
+    id.split('-')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 fn select_code_recall<'a>(
     unit: &'a AlgorithmUnit,
@@ -2778,5 +2790,21 @@ mod tests {
     fn converts_unix_days_to_utc_civil_dates() {
         assert_eq!(civil_date_from_unix_days(0), (1970, 1, 1));
         assert_eq!(civil_date_from_unix_days(20_000), (2024, 10, 4));
+    }
+
+    #[test]
+    fn variant_titles_are_humanized_short_names() {
+        assert_eq!(variant_title("comments"), "Comments");
+        assert_eq!(
+            variant_title("comment-guided-frontier"),
+            "Comment Guided Frontier"
+        );
+        assert_eq!(variant_title("no-hints"), "No Hints");
+        assert_eq!(variant_title("cloze-frontier"), "Cloze Frontier");
+        assert_eq!(
+            variant_title("fifo-shortest-distance"),
+            "Fifo Shortest Distance"
+        );
+        assert_eq!(variant_title("single"), "Single");
     }
 }
