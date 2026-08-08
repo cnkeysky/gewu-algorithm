@@ -714,8 +714,12 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && rollbackMatch) {
       const draft = state.drafts.find((item) => item.id === rollbackMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (draft.status === "accepted") return send(response, 409, { error: "an accepted draft is immutable; create a new revision instead" });
-      if (draft.status === "queued" || draft.status === "draft") return send(response, 409, { error: "draft is already awaiting generation" });
+      // The backend is the source of truth for the state machine: regenerate
+      // is only valid from a fresh generation, an LLM-approved draft, or a
+      // draft whose pre-review failed — matching the UI.
+      if (!["generated", "llm_reviewed", "needs_revision"].includes(draft.status)) {
+        return send(response, 409, { error: "regenerate is only available after generation, after LLM approval, or after a failed pre-review" });
+      }
       draft.status = "revision_requested";
       draft.artifactPath = undefined;
       draft.publishedPath = undefined;

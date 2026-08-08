@@ -87,6 +87,13 @@ allowed only with explicit migration notes (see
   artifact) is read-only — the Save revision button is hidden, editors are
   read-only, and the meta line says "Read-only view". Only Drafts'
   needs_revision "Revise artifact" exposes editing.
+- The backend now enforces the full approval state machine as the source of
+  truth: `rollback` (regenerate) is only accepted from `generated`,
+  `llm_reviewed`, or `needs_revision` (matching the UI), and the guaranteed
+  transition table is documented in `docs/architecture/approval-flow.md`.
+  The low-level `generate-template` CLI shares the same generation pipeline
+  (auto strategies + canonical binding) and needs no approval changes; the
+  full draft-to-approval flow lives in the batch CLI.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with

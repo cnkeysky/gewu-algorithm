@@ -22,6 +22,21 @@ Accepted drafts without a recorded acceptance tier default to **Human
 approved** (historically acceptance required a human); the upgrade button
 only appears for units whose approval tier is `llm_acceptance`.
 
+## Backend guarantees
+
+The workbench API is the source of truth for the state machine — the UI only
+mirrors it. Every endpoint rejects invalid transitions:
+
+- `generate` only from `queued` / `revision_requested`;
+- `validate` only from `generated`;
+- `reviews` only from `validated` (or `needs_revision` while completing the
+  remaining roles for the same artifact);
+- `accept` only from `llm_reviewed`, `needs_revision` with an explicit
+  `override` plus rationale, `validated` with a human revision, or the human
+  upgrade of an already-`accepted` unit;
+- `rollback` (regenerate) only from `generated`, `llm_reviewed`, or
+  `needs_revision`.
+
 ## Transitions
 
 ```text
