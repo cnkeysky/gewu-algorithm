@@ -61,9 +61,13 @@ flags:
   --report PATH     JSON report output (default batch-report.json)
   --no-ensure-api   fail instead of starting the authoring API when it is down
 
-The batch CLI defaults to all five practice modes and every code recall
-layout. Published units land in tools/template-authoring/drafts/.workbench/
-published and become available to a Core started with that content root.`);
+The batch CLI defaults to all five practice modes: shadow typing, flow recall,
+code recall, reasoning recall, and transfer practice. Code recall expands to
+four layouts (full recall, comment guided, comment to code, cloze), so the
+default run produces 8 practice kinds — plus one shadow typing item per
+implementation strategy. Published units land in
+tools/template-authoring/drafts/.workbench/published and become available to a
+Core started with that content root.`);
 }
 
 const args = process.argv.slice(2);

@@ -16,10 +16,7 @@ const modes: Array<{ id: PracticeMode; label: string; hint: string }> = [
 ];
 const assistance: Array<{ id: Assistance; label: string }> = [
   { id: "comments", label: "Comments" },
-  { id: "keywords", label: "Keywords" },
   { id: "cloze", label: "Cloze" },
-  { id: "skeleton", label: "Skeleton" },
-  { id: "none", label: "No hints" },
 ];
 let providerModels: Record<string, string[]> = {
   deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],

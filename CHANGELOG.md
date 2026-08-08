@@ -79,6 +79,14 @@ allowed only with explicit migration notes (see
   is hidden instead of failing on start. Practice summaries resolve language
   to `None` (unknown) when the selected implementation no longer exists in the
   current revision instead of guessing from the first implementation.
+- Code recall assistance options in the web authoring form are narrowed to
+  the two that actually drive generation (Comments, Cloze); the legacy
+  Keywords / Skeleton / No hints checkboxes were no-ops because layout
+  derivation only reads comments and cloze (full recall is always included).
+- Batch authoring documents its default output as 8 practice kinds: shadow
+  typing, flow recall, the four code recall layouts (full recall, comment
+  guided, comment to code, cloze), reasoning recall, and transfer practice —
+  plus one shadow typing item per implementation strategy.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

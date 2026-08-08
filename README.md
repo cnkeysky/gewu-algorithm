@@ -159,8 +159,11 @@ Core through `cargo`, so `cargo` must be on `PATH`.
 The batch CLI drives the same authoring API as the web workbench, so every
 draft stays in the local sqlite store, appears in Drafts / Review history, and
 publishes through the normal acceptance gate. It defaults to all five practice
-modes (shadow typing, flow recall, code recall with every layout, reasoning
-recall, transfer practice).
+modes — shadow typing, flow recall, code recall, reasoning recall, and
+transfer practice — which expand to **8 practice kinds**: shadow typing, flow
+recall, the four code recall layouts (full recall, comment guided, comment to
+code, cloze), reasoning recall, and transfer practice, plus one shadow typing
+item per implementation strategy.
 
 ```sh
 npm run batch                      # interactive menu (starts the API if needed)

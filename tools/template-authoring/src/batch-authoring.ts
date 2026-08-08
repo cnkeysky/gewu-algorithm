@@ -32,6 +32,11 @@ import { fileURLToPath } from "node:url";
  *   --modes <list>       practice modes (default all five)
  *   --assistance <list>  code recall assistance (default comments,cloze)
  *   --report <path>      JSON report output (default batch-report.json)
+ *
+ * Defaults: all five practice modes are generated. Code recall expands to
+ * four layouts (full_recall, comment_guided, comment_to_code, cloze), so a
+ * default run produces 8 practice kinds, plus one shadow typing item per
+ * implementation strategy.
  */
 
 const REVIEW_ROLES = ["algorithm_correctness", "learning_design", "provenance_safety"] as const;
