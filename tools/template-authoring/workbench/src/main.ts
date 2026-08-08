@@ -745,7 +745,7 @@ interface DraftRecord {
   publishedPath?: string;
   unitId?: string;
 }
-interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; reportPath?: string; createdAt: string; }
+interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; reportPath?: string; rationale?: string; createdAt: string; }
 interface ArtifactPayload { draft: DraftRecord; files: Record<string, string>; reviews: Array<ReviewRecord & { report?: { verdict?: string; findings?: Array<{ rule_id: string; severity: string; path: string; problem: string; evidence: string; suggested_change: string }> } }> }
 
 const DRAFTS_KEY = "gewu.authoring.drafts.v1";
@@ -809,7 +809,9 @@ function variantLabel(value: { unit_id?: string; mode?: string; implementation?:
 function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM approved", needs_revision: "Needs revision", revision_requested: "Awaiting regeneration", accepted: "Human approved" })[status]; }
 function acceptanceLabel(draft: DraftRecord): string {
   if (draft.status !== "accepted") return statusLabel(draft.status);
-  return readReviews().some((review) => review.draftId === draft.id && review.role === "llm_acceptance") ? "LLM approved" : "Human approved";
+  const human = readReviews().some((review) => review.draftId === draft.id && review.role === "human_acceptance");
+  const llm = readReviews().some((review) => review.draftId === draft.id && review.role === "llm_acceptance");
+  return human ? "Human approved" : llm ? "LLM approved" : "Approved";
 }
 function displayRole(role: string): string {
   if (role === "llm_acceptance") return "LLM approve";
@@ -947,8 +949,10 @@ function renderDrafts(): void {
       canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}" title="Run the three role reviews (algorithm correctness, learning design, provenance). All pass marks the draft LLM approved.">LLM pre-review</button>` : "",
       canAccept ? `<button class="inline-action approval-action${draft.status === "needs_revision" ? " override-action" : ""}" type="button" data-accept-id="${draft.id}">${draft.status === "needs_revision" ? "Approve anyway" : "Human approve"}</button>` : "",
+      draft.status === "accepted" && !readReviews().some((review) => review.draftId === draft.id && review.role === "human_acceptance")
+        ? `<button class="inline-action approval-action" type="button" data-upgrade-id="${draft.id}" title="Record explicit human approval over the LLM approval.">Human approve</button>` : "",
       canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}" title="Roll back and regenerate the artifact using the latest review feedback.">Regenerate</button>` : "",
-      canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}">Extend unit</button>` : "",
+      canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}" title="Publish a corrected revision of this unit: fix the content, then re-approve.">Extend unit</button>` : "",
       canDelete ? `<button class="inline-action danger-action" type="button" data-delete-id="${draft.id}">Delete</button>` : "",
     ].filter(Boolean).join("");
     const pipeline = (label: string, active: boolean) => `<b class="${active ? "active" : ""}">${label}</b>`;
@@ -1004,7 +1008,7 @@ function renderHistory(): void {
   renderHistoryFilters(allReviews);
   const reviews = filterReviews(allReviews);
   historyList.innerHTML = reviews.length
-    ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View feedback</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${escapeHtml(displayRole(review.role))}</strong><small>${draft?.title ?? "Unknown draft"}${draft?.language ? ` · ${escapeHtml(draft.language)}` : ""} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
+    ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View feedback</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row" title="${review.rationale ? escapeHtml(review.rationale) : ""}"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${escapeHtml(displayRole(review.role))}</strong><small>${draft?.title ?? "Unknown draft"}${draft?.language ? ` · ${escapeHtml(draft.language)}` : ""} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
     : `<div class="empty-state"><strong>${historyFilter === "all" && historyLanguage === "all" ? "No review reports yet" : "No matching reports"}</strong><span>${historyFilter === "all" && historyLanguage === "all" ? "Reports appear after a draft is validated and reviewed." : "Try another verdict or language filter."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
 }
 
@@ -1218,6 +1222,20 @@ document.addEventListener("click", (event) => {
       notify(response.ok ? "Human approval recorded; draft is accepted." : `Human approval failed: ${payload.error ?? "unknown error"}`, !response.ok);
       if (response.ok) { await syncFromApi(); renderDraftsView(); }
     }).catch(() => { notify("Authoring API is unavailable.", true); }).finally(() => unlockAction("accept", id));
+    return;
+  }
+  const upgradeButton = target.closest<HTMLButtonElement>("[data-upgrade-id]");
+  if (upgradeButton) {
+    event.stopPropagation();
+    const id = upgradeButton.dataset.upgradeId;
+    if (!lockAction("upgrade", id)) return;
+    const rationale = window.prompt("Record explicit human approval for this LLM-approved unit. Enter a reason:");
+    if (rationale === null) return;
+    void fetch(`/api/drafts/${id}/accept`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ acceptanceRole: "human_acceptance", rationale: rationale || "human upgrade" }) }).then(async (response) => {
+      const payload = await response.json() as { error?: string };
+      notify(response.ok ? "Human approval recorded; the unit is now Human approved." : `Human upgrade failed: ${payload.error ?? "unknown error"}`, !response.ok);
+      if (response.ok) { await syncFromApi(); renderDraftsView(); }
+    }).catch(() => { notify("Authoring API is unavailable.", true); }).finally(() => unlockAction("upgrade", id));
     return;
   }
   const rollbackButton = target.closest<HTMLButtonElement>("[data-rollback-id]");

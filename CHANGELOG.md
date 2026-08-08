@@ -43,6 +43,15 @@ allowed only with explicit migration notes (see
   "Pending" steps for that state. "LLM pre-review" and "Regenerate" carry
   tooltips that spell out their difference (review the artifact vs rebuild it
   with feedback).
+- Approval is a layered gate with an explicit hierarchy: **LLM approved**
+  (pre-review content gate and/or automated `llm_acceptance` publication) is
+  the lower tier, and **Human approved** is always superior — a human can
+  upgrade an LLM-approved published unit with a "Human approve" action that
+  records an explicit `human_acceptance` review and rationale, and every
+  published unit can be corrected through Extend unit (fork → fix → new
+  revision). Acceptance rationales are now persisted in the audit trail
+  (`reviews.rationale`) and shown in Review history. The full state machine
+  is documented in `docs/architecture/approval-flow.md`.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with

@@ -40,11 +40,12 @@ database.exec(`
   );
   CREATE TABLE IF NOT EXISTS reviews (
     id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, role TEXT NOT NULL, verdict TEXT NOT NULL,
-    artifact_hash TEXT, report_path TEXT, created_at TEXT NOT NULL, FOREIGN KEY (draft_id) REFERENCES drafts(id)
+    artifact_hash TEXT, report_path TEXT, rationale TEXT, created_at TEXT NOT NULL, FOREIGN KEY (draft_id) REFERENCES drafts(id)
   );
 `);
 try { database.exec("ALTER TABLE drafts ADD COLUMN published_path TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE drafts ADD COLUMN unit_id TEXT"); } catch { /* Existing database already has the column. */ }
+try { database.exec("ALTER TABLE reviews ADD COLUMN rationale TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE reviews ADD COLUMN report_path TEXT"); } catch { /* Existing database already has the column. */ }
 database.exec("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
 database.prepare("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)").run("authoring_schema", "2");
@@ -74,6 +75,7 @@ type ReviewRecord = {
   verdict: "pending" | "pass" | "needs_revision" | "reject";
   artifactHash: string | null;
   reportPath?: string;
+  rationale?: string;
   createdAt: string;
 };
 type State = { drafts: DraftRecord[]; reviews: ReviewRecord[] };
@@ -103,10 +105,10 @@ class DraftInputError extends Error {
 
 function loadState(): State {
   const drafts = database.prepare("SELECT id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path FROM drafts ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
-  const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, created_at FROM reviews ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
+  const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at FROM reviews ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
   return {
     drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), unitId: row.unit_id ? String(row.unit_id) : undefined, artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined })),
-    reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, reportPath: row.report_path ? String(row.report_path) : undefined, createdAt: String(row.created_at) })),
+    reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, reportPath: row.report_path ? String(row.report_path) : undefined, rationale: row.rationale ? String(row.rationale) : undefined, createdAt: String(row.created_at) })),
   };
 }
 
@@ -116,8 +118,8 @@ function saveState(state: State): void {
     database.exec("DELETE FROM reviews; DELETE FROM drafts;");
     const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.unitId ?? null, draft.artifactPath ?? null, draft.publishedPath ?? null);
-    const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.reportPath ?? null, review.createdAt);
+    const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.reportPath ?? null, review.rationale ?? null, review.createdAt);
     database.exec("COMMIT");
   } catch (error) {
     database.exec("ROLLBACK");
@@ -550,6 +552,27 @@ const server = createServer(async (request, response) => {
       const payload = await body(request).catch(() => ({}));
       const humanOverride = isRecord(payload) && payload.override === true && typeof payload.rationale === "string" && payload.rationale.trim().length > 0;
       const acceptanceRole = isRecord(payload) && payload.acceptanceRole === "llm_acceptance" ? "llm_acceptance" : "human_acceptance";
+      const rationale = isRecord(payload) && typeof payload.rationale === "string" ? payload.rationale.trim() : "";
+      if (draft.status === "accepted") {
+        // Human approval is superior to an LLM approval: a human may upgrade an
+        // LLM-approved published draft by recording an explicit human
+        // acceptance with a rationale. The unit stays published.
+        const alreadyHuman = state.reviews.some((review) => review.draftId === draft.id && review.role === "human_acceptance");
+        if (acceptanceRole !== "human_acceptance" || alreadyHuman) return send(response, 409, { error: "draft is already accepted" });
+        if (!rationale) return send(response, 409, { error: "human upgrade requires a rationale" });
+        const upgradeReview: ReviewRecord = {
+          id: crypto.randomUUID(),
+          draftId: draft.id,
+          role: "human_acceptance",
+          verdict: "pass",
+          artifactHash: latestArtifactHash(state.reviews, draft.id),
+          rationale,
+          createdAt: new Date().toISOString(),
+        };
+        state.reviews = [upgradeReview, ...state.reviews];
+        await saveState(state);
+        return send(response, 200, { status: "accepted", draft, publishedPath: draft.publishedPath });
+      }
       const humanEdited = state.reviews.some((review) => review.draftId === draft.id && review.role === "human_revision" && review.verdict === "pass");
       if (!["llm_reviewed", "needs_revision"].includes(draft.status) && !(draft.status === "validated" && humanEdited)) {
         return send(response, 409, { error: "LLM pre-review must pass or the artifact must be human-edited and reviewed before acceptance" });
@@ -567,6 +590,7 @@ const server = createServer(async (request, response) => {
           role: acceptanceRole,
           verdict: "pass",
           artifactHash: latestArtifactHash(state.reviews, draft.id),
+          rationale,
           createdAt: new Date().toISOString(),
         };
         state.reviews = [acceptanceReview, ...state.reviews];

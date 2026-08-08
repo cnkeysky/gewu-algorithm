@@ -226,7 +226,7 @@ test("status filters group drafts with live counts and empty states", async ({ p
 
   await pill("Published").click();
   await expect(page.locator(".draft-row")).toHaveCount(2);
-  await expect(page.locator(".draft-row .draft-status").first()).toHaveText("Human approved");
+  await expect(page.locator(".draft-row .draft-status").first()).toHaveText("Approved");
 });
 
 test("a status filter with no matches shows a targeted empty state", async ({ page }) => {

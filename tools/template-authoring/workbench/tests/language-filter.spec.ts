@@ -180,3 +180,24 @@ test("units list uses a fixed area with pagination like Drafts", async ({ page }
   await expect(page.locator("#units-list .pagination-info")).toContainText("of 8");
   await expect.poll(async () => (await area.evaluate((el) => el.clientHeight))).toBe(heightBefore);
 });
+
+test("human approval is superior and upgrades an LLM-approved unit", async ({ page }) => {
+  const llmAccepted = { ...draft("LLM unit", "python", 0), status: "accepted", unitId: "unit.a" };
+  const humanAccepted = { ...draft("Human unit", "python", 1), status: "accepted", unitId: "unit.b" };
+  const reviews = [
+    { id: "review-llm", draftId: llmAccepted.id, role: "llm_acceptance", verdict: "pass", artifactHash: "hash-llm", rationale: "LLM approve by deepseek/deepseek-v4-flash: verified", createdAt: "2026-08-05T08:30:00.000Z" },
+    { id: "review-human", draftId: humanAccepted.id, role: "human_acceptance", verdict: "pass", artifactHash: "hash-human", rationale: "human review", createdAt: "2026-08-05T08:31:00.000Z" },
+  ];
+  await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts: [llmAccepted, humanAccepted] } }));
+  await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews } }));
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Drafts/ }).click();
+
+  const llmRow = page.locator(".draft-row", { hasText: "LLM unit" });
+  await expect(llmRow.locator(".draft-status")).toHaveText("LLM approved");
+  await expect(llmRow.locator("[data-upgrade-id]")).toHaveText("Human approve");
+
+  const humanRow = page.locator(".draft-row", { hasText: "Human unit" });
+  await expect(humanRow.locator(".draft-status")).toHaveText("Human approved");
+  await expect(humanRow.locator("[data-upgrade-id]")).toHaveCount(0);
+});
