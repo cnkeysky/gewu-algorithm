@@ -33,7 +33,7 @@ Practice:
 - assistance "none" requires an empty scaffold; otherwise nonempty.
 - Variants: only genuinely distinct strategies (different approaches or clear complexity trade-offs); usually one canonical solution, at most three, never cosmetic-only.
 - shadow_typing has exactly one item per strategy; flow_recall, code_recall, reasoning_recall, transfer_practice bind to the first-declared implementation only - their variants are exercise formats, not new implementations.
-- provenance.sources must cite the statement's actual origin (title, URL, accessed_at); choose a license compatible with that source - never claim MIT for verbatim third-party problem text (LeetCode); "all-rights-reserved" is the safe default.
+- provenance.sources must cite the statement's actual origin (title, URL, accessed_at) with role "primary", "synthesis", or "lead"; choose a license compatible with that source - never claim MIT for verbatim third-party problem text (LeetCode); "all-rights-reserved" is the safe default.
 
 Return only the schema fields.`;
 
@@ -148,7 +148,7 @@ export const OUTPUT_SCHEMA: Record<string, unknown> = {
           },
         },
         validation: { type: "object", additionalProperties: false, required: ["schema", "code", "content_review", "transfer_review", "last_validated_at"], properties: { schema: { const: "pending" }, code: { const: "pending" }, content_review: { const: "pending" }, transfer_review: { const: "pending" }, last_validated_at: { type: ["string", "null"] } } },
-        provenance: { type: "object", additionalProperties: false, required: ["authors", "generated_by", "reviewed_by", "sources", "license"], properties: { authors: { type: "array", items: { type: "string" } }, generated_by: { type: ["object", "null"], additionalProperties: false, required: ["provider", "model", "task_version", "generated_at"], properties: { provider: { type: "string" }, model: { type: "string" }, task_version: { type: "string" }, generated_at: { type: "string" } } }, reviewed_by: { type: "array", items: { type: "string" } }, sources: { type: "array", items: { type: "object", additionalProperties: false, required: ["title", "url", "role", "accessed_at"], properties: { title: { type: "string" }, url: { type: "string" }, role: { type: "string" }, accessed_at: { type: "string" } } } }, license: { type: "string" } } },
+        provenance: { type: "object", additionalProperties: false, required: ["authors", "generated_by", "reviewed_by", "sources", "license"], properties: { authors: { type: "array", items: { type: "string" } }, generated_by: { type: ["object", "null"], additionalProperties: false, required: ["provider", "model", "task_version", "generated_at"], properties: { provider: { type: "string" }, model: { type: "string" }, task_version: { type: "string" }, generated_at: { type: "string" } } }, reviewed_by: { type: "array", items: { type: "string" } }, sources: { type: "array", items: { type: "object", additionalProperties: false, required: ["title", "url", "role", "accessed_at"], properties: { title: { type: "string" }, url: { type: "string" }, role: { type: "string", enum: ["primary", "synthesis", "lead"] }, accessed_at: { type: "string" } } } }, license: { type: "string" } } },
         supersedes: { type: "array", items: { type: "object", additionalProperties: false, required: ["revision", "reason"], properties: { revision: { type: "integer", minimum: 1 }, reason: { type: "string" } } } },
       },
     },
