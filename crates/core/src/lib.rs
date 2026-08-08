@@ -1410,14 +1410,15 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         });
     }
     for definition in &unit.practice.code_recall {
+        let short = unit.id.as_str().rsplit('.').next().unwrap_or(unit.id.as_str());
+        let variant_name = definition
+            .id
+            .strip_prefix(&format!("{short}-"))
+            .unwrap_or(definition.id.as_str())
+            .replace('-', " ");
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
-            label: format!(
-                "{} · {} · {}",
-                definition.id.replace('-', " "),
-                code_layout_label(definition.layout),
-                assistance_label(definition.assistance)
-            ),
+            label: variant_name,
             language: unit
                 .implementations
                 .first()

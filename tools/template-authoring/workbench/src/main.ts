@@ -54,7 +54,7 @@ root.innerHTML = `
           <div class="hero-actions"><button class="button primary" type="button" data-go="practice">Start practicing <span aria-hidden="true">&#8594;</span></button><button class="button secondary" type="button" data-go="new">Author a unit</button></div>
           <div class="hero-meta"><span><b>01</b> canonical AlgorithmUnit</span><span><b>02</b> practice projections</span><span><b>03</b> core-owned state</span></div>
         </div>
-        <div class="terminal-visual" aria-label="GEWU core status visualization"><div class="terminal-bar"><span></span><span></span><span></span><b>gewu-core</b><i class="terminal-pulse" aria-hidden="true"></i></div><div class="terminal-body"><p><em>core</em>.start(<strong>graph.bfs</strong>, <strong>code_recall</strong>)</p><p class="dim">&gt; loading reviewed revision <strong>r1</strong></p><p class="green">&gt; state machine ready</p><p class="amber" data-text-layout><span id="home-live-text">&gt; next move: reconstruct frontier</span><span class="terminal-cursor" aria-hidden="true">_</span></p><div class="terminal-grid"><span>accepted</span><strong id="home-accepted">000</strong><span>stability</span><strong id="home-stability">0.00</strong><span>mode</span><strong>RECALL</strong></div></div></div>
+        <div class="terminal-visual" aria-label="GEWU core status visualization"><div class="terminal-bar"><span></span><span></span><span></span><b>gewu-core</b><i class="terminal-pulse" aria-hidden="true"></i></div><div class="terminal-body"><p><em>core</em>.start(<strong id="home-unit-id">your.algorithm</strong>, <strong>code_recall</strong>)</p><p class="dim">&gt; loading reviewed revision <strong>r1</strong></p><p class="green">&gt; state machine ready</p><p class="amber" data-text-layout><span id="home-live-text">&gt; next move: reconstruct frontier</span><span class="terminal-cursor" aria-hidden="true">_</span></p><div class="terminal-grid"><span>accepted</span><strong id="home-accepted">000</strong><span>stability</span><strong id="home-stability">0.00</strong><span>mode</span><strong>RECALL</strong></div></div></div>
       </div>
       <section class="vision-strip"><div><p class="eyebrow">The GEWU model</p><h2 data-text-layout>One canonical unit. Many ways to remember it.</h2></div><p data-text-layout>Content, practice, review, and persistence share a typed boundary. The interface can change; the learning facts do not.</p></section>
       <section class="home-cards"><article><span class="card-index">01</span><h3>Reconstruct</h3><p>Shadow typing and code recall make the implementation a sequence of decisions, not a snippet to copy.</p><button class="text-link" type="button" data-go="practice">Open Practice <span aria-hidden="true">&#8594;</span></button></article><article><span class="card-index">02</span><h3>Understand</h3><p>Flow, reasoning, and transfer recall keep state, invariants, trade-offs, and boundaries in view.</p><button class="text-link" type="button" data-go="practice">Explore modes <span aria-hidden="true">&#8594;</span></button></article><article><span class="card-index">03</span><h3>Author</h3><p>Describe an algorithm once. GEWU generates one reviewed learning unit with explicit practice projections.</p><button class="text-link" type="button" data-go="new">Build a unit <span aria-hidden="true">&#8594;</span></button></article></section>
@@ -102,6 +102,7 @@ root.innerHTML = `
     </div>
     <section id="practice-view" class="app-view panel page-panel" hidden>
       <div class="practice-heading panel-heading"><div><p class="eyebrow">Core practice / local first</p><h2>Practice workspace</h2><p class="page-subtitle">Choose a unit, start one projection, and keep the current state visible while you work.</p></div><span class="connection-badge" id="practice-connection">Core offline</span></div>
+      <div class="session-heading" id="session-heading" hidden><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span><span class="session-actions"><button class="button secondary" type="button" id="practice-back" hidden>&#8592; Back to workspace</button><button class="button danger" type="button" id="session-stop">Stop practice</button></span></div></div>
       <div class="practice-layout">
         <form id="practice-start" class="practice-controls">
           <label class="field"><span>Algorithm unit</span><select id="practice-unit"><option>Loading units...</option></select></label>
@@ -113,9 +114,9 @@ root.innerHTML = `
         <section class="problem-pane" hidden>
           <div class="session-problem"><span>Problem</span><div class="session-question" id="session-question"></div></div>
         </section>
+        <div class="split-divider" id="split-divider" hidden></div>
         <div class="session-column">
         <section class="practice-session" id="practice-session" hidden>
-          <div class="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span><button class="button danger" type="button" id="session-stop">Stop practice</button></div></div>
           <p class="session-meta" id="session-meta"></p>
           <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-cloze-template" class="session-cloze-template" hidden data-text-layout></pre><pre id="session-target" class="session-target" data-text-layout></pre>
           <div id="session-editor-shell" class="practice-editor-shell" hidden><div class="practice-editor-toolbar"><span class="session-language" id="session-language">Template language</span><label>Font size <select id="editor-font-size"><option value="12">12</option><option value="13" selected>13</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option></select></label></div><div id="session-editor" class="shadow-editor" aria-label="Practice code editor"></div></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
@@ -420,7 +421,16 @@ function syncProblemPaneHeight(): void {
   const pane = document.querySelector<HTMLElement>(".problem-pane");
   const column = document.querySelector<HTMLElement>(".session-column");
   if (!pane || !column || pane.hidden || window.matchMedia("(max-width: 940px)").matches) return;
+  if (document.querySelector<HTMLElement>("#practice-view")?.classList.contains("focused")) return;
   pane.style.height = `${Math.max(0, Math.round(column.scrollHeight))}px`;
+}
+function setPracticeFocus(focused: boolean): void {
+  document.querySelector<HTMLElement>("#practice-view")?.classList.toggle("focused", focused);
+  document.querySelector<HTMLElement>(".practice-layout")?.classList.toggle("focused", focused);
+  const pane = document.querySelector<HTMLElement>(".problem-pane");
+  if (pane) pane.style.height = "";
+  document.querySelector<HTMLButtonElement>("#practice-back")!.hidden = !focused;
+  if (!focused) syncProblemPaneHeight();
 }
 if (typeof ResizeObserver !== "undefined") {
   const column = document.querySelector<HTMLElement>(".session-column");
@@ -431,14 +441,22 @@ function renderPracticeSession(session: PracticeSession): void {
   activePracticeSnapshot = session;
   document.querySelector<HTMLElement>(".problem-pane")!.hidden = false;
   document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
+  document.querySelector<HTMLElement>("#session-heading")!.hidden = false;
+  document.querySelector<HTMLElement>("#split-divider")!.hidden = false;
   syncProblemPaneHeight();
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
   document.querySelector<HTMLElement>("#session-question")!.innerHTML = renderProblemStatement(session.problem_statement);
-  const sessionBindings = [
-    session.implementation ? `implementation ${session.implementation}` : "",
-    session.practice_id ? `practice ${session.practice_id}` : "",
-  ].filter(Boolean);
-  document.querySelector<HTMLElement>("#session-context")!.textContent = `${session.mode.replaceAll("_", " ")}${session.code_layout ? ` · ${session.code_layout.replaceAll("_", " ")}` : ""} · ${sessionBindings.join(" · ") || "default variant"}`;
+  const unitShort = session.unit_id.split(".").pop() ?? "";
+  const practiceName = session.practice_id
+    ? session.practice_id.startsWith(`${unitShort}-`)
+      ? session.practice_id.slice(unitShort.length + 1).replaceAll("-", " ")
+      : session.practice_id.replaceAll("-", " ")
+    : "";
+  const contextParts = [session.mode.replaceAll("_", " ")];
+  if (practiceName) contextParts.push(practiceName);
+  else if (session.code_layout) contextParts.push(session.code_layout.replaceAll("_", " "));
+  if (session.implementation) contextParts.push(`implementation ${session.implementation}`);
+  document.querySelector<HTMLElement>("#session-context")!.textContent = contextParts.join(" · ") || "default variant";
   document.querySelector<HTMLElement>("#session-status")!.textContent = session.status;
   const progress = document.querySelector<HTMLElement>("#session-progress")!;
   const completed = document.querySelector<HTMLElement>("#session-completed")!;
@@ -580,6 +598,7 @@ async function refreshPracticeData(): Promise<void> {
       practiceRpc<{ attempts: Attempt[] }>("gewu/recentAttempts", { limit: 50 }),
     ]);
     practiceUnits = units;
+    document.querySelector<HTMLElement>("#home-unit-id")!.textContent = units[0]?.id ?? "your.algorithm";
     const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit")!;
     const selectedUnitId = unitSelect.value;
     unitSelect.innerHTML = units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("");
@@ -1224,6 +1243,7 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
       if (!resumed.session) throw new Error("The interrupted practice is no longer available");
       activePracticeSession = { session_id: resumed.session.session_id, mode: resumed.session.mode };
       renderPracticeSession(resumed.session);
+      setPracticeFocus(true);
       practiceMessage("Interrupted practice resumed.");
       await refreshPracticeData();
       return;
@@ -1236,6 +1256,7 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
     activePracticeSession = { session_id: session.session.session_id, mode: session.session.mode };
     document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = false;
     renderPracticeSession(session.session);
+    setPracticeFocus(true);
     practiceMessage("Practice started.");
     await refreshPracticeData();
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to start practice", true); }
@@ -1287,11 +1308,39 @@ document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("cl
     const result = await practiceRpc<{ session: PracticeSession }>("gewu/stopSession", { session_id: activePracticeSession.session_id, elapsed: { active_ms: 1000, wall_ms: 1000 } });
     renderPracticeSession(result.session);
     activePracticeSession = undefined;
+    setPracticeFocus(false);
     await refreshPracticeData();
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to stop practice", true); }
   finally { unlockAction("stop", sessionId); }
 });
+document.querySelector<HTMLButtonElement>("#practice-back")!.addEventListener("click", () => setPracticeFocus(false));
 document.querySelector<HTMLButtonElement>("#refresh-checkpoints")!.addEventListener("click", () => { void refreshPracticeData(); });
+const splitDivider = document.querySelector<HTMLElement>("#split-divider");
+if (splitDivider) {
+  let splitDragging = false;
+  const applySplit = (clientX: number): void => {
+    const layout = document.querySelector<HTMLElement>(".practice-layout");
+    if (!layout) return;
+    const rect = layout.getBoundingClientRect();
+    const ratio = Math.min(0.6, Math.max(0.25, (clientX - rect.left) / rect.width));
+    layout.style.gridTemplateColumns = `${ratio}fr 8px ${1 - ratio}fr`;
+  };
+  splitDivider.addEventListener("pointerdown", (event) => {
+    splitDragging = true;
+    splitDivider.setPointerCapture(event.pointerId);
+    splitDivider.classList.add("dragging");
+    event.preventDefault();
+  });
+  splitDivider.addEventListener("pointermove", (event) => { if (splitDragging) applySplit(event.clientX); });
+  const stopDrag = (event: PointerEvent): void => {
+    if (!splitDragging) return;
+    splitDragging = false;
+    splitDivider.classList.remove("dragging");
+    applySplit(event.clientX);
+  };
+  splitDivider.addEventListener("pointerup", stopDrag);
+  splitDivider.addEventListener("pointercancel", stopDrag);
+}
 document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click", async (event) => {
   const target = event.target as HTMLElement;
   const recommendation = target.closest<HTMLButtonElement>("[data-start-recommendation]");
@@ -1320,7 +1369,7 @@ document.querySelector<HTMLElement>("#practice-view")!.addEventListener("click",
     if (resume) {
       if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
       const result = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: resume.dataset.resumeCheckpoint });
-      if (result.session) { flowPromptRevealed = false; codePromptRevealed = false; promptRevealedModes.clear(); activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); }
+      if (result.session) { flowPromptRevealed = false; codePromptRevealed = false; promptRevealedModes.clear(); activePracticeSession = { session_id: result.session.session_id, mode: result.session.mode }; renderPracticeSession(result.session); setPracticeFocus(true); }
     }
     if (discard) await practiceRpc("gewu/discardCheckpoint", { checkpoint_id: discard.dataset.discardCheckpoint });
     await refreshPracticeData();

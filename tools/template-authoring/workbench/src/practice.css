@@ -2,6 +2,27 @@
   padding: 32px 29px 38px;
   background: #fbfcfb;
 }
+#practice-view.focused {
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  padding-left: clamp(18px, 3vw, 44px);
+  padding-right: clamp(18px, 3vw, 44px);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 68px - 54px);
+}
+#practice-view.focused .practice-heading { display: none; }
+#practice-view.focused .session-heading { padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+#practice-view.focused .practice-layout { flex: 1; min-height: 0; height: auto; grid-template-rows: minmax(0, 1fr); }
+#practice-view.focused .problem-pane { align-self: stretch; }
+#practice-view.focused .session-column { height: 100%; }
+#practice-view.focused .practice-session { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#practice-view.focused .practice-editor-shell { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 10px; }
+#practice-view.focused .practice-editor-shell .shadow-editor { flex: 1; min-height: 0; height: auto; }
+#practice-view.focused #session-answer { flex: 1; min-height: 0; }
+body:has(#practice-view.focused) .shell { padding-bottom: 0; }
+body:has(#practice-view.focused) footer { display: none; }
+}
 
 .practice-heading {
   align-items: start;
@@ -17,7 +38,12 @@
 .connection-badge.is-connected::before { background: #2f8a59; box-shadow: 0 0 0 3px rgba(47, 138, 89, .12); }
 
 /* Split layout: problem statement on the left, session on the right. */
-.practice-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(520px, 1.25fr); gap: 24px; }
+.practice-layout { --problem: 1fr; --editor: 1.25fr; display: grid; grid-template-columns: minmax(0, var(--problem)) 20px minmax(0, var(--editor)); row-gap: 24px; }
+.practice-layout.focused { --problem: .8fr; --editor: 1.5fr; grid-template-rows: minmax(0, 1fr); }
+.practice-layout.focused .practice-controls, .practice-layout.focused .practice-side { display: none; }
+.split-divider { position: relative; cursor: col-resize; touch-action: none; }
+.split-divider::before { position: absolute; top: 0; bottom: 0; left: 9px; width: 2px; border-radius: 2px; background: var(--line); content: ""; transition: background .15s ease; }
+.split-divider:hover::before, .split-divider.dragging::before { background: var(--green); }
 .problem-pane[hidden] { display: none; }
 .problem-pane { min-height: 0; overflow-y: auto; padding: 24px 26px; border: 1px solid var(--line); border-radius: 12px; background: #fff; scrollbar-width: thin; }
 .problem-pane .session-problem { margin: 0; }
@@ -38,8 +64,11 @@
 .session-heading h3 { margin: 0; font-size: 24px; line-height: 1.2; }
 .session-context { margin: 7px 0 0; color: #2f3d36; font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: capitalize; }
 .session-meta { margin: 12px 0 0; padding-bottom: 12px; overflow: hidden; color: #2f3d36; border-bottom: 1px solid var(--line); font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
-.session-heading-meta { display: flex; min-width: 96px; align-self: stretch; flex-direction: column; align-items: flex-end; justify-content: space-between; }
+.session-heading-meta { display: flex; min-width: 96px; flex-direction: column; align-items: flex-end; gap: 12px; }
 .session-heading-meta .button { min-height: 34px; padding: 0 14px; font-size: 11px; white-space: nowrap; }
+.session-actions { display: flex; align-items: center; gap: 8px; }
+#practice-back { border-color: #aebbb3; color: var(--ink); }
+#practice-back:hover { border-color: #7f9488; }
 .session-language { display: inline-block; padding: 4px 10px; border: 1px solid #d5e2d9; border-radius: 999px; color: #35523f; background: #eef4ef; font: 600 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: lowercase; }
 .session-prompt { min-height: 30px; margin: 14px 0 10px; color: var(--muted); font-size: 14px; line-height: 1.5; }
 .session-prompt[hidden] { display: none; }
@@ -104,6 +133,8 @@
   #practice-view { padding: 23px 18px 28px; }
   .practice-heading { flex-direction: column; gap: 15px; }
   .practice-layout { grid-template-columns: 1fr; }
+  .practice-layout.focused { grid-template-columns: 1fr; }
+  .split-divider { display: none; }
   .problem-pane { min-height: 38vh; max-height: 48vh; }
   .practice-controls { grid-template-columns: 1fr 1fr; }
   .practice-controls .button, .practice-controls .form-message { grid-column: 1 / -1; }

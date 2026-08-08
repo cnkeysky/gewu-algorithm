@@ -34,6 +34,17 @@ allowed only with explicit migration notes (see
   numbered-window navigation is the mainstream pattern). The count reads
   `1–6 of 24` without the "Showing" prefix, and the practice variant selector
   keeps its selection when lists refresh.
+- Active practice enters a focus mode: the start controls and the
+  Interrupted/Spaced review/Recent attempts panels hide so the problem and
+  editor fill the workspace, with a "Back to workspace" button to return while
+  the session stays active. The focused workspace is a dedicated layout: a
+  full-width toolbar (title, status, Back, Stop) on top, then the problem and
+  editor at equal height with a draggable divider (LeetCode-style), filling
+  the viewport without page scroll.
+- Internal identifiers no longer surface in the UI: practice variant labels
+  drop the unit prefix and are short names only, the session context shows
+  `mode · variant` instead of raw practice ids, and the home terminal unit is
+  populated from the practice catalog instead of a hardcoded id.
 - Shadow typing / code recall editors enqueue every content change instead of
   batching: a wrong character is rejected on its own while the correctly typed
   prefix stays accepted (fast typing no longer rolls back the whole batch),

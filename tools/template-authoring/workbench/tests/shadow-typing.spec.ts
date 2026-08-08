@@ -105,11 +105,14 @@ test("problem statement stays bound across modes, restart, and checkpoint resume
   expect(original).toContain("ascending sorted array");
   await expect(statement.locator(".katex")).toHaveCount(2);
 
+  // Focus mode hides the controls and side panels during an active session.
+  await page.locator("#practice-back").click();
   await page.locator("#refresh-checkpoints").click();
   await page.locator("#practice-checkpoints [data-resume-checkpoint]").first().click();
   await expect(statement).toHaveText(original ?? "");
   await expect(statement.locator(".katex")).toHaveCount(2);
 
+  await page.locator("#practice-back").click();
   await page.locator("#practice-mode").selectOption("flow_recall");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
   await expect(statement).toHaveText(original ?? "");
@@ -144,7 +147,7 @@ test("comment-to-code exposes reviewed comments and keeps the full-code editor",
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
 
   await expect(page.locator("#session-editor .monaco-editor")).toBeVisible();
-  await expect(page.locator("#session-context")).toContainText("comment to code");
+  await expect(page.locator("#session-context")).toContainText("comments");
   await expect(page.locator(".gewu-shadow-guidance")).toHaveText("");
   await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
   await expect(page.locator("#session-reveal")).toHaveText("Reveal prompt");
@@ -232,11 +235,11 @@ test("code recall restart keeps the mode and variant bound", async ({ page }) =>
   await page.locator("#practice-mode").selectOption("code_recall");
   await page.locator("#practice-id").selectOption("bfs-comments");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
-  await expect(page.locator("#session-context")).toContainText("practice bfs-comments");
+  await expect(page.locator("#session-context")).toContainText("comments");
   await page.locator("#session-restart").click();
   await expect(page.locator("#session-editor .monaco-editor")).toBeVisible();
   await expect(page.locator("#session-context")).toContainText("code recall");
-  await expect(page.locator("#session-context")).toContainText("practice bfs-comments");
+  await expect(page.locator("#session-context")).toContainText("comments");
   await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
 });
 
@@ -257,6 +260,41 @@ test("practice variant selection survives refreshes and starts", async ({ page }
   await page.waitForTimeout(700);
   await expect(variant).toHaveValue("bfs-comment-guided-frontier");
   await expect(page.locator("#session-context")).toContainText("comment guided");
+});
+
+test("focused workspace has a top toolbar with equal-height split and draggable divider", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  const heading = page.locator("#session-heading");
+  const problem = page.locator(".problem-pane");
+  const editor = page.locator("#session-editor");
+  const divider = page.locator("#split-divider");
+  await expect(heading).toBeVisible();
+  await expect(divider).toBeVisible();
+  const headingBox = await heading.boundingBox();
+  const problemBox = await problem.boundingBox();
+  const editorBox = await editor.boundingBox();
+  expect(headingBox).not.toBeNull();
+  expect(problemBox).not.toBeNull();
+  expect(editorBox).not.toBeNull();
+  // The toolbar is a full-width bar above the split.
+  expect(headingBox!.y + headingBox!.height).toBeLessThanOrEqual(problemBox!.y + 1);
+  // Problem and editor fill the same height.
+  expect(Math.abs((problemBox!.y + problemBox!.height) - (editorBox!.y + editorBox!.height))).toBeLessThanOrEqual(2);
+  // Dragging the divider widens the problem pane.
+  const dividerBox = await divider.boundingBox();
+  const beforeWidth = problemBox!.width;
+  await page.mouse.move((dividerBox?.x ?? 0) + 10, (dividerBox?.y ?? 0) + 100);
+  await page.mouse.down();
+  await page.mouse.move((dividerBox?.x ?? 0) + 200, (dividerBox?.y ?? 0) + 100, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const afterWidth = (await problem.boundingBox())?.width ?? beforeWidth;
+  expect(afterWidth).toBeGreaterThan(beforeWidth + 50);
 });
 
 test("cloze recall renders fixed context and submits the active slot", async ({ page }) => {
@@ -309,6 +347,7 @@ test("reasoning and transfer recall expose step context through the shared answe
   await page.locator("#session-reveal").click();
   await expect(page.locator("#session-prompt")).toHaveText("Why does this frontier order preserve nondecreasing edge distance?");
 
+  await page.locator("#practice-back").click();
   await page.locator("#practice-mode").selectOption("transfer_practice");
   await page.locator("#practice-id").selectOption("rotting-oranges");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
@@ -328,7 +367,7 @@ test("all recall modes keep restart and stop state transitions bound", async ({ 
     if (variant) await page.locator("#practice-id").selectOption(variant);
     await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
     await expect(page.locator("#session-context")).toContainText(mode.replaceAll("_", " "));
-    if (variant) await expect(page.locator("#session-context")).toContainText(`practice ${variant}`);
+    if (variant) await expect(page.locator("#session-context")).toContainText(variant.replaceAll("-", " "));
     await page.locator("#session-reveal").click();
     await expect(page.locator("#session-prompt")).not.toHaveText("Prompt hidden until Reveal");
     await page.locator("#session-restart").click();
@@ -347,6 +386,7 @@ test("practice list cards keep natural height inside equal sections", async ({ p
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
   await page.locator("#session-editor .monaco-editor").click({ position: { x: 220, y: 30 } });
   await page.keyboard.type("f");
+  await page.locator("#practice-back").click();
   await page.locator("#refresh-checkpoints").click();
   const card = page.locator("#practice-checkpoints .practice-record").first();
   await expect(card).toBeVisible();
@@ -371,6 +411,7 @@ test("resume replaces the old session boundary before accepting Enter", async ({
   await page.keyboard.type("from collections import deque");
   await page.keyboard.press("Enter");
   await expect(meta).toContainText("progress 7%");
+  await page.locator("#practice-back").click();
   await page.locator("#refresh-checkpoints").click();
   await page.locator("#practice-checkpoints [data-resume-checkpoint]").first().click();
   await expect(meta).toContainText("progress 7%");
@@ -391,6 +432,10 @@ test("mouse wheel leaves Monaco when the editor cannot scroll further", async ({
   await expect(editor).toBeVisible();
   await expect(editor.locator(".monaco-editor")).toBeVisible();
   await editor.evaluate((element) => window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 80));
+  // The workspace layout (controls + side panels) makes the page tall enough
+  // for the wheel to propagate after Monaco stops scrolling.
+  await page.locator("#practice-back").click();
+  await page.waitForTimeout(200);
   const box = await editor.boundingBox();
   expect(box).not.toBeNull();
   const before = await page.evaluate(() => window.scrollY);
