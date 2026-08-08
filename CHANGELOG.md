@@ -82,6 +82,11 @@ allowed only with explicit migration notes (see
   button is renamed **View report** (read-only inspection of the artifact and
   its review reports, with a tooltip pointing revisions back to Drafts), so
   "needs revision" no longer suggests fixing it in place.
+- The shared artifact inspector now respects its entry point: opening it from
+  Review history (View report) or from a non-`needs_revision` draft (View
+  artifact) is read-only — the Save revision button is hidden, editors are
+  read-only, and the meta line says "Read-only view". Only Drafts'
+  needs_revision "Revise artifact" exposes editing.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with

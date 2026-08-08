@@ -1058,11 +1058,11 @@ function renderHistory(): void {
   renderHistoryFilters(allReviews);
   const reviews = filterReviews(allReviews);
   historyList.innerHTML = reviews.length
-    ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}" title="Open the artifact and its review reports (read-only). Revision happens in Drafts.">View report</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row" title="${review.rationale ? escapeHtml(review.rationale) : ""}"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${escapeHtml(displayRole(review.role))}</strong><small>${draft?.title ?? "Unknown draft"}${draft?.language ? ` · ${escapeHtml(draft.language)}` : ""} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-actions"><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</span></div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
+    ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}" data-readonly="1" title="Open the artifact and its review reports (read-only). Revision happens in Drafts.">View report</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row" title="${review.rationale ? escapeHtml(review.rationale) : ""}"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${escapeHtml(displayRole(review.role))}</strong><small>${draft?.title ?? "Unknown draft"}${draft?.language ? ` · ${escapeHtml(draft.language)}` : ""} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-actions"><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</span></div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
     : `<div class="empty-state"><strong>${historyFilter === "all" && historyLanguage === "all" ? "No review reports yet" : "No matching reports"}</strong><span>${historyFilter === "all" && historyLanguage === "all" ? "Reports appear after a draft is validated and reviewed." : "Try another verdict or language filter."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
 }
 
-async function inspectArtifact(id: string): Promise<void> {
+async function inspectArtifact(id: string, readonly = false): Promise<void> {
   artifactMessage("");
   try {
     const response = await fetch(`/api/drafts/${id}/artifact`);
@@ -1071,7 +1071,11 @@ async function inspectArtifact(id: string): Promise<void> {
     artifactInspector.hidden = false;
     artifactInspector.dataset.draftId = id;
     document.querySelector<HTMLElement>("#artifact-title")!.textContent = payload.draft.title;
-    document.querySelector<HTMLElement>("#artifact-meta")!.textContent = `${statusLabel(payload.draft.status)} · ${payload.draft.provider} / ${payload.draft.model}${payload.draft.publishedPath ? " · Published to Core content" : ""}`;
+    document.querySelector<HTMLElement>("#artifact-meta")!.textContent = `${statusLabel(payload.draft.status)} · ${payload.draft.provider} / ${payload.draft.model}${payload.draft.publishedPath ? " · Published to Core content" : ""}${readonly ? " · Read-only view" : ""}`;
+    const saveButton = document.querySelector<HTMLButtonElement>("#save-artifact")!;
+    saveButton.hidden = readonly;
+    const editors = document.querySelectorAll<HTMLTextAreaElement>("#artifact-files .artifact-editor, #artifact-manifest");
+    for (const editor of editors) editor.readOnly = readonly;
     const manifest = payload.files["unit.json"];
     try { document.querySelector<HTMLElement>("#artifact-manifest")!.textContent = manifest ? JSON.stringify(JSON.parse(manifest) as unknown, null, 2) : "Manifest unavailable"; }
     catch { document.querySelector<HTMLElement>("#artifact-manifest")!.textContent = manifest ?? "Manifest unavailable"; }
@@ -1198,7 +1202,10 @@ document.addEventListener("click", (event) => {
   const viewArtifact = target.closest<HTMLButtonElement>("[data-view-artifact-id]");
   if (viewArtifact) {
     event.stopPropagation();
-    void inspectArtifact(viewArtifact.dataset.viewArtifactId!).catch((error) => { notify(error instanceof Error ? error.message : "Unable to inspect artifact", true); });
+    const id = viewArtifact.dataset.viewArtifactId!;
+    const draft = readDrafts().find((item) => item.id === id);
+    const readonly = viewArtifact.dataset.readonly === "1" || draft?.status !== "needs_revision";
+    void inspectArtifact(id, readonly).catch((error) => { notify(error instanceof Error ? error.message : "Unable to inspect artifact", true); });
     return;
   }
   const generateButton = target.closest<HTMLButtonElement>("[data-generate-id]");
@@ -1251,7 +1258,7 @@ document.addEventListener("click", (event) => {
         : reviewed?.status === "needs_revision"
           ? `LLM pre-review found revision items (${failed || "one or more roles"}); remaining roles were still evaluated. Inspect the feedback, revise or approve with rationale.`
           : "LLM pre-review completed. Inspect the feedback before approving.");
-      await inspectArtifact(id!); renderDraftsView();
+      await inspectArtifact(id!, reviewed?.status !== "needs_revision"); renderDraftsView();
     })().catch((error) => { notify(error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable.", true); }).finally(() => unlockAction("review", id));
     reviewButton.disabled = false;
     reviewButton.textContent = originalLabel;
