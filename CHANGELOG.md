@@ -43,6 +43,9 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- `provenance.sources[].role` is enum-constrained in the generation schema
+  (`primary`/`synthesis`/`lead`) and re-stated in the prompt, fixing a
+  regression from the prompt trim that let the model guess source roles.
 - Provenance policy: generated manifests must cite the statement's actual
   origin (title, URL, accessed_at) and choose a source-compatible license;
   MIT is no longer the server fallback or prompt default — `all-rights-reserved`

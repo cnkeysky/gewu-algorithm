@@ -267,23 +267,34 @@ async function askDuplicate(problem: BatchProblem, accepted: AcceptedUnit): Prom
   }
 }
 
-async function acceptedByProblem(options: Options): Promise<Map<string, AcceptedUnit>> {
+type DraftIndexes = {
+  accepted: Map<string, AcceptedUnit>;
+  /** Newest non-accepted draft per problem+language, reused on re-runs so
+   * failed/interrupted attempts are retried instead of accumulating. */
+  existing: Map<string, { id: string; status: string }>;
+};
+
+async function loadDraftIndexes(options: Options): Promise<DraftIndexes> {
   const result = await apiRequest(options, "GET", "/api/drafts");
   if (!result.ok) throw new Error(`cannot list drafts: ${draftError(result)}`);
   const drafts = (result.body as { drafts?: Array<{ id: string; problem: string; status: string; language?: string; modes?: string[]; unitId?: string }> }).drafts ?? [];
-  const map = new Map<string, AcceptedUnit>();
+  const accepted = new Map<string, AcceptedUnit>();
+  const existing = new Map<string, { id: string; status: string }>();
   for (const draft of drafts) {
-    if (draft.status !== "accepted") continue;
     const problem = String(draft.problem ?? "").trim();
     if (!problem) continue;
     const language = String(draft.language ?? "python").trim() || "python";
-    const modes = new Set(draft.modes ?? []);
     const key = coverageKey(problem, language);
-    const existing = map.get(key);
-    if (existing) for (const mode of existing.modes) modes.add(mode);
-    map.set(key, { draftId: draft.id, unitId: draft.unitId, modes });
+    if (draft.status === "accepted") {
+      const modes = new Set(draft.modes ?? []);
+      const previous = accepted.get(key);
+      if (previous) for (const mode of previous.modes) modes.add(mode);
+      accepted.set(key, { draftId: draft.id, unitId: draft.unitId, modes });
+    } else if (!existing.has(key)) {
+      existing.set(key, { id: draft.id, status: String(draft.status ?? "") });
+    }
   }
-  return map;
+  return { accepted, existing };
 }
 
 type ItemResult = {
@@ -324,14 +335,14 @@ async function runReviews(options: Options, draftId: string): Promise<{ verdicts
 async function processProblem(
   options: Options,
   problem: BatchProblem,
-  acceptedMap: Map<string, AcceptedUnit>,
+  indexes: DraftIndexes,
   context: RunContext,
 ): Promise<ItemResult> {
   const base: ItemResult = { title: problem.title, status: "failed" };
   let duplicatePolicy = context.duplicatePolicy;
   try {
     const language = resolveLanguage(options, problem);
-    const accepted = acceptedMap.get(coverageKey(problem.problem, language));
+    const accepted = indexes.accepted.get(coverageKey(problem.problem, language));
     const covered = accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     if (accepted && covered && !options.force && !matchesRequested(problem, options.regenerate)) {
       if (duplicatePolicy === "ask") {
@@ -382,6 +393,24 @@ async function processProblem(
       });
       if (!patch.ok) return { ...base, status: "failed", error: `fork update: ${draftError(patch)}` };
       base.draftSource = accepted.unitId ? `revision of ${accepted.unitId}` : `revision of ${accepted.draftId}`;
+    } else if (indexes.existing.has(coverageKey(problem.problem, language))) {
+      // Reuse the newest non-accepted draft for this problem+language: reset it
+      // to queued with the current run's configuration and retry, instead of
+      // creating a duplicate entry on every re-run.
+      const existing = indexes.existing.get(coverageKey(problem.problem, language))!;
+      const patch = await apiRequest(options, "PATCH", `/api/drafts/${existing.id}`, {
+        title: problem.title,
+        problem: problem.problem,
+        provider: options.provider ?? "deepseek",
+        model: options.model ?? "deepseek-v4-flash",
+        language,
+        variants: options.variants,
+        modes: options.modes,
+        assistance: options.modes.includes("code_recall") ? options.assistance : [],
+      });
+      if (!patch.ok) return { ...base, status: "failed", error: `reuse update: ${draftError(patch)}` };
+      draftId = existing.id;
+      base.draftSource = `reused ${existing.id.slice(0, 8)} (was ${existing.status})`;
     } else {
       const draftResult = await apiRequest(options, "POST", "/api/drafts", {
         title: problem.title,
@@ -537,13 +566,13 @@ async function main(): Promise<void> {
   }
   console.log(`batch-authoring: ${problems.length} problems, steps=[${[...options.steps].join(",")}], concurrency=${options.concurrency}${options.force ? ", force" : ", dedupe-covered"}${options.select.length > 0 ? `, select=[${options.select.join(",")}]` : ""}`);
 
-  const acceptedMap = await acceptedByProblem(options);
+  const indexes = await loadDraftIndexes(options);
   if (options.force || options.regenerate.length > 0) {
     // Explicit regeneration: no pre-run skip summary needed.
   } else {
     const covered = problems.filter((problem) => {
       const language = resolveLanguage(options, problem);
-      const accepted = acceptedMap.get(coverageKey(problem.problem, language));
+      const accepted = indexes.accepted.get(coverageKey(problem.problem, language));
       return accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     });
     if (covered.length > 0) {
@@ -566,7 +595,7 @@ async function main(): Promise<void> {
       if (!problem) return;
       let result: ItemResult;
       try {
-        result = await processProblem(options, problem, acceptedMap, context);
+        result = await processProblem(options, problem, indexes, context);
       } catch (error) {
         if (error instanceof RunAborted) return;
         throw error;
