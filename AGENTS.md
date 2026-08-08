@@ -47,7 +47,9 @@ user asks to skip a rule, follow the user and call it out in the closure.
    release; release is an explicit, confirmed action; create the gh release
    with notes. Small changes stay in `[Unreleased]`.
 8. **Confirm before acting** on breaking changes, API changes, UI overhauls,
-   releases, and data deletion; otherwise proceed and report.
+   releases, data deletion, destructive commands (`git reset --hard`,
+   `rm -rf`, and equivalents), and external side effects (publishing
+   packages, opening PRs, sending messages); otherwise proceed and report.
 9. **Security and data.** Never commit secrets; audit `.gitignore` before
    committing. Use idempotent migrations for schema changes and define
    fallbacks for existing data. Throttle high-frequency persistence in
@@ -60,7 +62,10 @@ user asks to skip a rule, follow the user and call it out in the closure.
 
 ## Required closure after every change
 
-End with a short self-check, for example:
+End with a short self-check scaled to the change: small changes (typo/docs
+fixes, minor refactors) get a one-line summary covering the four points; key
+changes (API/contract, data migration, UI/layout, release, LLM-backed
+pipelines) get the full report. For example:
 
 - Cascade audit: what changed in frontend / backend / CLI / tests / docs.
 - Semantic check: stale assumptions searched; status-guard-legacy verified.

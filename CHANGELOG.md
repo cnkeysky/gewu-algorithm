@@ -27,6 +27,11 @@ allowed only with explicit migration notes (see
   aligned with the repo rules: rule numbering reordered to match, rule 1
   covers roadmap records, rule 3 covers LLM-generated-content acceptance, and
   rule 10 covers DX and CI parity.
+- The project-independent rules and the global config abstract project
+  carriers into conditional phrasing (ADRs/CHANGELOG/steppers/native prompts
+  only when the project uses them), scale the closure self-check by change
+  size, and extend rule 8 to destructive commands and external side effects;
+  repo AGENTS.md and the playbook sync rule 8.
 - Coding standards now link the resident agent rules for on-demand reading and
   explicitly cover the web workbench and template-authoring CLI; persistence
   and async sections gain idempotent-migration and write-throttling rules.
