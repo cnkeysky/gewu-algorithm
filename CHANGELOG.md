@@ -128,6 +128,13 @@ allowed only with explicit migration notes (see
   fixed-height area and pagination pattern as Drafts, so the page does not
   reflow as entries change. Drafts keeps the full approval lifecycle including
   Human approved rows.
+- Drafts and Review history rows are now cards with a background (matching
+  Units), and their fixed list areas use the same pagination pattern. All
+  three list areas (Drafts, Review history, Units) use `overflow-y: auto` as
+  a safety net, so entries are never silently clipped when content grows —
+  pagination keeps normal cases scroll-free. The Drafts row actions returned
+  to a side-by-side layout (date and buttons on the same line) instead of
+  stacking the buttons below the date.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

@@ -172,10 +172,11 @@ test("units list uses a fixed area with pagination like Drafts", async ({ page }
   const rows = page.locator(".unit-row");
   await expect(rows).toHaveCount(6);
   const area = page.locator("#units-list .paged-scroll");
+  await expect(page.locator("#units-view")).toBeVisible();
+  await expect.poll(async () => (await area.evaluate((el) => el.clientHeight))).toBeGreaterThan(0);
   const heightBefore = await area.evaluate((el) => el.clientHeight);
   await page.locator("#units-list [data-page-next='units']").click();
   await expect(rows).toHaveCount(2);
   await expect(page.locator("#units-list .pagination-info")).toContainText("of 8");
-  const heightAfter = await area.evaluate((el) => el.clientHeight);
-  expect(heightAfter).toBe(heightBefore);
+  await expect.poll(async () => (await area.evaluate((el) => el.clientHeight))).toBe(heightBefore);
 });
