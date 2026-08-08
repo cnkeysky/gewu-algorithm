@@ -6,6 +6,8 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-08-08
+
 ### Added
 
 - Batch authoring supports a fully LLM-driven pipeline with an **LLM approve**
