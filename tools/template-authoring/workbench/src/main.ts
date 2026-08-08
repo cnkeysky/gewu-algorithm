@@ -104,6 +104,7 @@ root.innerHTML = `
       <div class="practice-heading panel-heading"><div><p class="eyebrow">Core practice / local first</p><h2>Practice workspace</h2><p class="page-subtitle">Choose a unit, start one projection, and keep the current state visible while you work.</p></div><span class="connection-badge" id="practice-connection">Core offline</span></div>
       <form id="practice-start" class="practice-controls">
         <label class="field"><span>Algorithm unit</span><select id="practice-unit"><option>Loading units...</option></select></label>
+        <label class="field"><span>Language</span><select id="practice-language"><option value="">Language…</option></select></label>
         <label class="field"><span>Practice mode</span><select id="practice-mode">${modes.map((mode) => `<option value="${mode.id}">${mode.label}</option>`).join("")}</select></label>
         <label class="field"><span id="practice-option-label">Practice variant <small class="catalog-note">Reviewed choices from this unit</small></span><select id="practice-id"><option value="">Default reviewed variant</option></select></label>
         <button class="button primary" type="submit">Start practice <span aria-hidden="true">&#8594;</span></button>
@@ -134,13 +135,13 @@ root.innerHTML = `
     </section>
     <section id="drafts-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
-      <div class="filter-pills" id="draft-filters"></div>
+      <div class="filter-row"><div class="filter-pills" id="draft-filters"></div><select id="draft-language" class="filter-select" aria-label="Filter drafts by language"><option value="all">All languages</option></select></div>
       <div class="draft-list" id="draft-list"></div>
       <p class="view-note">Generated artifacts and LLM pre-review reports remain inspectable; only Human approve promotes a draft.</p>
     </section>
     <section id="history-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Audit trail</p><h2>Review history</h2></div><span class="lock">Immutable reports</span></div>
-      <div class="filter-pills" id="history-filters"></div>
+      <div class="filter-row"><div class="filter-pills" id="history-filters"></div><select id="history-language" class="filter-select" aria-label="Filter review history by language"><option value="all">All languages</option></select></div>
       <div class="history-list" id="history-list"></div>
       <p class="view-note">Reports are tied to an artifact hash and cannot promote a draft without human acceptance.</p>
     </section>
@@ -211,9 +212,9 @@ const promptRevealedModes = new Set<PracticeMode>();
 type PracticeOption = { id: string; label: string; language: string; code_layout?: string; mode: PracticeMode; selector: "implementation" | "practice_id" };
 type PracticeUnit = { id: string; revision: number; title: string; modes: PracticeMode[]; practice_options: PracticeOption[] };
 type PracticeSession = { session_id: string; unit_id: string; revision: number; unit_title: string; problem_question: string; problem_statement: string; mode: PracticeMode; language: string; implementation?: string; practice_id?: string; code_layout?: string; code_template?: string; code_slot_ids?: string[]; current_code_slot?: string; status: string; accepted_text: string; target_text: string; current_prompt?: string; completed_prompts: string[]; completed_steps: number; total_steps: number; accepted_input_count: number; rejected_input_count: number; correction_count: number; prompt_count: number; scaffold_reveal_count: number; active_ms: number; wall_ms: number; code_assistance?: string; scaffold_count?: number; visible_scaffold?: string[]; revealed_scaffold_indices?: number[] };
-type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
-type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
-type Attempt = { id: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
+type Checkpoint = { id: string; unit_title: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; language?: string; practice_id?: string; completed_steps: number; total_steps: number; accepted_characters: number; target_characters: number; saved_at: string };
+type Recommendation = { policy_version: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; language?: string; practice_id?: string; kind: string; priority: string; reason: string; due_after_days: number; due_at_ms?: number };
+type Attempt = { id: string; unit_id: string; revision: number; mode: PracticeMode; implementation?: string; language?: string; practice_id?: string; terminal_reason: string; accepted_input_count: number; rejected_input_count: number; created_at: string };
 type PracticeListName = "checkpoints" | "recommendations" | "attempts";
 // Two rows leave enough room for long mode/status labels inside the fixed panels.
 const PRACTICE_PAGE_SIZE = 2;
@@ -226,20 +227,36 @@ type DraftFilter = "all" | "attention" | "progress" | "published";
 type HistoryFilter = "all" | "pass" | "needs_revision" | "reject";
 let draftFilter: DraftFilter = "all";
 let historyFilter: HistoryFilter = "all";
+let draftLanguage = "all";
+let historyLanguage = "all";
+let practiceLanguage = "";
 
 type PaginationKind = PracticeListName | "drafts" | "history";
 
 function filterDrafts(drafts: DraftRecord[]): DraftRecord[] {
-  if (draftFilter === "attention") return drafts.filter((draft) => draft.status === "needs_revision" || draft.status === "llm_reviewed");
-  if (draftFilter === "progress") return drafts.filter((draft) => ["queued", "generated", "validated", "revision_requested"].includes(draft.status));
-  if (draftFilter === "published") return drafts.filter((draft) => draft.status === "accepted");
-  return drafts;
+  let filtered = drafts;
+  if (draftFilter === "attention") filtered = filtered.filter((draft) => draft.status === "needs_revision" || draft.status === "llm_reviewed");
+  if (draftFilter === "progress") filtered = filtered.filter((draft) => ["queued", "generated", "validated", "revision_requested"].includes(draft.status));
+  if (draftFilter === "published") filtered = filtered.filter((draft) => draft.status === "accepted");
+  if (draftLanguage !== "all") filtered = filtered.filter((draft) => draft.language === draftLanguage);
+  return filtered;
 }
 function filterReviews(reviews: ReviewRecord[]): ReviewRecord[] {
-  if (historyFilter === "pass") return reviews.filter((review) => review.verdict === "pass");
-  if (historyFilter === "needs_revision") return reviews.filter((review) => review.verdict === "needs_revision");
-  if (historyFilter === "reject") return reviews.filter((review) => review.verdict === "reject");
-  return reviews;
+  let filtered = reviews;
+  if (historyFilter === "pass") filtered = filtered.filter((review) => review.verdict === "pass");
+  if (historyFilter === "needs_revision") filtered = filtered.filter((review) => review.verdict === "needs_revision");
+  if (historyFilter === "reject") filtered = filtered.filter((review) => review.verdict === "reject");
+  if (historyLanguage !== "all") {
+    const drafts = readDrafts();
+    filtered = filtered.filter((review) => drafts.find((draft) => draft.id === review.draftId)?.language === historyLanguage);
+  }
+  return filtered;
+}
+function renderLanguageOptions(select: HTMLSelectElement, languages: string[]): void {
+  const previous = select.value;
+  const unique = [...new Set(languages.filter(Boolean))].sort();
+  select.innerHTML = `<option value="all">All languages</option>${unique.map((language) => `<option value="${escapeHtml(language)}">${escapeHtml(language)}</option>`).join("")}`;
+  if (unique.includes(previous)) select.value = previous;
 }
 function renderDraftFilters(allDrafts: DraftRecord[]): void {
   const groups: Array<{ key: DraftFilter; label: string; match: (draft: DraftRecord) => boolean }> = [
@@ -249,6 +266,8 @@ function renderDraftFilters(allDrafts: DraftRecord[]): void {
     { key: "published", label: "Published", match: (draft) => draft.status === "accepted" },
   ];
   document.querySelector<HTMLElement>("#draft-filters")!.innerHTML = groups.map((group) => `<button class="filter-pill${draftFilter === group.key ? " active" : ""}" type="button" data-draft-filter="${group.key}">${group.label}<span class="filter-count">${allDrafts.filter(group.match).length}</span></button>`).join("");
+  const languageSelect = document.querySelector<HTMLSelectElement>("#draft-language");
+  if (languageSelect) renderLanguageOptions(languageSelect, allDrafts.map((draft) => draft.language));
 }
 function renderHistoryFilters(allReviews: ReviewRecord[]): void {
   const groups: Array<{ key: HistoryFilter; label: string; match: (review: ReviewRecord) => boolean }> = [
@@ -258,6 +277,8 @@ function renderHistoryFilters(allReviews: ReviewRecord[]): void {
     { key: "reject", label: "Reject", match: (review) => review.verdict === "reject" },
   ];
   document.querySelector<HTMLElement>("#history-filters")!.innerHTML = groups.map((group) => `<button class="filter-pill${historyFilter === group.key ? " active" : ""}" type="button" data-history-filter="${group.key}">${group.label}<span class="filter-count">${allReviews.filter(group.match).length}</span></button>`).join("");
+  const languageSelect = document.querySelector<HTMLSelectElement>("#history-language");
+  if (languageSelect) renderLanguageOptions(languageSelect, readDrafts().map((draft) => draft.language));
 }
 
 function pageNumberItems(page: number, totalPages: number): Array<number | "…"> {
@@ -382,6 +403,13 @@ async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> 
   }
 }
 function practiceMessage(text: string, error = false): void { const target = document.querySelector<HTMLParagraphElement>("#practice-message")!; target.textContent = text; target.className = `form-message ${error ? "error" : "success"}`; }
+function practiceWorkspaceSummary(): string {
+  const parts: string[] = [];
+  if (checkpointItems.length) parts.push(`${checkpointItems.length} interrupted`);
+  if (recommendationItems.length) parts.push(`${recommendationItems.length} due for review`);
+  if (attemptItems.length) parts.push(`${attemptItems.length} recent attempts`);
+  return parts.length ? `${parts.join(" · ")} — resume or continue from the lists below.` : "No interrupted practice or review queue yet.";
+}
 let toastTimer: number | undefined;
 function notify(text: string, error = false): void {
   message.textContent = text;
@@ -573,6 +601,7 @@ async function refreshPracticeData(): Promise<void> {
     ]);
     practiceUnits = units;
     document.querySelector<HTMLElement>("#home-unit-id")!.textContent = units[0]?.id ?? "your.algorithm";
+    renderPracticeLanguageFilter();
     const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit")!;
     const selectedUnitId = unitSelect.value;
     unitSelect.innerHTML = units.map((unit) => `<option value="${unit.id}">${unit.title} · r${unit.revision}</option>`).join("");
@@ -590,6 +619,7 @@ async function refreshPracticeData(): Promise<void> {
     recommendationItems = recommendations;
     attemptItems = attempts.attempts;
     renderPracticeLists();
+    if (document.querySelector<HTMLElement>("#practice-session")!.hidden) practiceMessage(practiceWorkspaceSummary());
     if (practiceReconnectTimer !== undefined) { window.clearTimeout(practiceReconnectTimer); practiceReconnectTimer = undefined; }
     if (shouldRecoverSession && activePracticeSession && activePracticeSnapshot?.status === "active" && !reconnectingPractice) {
       const matching = checkpointItems.find((item) => item.unit_id === activePracticeSnapshot?.unit_id && item.revision === activePracticeSnapshot.revision && item.mode === activePracticeSession?.mode && (!activePracticeSnapshot.practice_id || item.practice_id === activePracticeSnapshot.practice_id) && (!activePracticeSnapshot.implementation || item.implementation === activePracticeSnapshot.implementation));
@@ -619,9 +649,9 @@ function renderPagedPracticeList<T>(name: PracticeListName, targetId: string, it
 }
 function renderPracticeLists(): void {
   const activeCheckpointId = activePracticeSession ? `checkpoint-${activePracticeSession.session_id}` : null;
-  renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); const isActive = checkpoint.id === activeCheckpointId; return `<div class="compact-row practice-record${isActive ? " is-active" : ""}"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}${isActive ? " · in progress" : ""}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
-  renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : `Due ${dueDate}`; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><time title="${dueLabel}">${dueLabel}</time><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
-  renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id} · r${item.revision}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}</span></div><div class="record-footer"><time title="${created}">${created}</time><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
+  renderPagedPracticeList("checkpoints", "#practice-checkpoints", checkpointItems, (checkpoint) => { const progress = progressPercent(checkpoint.accepted_characters, checkpoint.target_characters); const saved = formatDateTime(checkpoint.saved_at); const isActive = checkpoint.id === activeCheckpointId; return `<div class="compact-row practice-record${isActive ? " is-active" : ""}"><div class="record-main"><strong>${checkpoint.unit_title}</strong><span>${checkpoint.mode.replaceAll("_", " ")} · ${variantLabel(checkpoint)}${languageBadge(checkpoint)}${isActive ? " · in progress" : ""}</span><span title="${checkpoint.accepted_characters}/${checkpoint.target_characters} characters">${progress}% complete</span></div><div class="record-footer"><time title="${saved}">${saved}</time><span class="record-actions"><button class="inline-action" data-resume-checkpoint="${checkpoint.id}">Resume</button><button class="inline-action" data-discard-checkpoint="${checkpoint.id}">Discard</button></span></div></div>`; }, "No interrupted practice.");
+  renderPagedPracticeList("recommendations", "#practice-recommendations", recommendationItems, (item) => { const due = item.due_at_ms ? new Date(item.due_at_ms) : undefined; const dueDate = due ? formatDateTime(due.toISOString()) : `${item.due_after_days}d`; const dueLabel = due && due.getTime() <= Date.now() ? "Due now" : `Due ${dueDate}`; const title = practiceUnits.find((unit) => unit.id === item.unit_id)?.title ?? item.unit_id; return `<div class="compact-row practice-record"><div class="record-main"><strong>${title}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}${languageBadge(item)}</span><span title="${escapeHtml(item.reason)}">${item.kind} · ${item.priority} priority</span></div><div class="record-footer"><time title="${dueLabel}">${dueLabel}</time><span class="record-actions"><button class="inline-action" type="button" data-start-recommendation="${item.unit_id}" data-recommendation-mode="${item.mode}">Practice</button></span></div></div>`; }, "Complete a practice to build your review schedule.");
+  renderPagedPracticeList("attempts", "#practice-attempts", attemptItems, (item) => { const created = formatDateTime(item.created_at); return `<div class="compact-row practice-record"><div class="record-main"><strong>${item.unit_id} · r${item.revision}</strong><span>${item.mode.replaceAll("_", " ")} · ${variantLabel(item)}${languageBadge(item)}</span></div><div class="record-footer"><time title="${created}">${created}</time><span class="record-state">${item.terminal_reason}</span></div></div>`; }, "No attempts yet.");
 }
 function renderPracticeOptions(): void {
   const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")?.value;
@@ -629,10 +659,11 @@ function renderPracticeOptions(): void {
   const select = document.querySelector<HTMLSelectElement>("#practice-id");
   const label = document.querySelector<HTMLElement>("#practice-option-label");
   if (!select || !label) return;
-  const options = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.filter((option) => option.mode === mode) ?? [];
+  const options = (practiceUnits.find((unit) => unit.id === unitId)?.practice_options.filter((option) => option.mode === mode) ?? [])
+    .filter((option) => !practiceLanguage || option.language === practiceLanguage);
   const selector = options[0]?.selector;
   const previous = select.value;
-  label.firstChild!.textContent = "Practice variant ";
+  label.firstChild!.textContent = options.length || !practiceLanguage ? "Practice variant " : `No ${practiceLanguage} variant for this unit `;
   select.innerHTML = options.length ? options.map((option) => `<option value="${option.id}">${option.label}</option>`).join("") : "<option value=\"\">Default reviewed configuration</option>";
   select.disabled = options.length === 0;
   select.dataset.selector = selector ?? "practice_id";
@@ -640,6 +671,23 @@ function renderPracticeOptions(): void {
   // refreshPracticeData after starting/stopping); fall back to the first only
   // when the chosen variant no longer exists for this unit/mode.
   if (options.some((option) => option.id === previous)) select.value = previous;
+}
+
+function renderPracticeLanguageFilter(): void {
+  const select = document.querySelector<HTMLSelectElement>("#practice-language");
+  if (!select) return;
+  const languages = [...new Set(practiceUnits.flatMap((unit) => unit.practice_options.map((option) => option.language)).filter(Boolean))].sort();
+  select.innerHTML = languages.length ? languages.map((language) => `<option value="${escapeHtml(language)}">${escapeHtml(language)}</option>`).join("") : "<option value=\"\">No languages</option>";
+  const previous = select.value;
+  if (languages.includes(previous)) {
+    select.value = previous;
+    practiceLanguage = previous;
+  } else {
+    // A concrete language is always selected so starting practice is never
+    // ambiguous about which implementation language will be used.
+    practiceLanguage = languages[0] ?? "";
+    select.value = practiceLanguage;
+  }
 }
 
 interface DraftRecord {
@@ -707,6 +755,14 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat(unde
 function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(date); }
 function progressPercent(accepted: number, target: number): number { return target > 0 ? Math.min(100, Math.round((accepted / target) * 100)) : 0; }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
+function langChip(language?: string): string { return language ? `<span class="lang-chip">${escapeHtml(language)}</span>` : ""; }
+function languageBadge(value: { unit_id?: string; mode?: string; implementation?: string; practice_id?: string; language?: string }): string {
+  if (!value.language) return "";
+  // Shadow typing variant labels already carry the language (for example
+  // "teaching · python"); a separate badge would be redundant and widen rows.
+  if (variantLabel(value).toLowerCase().includes(value.language.toLowerCase())) return "";
+  return langChip(value.language);
+}
 function practiceOptionLabel(unitId: string | undefined, mode: PracticeMode | undefined, practiceId?: string, implementation?: string): string {
   const options = practiceUnits.find((unit) => unit.id === unitId)?.practice_options ?? [];
   const match = practiceId ? options.find((option) => option.id === practiceId) : options.find((option) => option.id === implementation);
@@ -745,7 +801,7 @@ function renderDrafts(): void {
   const totalPages = Math.max(1, Math.ceil(drafts.length / DRAFT_PAGE_SIZE));
   draftPage = Math.min(draftPage, totalPages - 1);
   const visibleDrafts = drafts.slice(draftPage * DRAFT_PAGE_SIZE, (draftPage + 1) * DRAFT_PAGE_SIZE);
-  const empty = draftFilter === "attention" ? ["Nothing needs attention", "You are all caught up."] : draftFilter === "progress" ? ["No drafts in progress", "Start a draft to see it here."] : draftFilter === "published" ? ["No published units yet", "Approve a draft to publish it."] : ["No local drafts yet", "Create a draft to see it here."];
+  const empty = draftFilter === "attention" ? ["Nothing needs attention", "You are all caught up."] : draftFilter === "progress" ? ["No drafts in progress", "Start a draft to see it here."] : draftFilter === "published" ? ["No published units yet", "Approve a draft to publish it."] : draftLanguage !== "all" ? ["No drafts in this language", "Try another language filter."] : ["No local drafts yet", "Create a draft to see it here."];
   draftList.innerHTML = drafts.length ? `<div class="paged-scroll">${visibleDrafts.map((draft) => {
     const canGenerate = ["queued", "revision_requested"].includes(draft.status);
     const canValidate = draft.status === "generated";
@@ -813,8 +869,8 @@ function renderHistory(): void {
   renderHistoryFilters(allReviews);
   const reviews = filterReviews(allReviews);
   historyList.innerHTML = reviews.length
-    ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View feedback</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
-    : `<div class="empty-state"><strong>${historyFilter === "all" ? "No review reports yet" : "No matching reports"}</strong><span>${historyFilter === "all" ? "Reports appear after a draft is validated and reviewed." : "Try another verdict filter."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
+    ? `<div class="paged-scroll history-paged">${reviews.slice(historyPage * HISTORY_PAGE_SIZE, (historyPage + 1) * HISTORY_PAGE_SIZE).map((review) => { const draft = drafts.find((item) => item.id === review.draftId); const passed = review.verdict === "pass"; const created = formatDateTime(review.createdAt); const inspect = draft?.artifactPath ? `<button class="inline-action" type="button" data-view-artifact-id="${draft.id}">View feedback</button>` : ""; const verdictClass = passed ? "verdict-pass" : review.verdict === "needs_revision" || review.verdict === "reject" ? "verdict-reject" : "verdict-pending"; return `<div class="history-row"><span class="review-mark ${passed ? "pass" : "pending-mark"}">${passed ? "&#10003;" : "&#8226;"}</span><span class="history-info"><strong>${review.role.replaceAll("_", " ")}</strong><small>${draft?.title ?? "Unknown draft"}${draft?.language ? ` · ${escapeHtml(draft.language)}` : ""} · ${review.artifactHash ?? "artifact pending"}</small><time title="${created}">${created}</time></span><span class="history-status ${verdictClass}">${review.verdict.replaceAll("_", " ")}</span>${inspect}</div>`; }).join("")}</div>${paginationHtml("history", historyPage, Math.max(1, Math.ceil(reviews.length / HISTORY_PAGE_SIZE)), reviews.length, HISTORY_PAGE_SIZE)}`
+    : `<div class="empty-state"><strong>${historyFilter === "all" && historyLanguage === "all" ? "No review reports yet" : "No matching reports"}</strong><span>${historyFilter === "all" && historyLanguage === "all" ? "Reports appear after a draft is validated and reviewed." : "Try another verdict or language filter."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
 }
 
 async function inspectArtifact(id: string): Promise<void> {
@@ -1145,6 +1201,20 @@ document.querySelector<HTMLSelectElement>("#provider")!.addEventListener("change
 });
 document.querySelector<HTMLSelectElement>("#practice-unit")!.addEventListener("change", renderPracticeOptions);
 document.querySelector<HTMLSelectElement>("#practice-mode")!.addEventListener("change", renderPracticeOptions);
+document.querySelector<HTMLSelectElement>("#practice-language")!.addEventListener("change", (event) => {
+  practiceLanguage = (event.target as HTMLSelectElement).value;
+  renderPracticeOptions();
+});
+document.querySelector<HTMLSelectElement>("#draft-language")!.addEventListener("change", (event) => {
+  draftLanguage = (event.target as HTMLSelectElement).value;
+  draftPage = 0;
+  renderDrafts();
+});
+document.querySelector<HTMLSelectElement>("#history-language")!.addEventListener("change", (event) => {
+  historyLanguage = (event.target as HTMLSelectElement).value;
+  historyPage = 0;
+  renderHistory();
+});
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const wasEditing = Boolean(editingDraftId);
@@ -1208,6 +1278,14 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
     const selectedOption = practiceOption.value || undefined;
     const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")!.value;
     const mode = document.querySelector<HTMLSelectElement>("#practice-mode")!.value as PracticeMode;
+    const unitModeOptions = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.filter((option) => option.mode === mode) ?? [];
+    // Default-configuration modes (for example flow recall) start with no
+    // variant; only block when the unit has variants but the language filter
+    // removed every option for this mode.
+    if (!selectedOption && unitModeOptions.length > 0 && practiceLanguage) {
+      practiceMessage(`No ${practiceLanguage} practice variant available for ${mode}.`, true);
+      return;
+    }
     const revision = practiceUnits.find((unit) => unit.id === unitId)?.revision;
     const defaultOption = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.find((option) => option.mode === mode);
     const expectedImplementation = practiceOption.dataset.selector === "implementation" ? selectedOption ?? defaultOption?.id : undefined;
@@ -1307,7 +1385,7 @@ document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("cl
   } catch (error) { practiceMessage(error instanceof Error ? error.message : "Unable to stop practice", true); }
   finally { unlockAction("stop", sessionId); }
 });
-document.querySelector<HTMLButtonElement>("#practice-back")!.addEventListener("click", () => setPracticeFocus(false));
+document.querySelector<HTMLButtonElement>("#practice-back")!.addEventListener("click", () => { setPracticeFocus(false); practiceMessage(practiceWorkspaceSummary()); });
 document.querySelector<HTMLButtonElement>("#refresh-checkpoints")!.addEventListener("click", () => { void refreshPracticeData(); });
 const splitDivider = document.querySelector<HTMLElement>("#split-divider");
 if (splitDivider) {

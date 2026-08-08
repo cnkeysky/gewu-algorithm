@@ -58,6 +58,8 @@ pub struct ReviewRecommendation {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implementation: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub practice_id: Option<String>,
     pub kind: RecommendationKind,
     pub priority: RecommendationPriority,
@@ -147,7 +149,7 @@ pub fn recommend(attempts: &[AttemptFact]) -> Vec<ReviewRecommendation> {
         } else {
             (RecommendationKind::Review, RecommendationPriority::Normal, 3, "Schedule a delayed independent review to test retention.".to_owned())
         };
-        Some(ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, implementation, practice_id, kind, priority, reason, due_after_days, due_at_ms: None, source_attempt_ids })
+        Some(ReviewRecommendation { policy_version: POLICY_VERSION.to_owned(), unit_id, revision, mode, implementation, language: None, practice_id, kind, priority, reason, due_after_days, due_at_ms: None, source_attempt_ids })
     }).collect()
 }
 

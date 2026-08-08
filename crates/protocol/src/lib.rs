@@ -305,6 +305,8 @@ pub struct AttemptSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implementation: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub practice_id: Option<String>,
     pub terminal_reason: TerminalReasonDto,
     pub accepted_input_count: u64,
@@ -362,6 +364,8 @@ pub struct CheckpointSummary {
     pub mode: PracticeModeDto,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implementation: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub practice_id: Option<String>,
     pub completed_steps: usize,

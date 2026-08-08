@@ -31,3 +31,10 @@ Reasoning Recall and Transfer Practice use the same additive protocol boundary.
 checkpoint replay preserves that selection. Their submit/reveal/restart events
 remain deterministic, while open-ended explanation quality is explicitly outside
 completion ownership.
+
+Practice summaries carry the resolved implementation language so clients can
+label and filter by language without re-deriving it from unit content:
+`listCheckpoints`, `recentAttempts`, and `reviewRecommendations` each include an
+optional `language` field (for example `python`), resolved from the unit's
+implementation definition at read time. The field is additive — older clients
+ignore it — and omitted when the unit is no longer resolvable.

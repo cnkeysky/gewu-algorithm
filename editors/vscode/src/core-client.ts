@@ -307,6 +307,7 @@ export interface CheckpointSummary {
   readonly revision: number;
   readonly mode: PracticeMode;
   readonly implementation?: string;
+  readonly language?: string;
   readonly practice_id?: string;
   readonly completed_steps: number;
   readonly total_steps: number;
@@ -377,6 +378,7 @@ export interface AttemptSummary {
   readonly revision: number;
   readonly mode: PracticeMode;
   readonly implementation?: string;
+  readonly language?: string;
   readonly practice_id?: string;
   readonly terminal_reason: "completed" | "stopped";
   readonly accepted_input_count: number;

@@ -49,6 +49,18 @@ allowed only with explicit migration notes (see
   problem coexist as separate units. An explicit `--language <slug>` overrides
   the catalog default (hot100.json defaults to Python); the batch runner
   forwards `--language` whenever it is given explicitly.
+- Practice summaries carry the resolved implementation language:
+  `listCheckpoints`, `recentAttempts`, and `reviewRecommendations` each include
+  an optional `language` field, resolved from the unit implementation at read
+  time (additive; omitted when the unit is no longer resolvable).
+- The web practice workspace adds a language filter for practice variants and
+  language badges on Interrupted, Spaced review, and Recent attempts rows; the
+  Drafts and Review history views add language badges and filters. The VS Code
+  extension shows the language in checkpoint and attempt listings. The practice
+  language selector always defaults to a concrete catalog language (never a
+  catch-all), so starting practice is unambiguous, and the workspace status
+  line summarizes the real Interrupted / Spaced review / Recent attempts state
+  instead of a stale action message.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.

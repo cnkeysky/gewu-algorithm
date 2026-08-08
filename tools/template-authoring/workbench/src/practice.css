@@ -55,7 +55,7 @@ body:has(#practice-session:not([hidden])) footer { display: none; }
 
 .session-column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.practice-controls { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 14px; align-items: end; margin-top: 6px; padding: 18px 24px 20px; border: 1px solid var(--line); border-radius: 12px; background: #f4f8f5; }
+.practice-controls { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(170px, 1fr) minmax(170px, 1fr) auto; gap: 14px; align-items: end; margin-top: 6px; padding: 18px 24px 20px; border: 1px solid var(--line); border-radius: 12px; background: #f4f8f5; }
 .practice-controls .field:first-child { grid-column: 1 / -1; }
 .practice-controls .field { min-width: 0; }
 .practice-controls .field > span { font-size: 11px; }

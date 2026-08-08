@@ -408,7 +408,8 @@ function checkpointItem(
 }
 
 function checkpointDescription(checkpoint: CheckpointSummary): string {
-  return `${displayMode(checkpoint.mode)} | ${checkpoint.unit_id} r${checkpoint.revision}`;
+  const language = checkpoint.language ? ` | ${checkpoint.language}` : "";
+  return `${displayMode(checkpoint.mode)} | ${checkpoint.unit_id} r${checkpoint.revision}${language}`;
 }
 
 function checkpointDetail(checkpoint: CheckpointSummary): string {
@@ -539,15 +540,16 @@ function formatLocalDate(value: string): string {
 function attemptDetail(
   attempt: import("./core-client.js").AttemptSummary,
 ): string {
+  const language = attempt.language ? ` | ${attempt.language}` : "";
   const variant = attempt.implementation
     ? ` | implementation ${attempt.implementation}`
     : attempt.practice_id
       ? ` | practice ${attempt.practice_id}`
       : "";
   if (attempt.mode === "shadow_typing") {
-    return `${formatLocalDate(attempt.created_at)}${variant} | accepted ${attempt.accepted_input_count} characters | rejected ${attempt.rejected_input_count} characters`;
+    return `${formatLocalDate(attempt.created_at)}${language}${variant} | accepted ${attempt.accepted_input_count} characters | rejected ${attempt.rejected_input_count} characters`;
   }
-  return `${formatLocalDate(attempt.created_at)}${variant} | completed ${attempt.accepted_input_count} steps | rejected ${attempt.rejected_input_count} answers | prompts ${attempt.prompt_count}`;
+  return `${formatLocalDate(attempt.created_at)}${language}${variant} | completed ${attempt.accepted_input_count} steps | rejected ${attempt.rejected_input_count} answers | prompts ${attempt.prompt_count}`;
 }
 
 function displayMode(mode: PracticeMode): string {

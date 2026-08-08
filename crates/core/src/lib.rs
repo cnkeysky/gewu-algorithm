@@ -344,6 +344,10 @@ impl Core {
         let mut seen = HashSet::new();
         let mut summaries = Vec::new();
         for checkpoint in self.store.list_checkpoints()? {
+            let language = self
+                .find_unit(&checkpoint.unit_id)
+                .ok()
+                .map(|unit| language_for(&unit, checkpoint.implementation.as_deref()));
             let key = format!(
                 "{}:{}:{}:{:?}:{:?}",
                 checkpoint.unit_id,
@@ -362,6 +366,7 @@ impl Core {
                 revision: checkpoint.revision,
                 mode: parse_mode(&checkpoint.mode)?,
                 implementation: checkpoint.implementation,
+                language,
                 practice_id: checkpoint.practice_id,
                 completed_steps: checkpoint.completed_steps,
                 total_steps: checkpoint.total_steps,
@@ -455,7 +460,13 @@ impl Core {
         let values = self.store.list_attempts(limit)?;
         values
             .into_iter()
-            .map(stored_attempt_view)
+            .map(|value| {
+                let language = self
+                    .find_unit(&value.unit_id)
+                    .ok()
+                    .map(|unit| language_for(&unit, value.implementation.as_deref()));
+                stored_attempt_view(value, language)
+            })
             .collect::<Result<Vec<_>, _>>()
     }
 
@@ -479,6 +490,10 @@ impl Core {
         Ok(recommend(&facts)
             .into_iter()
             .map(|mut recommendation| {
+                recommendation.language = self
+                    .find_unit(recommendation.unit_id.as_str())
+                    .ok()
+                    .map(|unit| language_for(&unit, recommendation.implementation.as_deref()));
                 recommendation.due_at_ms = states
                     .iter()
                     .find(|state| {
@@ -1753,7 +1768,7 @@ fn transfer_attempt(
         wall_ms: duration_ms(value.wall_clock_duration()),
     }
 }
-fn stored_attempt_view(value: StoredAttempt) -> Result<AttemptSummary, CoreError> {
+fn stored_attempt_view(value: StoredAttempt, language: Option<String>) -> Result<AttemptSummary, CoreError> {
     Ok(AttemptSummary {
         id: value.id,
         created_at: value.created_at,
@@ -1762,6 +1777,7 @@ fn stored_attempt_view(value: StoredAttempt) -> Result<AttemptSummary, CoreError
         schema_version: value.schema_version,
         mode: parse_stored_mode(&value.mode)?,
         implementation: value.implementation,
+        language,
         practice_id: value.practice_id,
         terminal_reason: parse_stored_terminal_reason(&value.terminal_reason)?,
         accepted_input_count: value.accepted_input_count,
@@ -2081,6 +2097,61 @@ mod tests {
                 .unwrap_or_else(|error| panic!("checkpoints: {error}"))
                 .is_empty()
         );
+        fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
+    }
+
+    #[test]
+    fn practice_summaries_carry_the_implementation_language() {
+        let data = data_root();
+        let mut core =
+            Core::open(fixture_root(), &data).unwrap_or_else(|error| panic!("open: {error}"));
+        let session = core
+            .start_session(StartSessionParams {
+                unit_id: "search.binary-search".to_owned(),
+                mode: PracticeModeDto::FlowRecall,
+                implementation: None,
+                practice_id: None,
+            })
+            .unwrap_or_else(|error| panic!("start: {error}"));
+        core.save_checkpoint(&session.session_id)
+            .unwrap_or_else(|error| panic!("checkpoint: {error}"));
+        let checkpoints = core
+            .list_checkpoints()
+            .unwrap_or_else(|error| panic!("list checkpoints: {error}"));
+        assert_eq!(checkpoints.len(), 1);
+        assert_eq!(checkpoints[0].language.as_deref(), Some("python"));
+
+        let _ = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id.clone(),
+                event: PracticeEventDto::SubmitAnswer {
+                    answer: "set-bounds".to_owned(),
+                },
+                elapsed: elapsed(1),
+            })
+            .unwrap_or_else(|error| panic!("step one: {error}"));
+        let complete = core
+            .apply_event(ApplyEventParams {
+                session_id: session.session_id.clone(),
+                event: PracticeEventDto::SubmitAnswer {
+                    answer: "middle comparison".to_owned(),
+                },
+                elapsed: elapsed(2),
+            })
+            .unwrap_or_else(|error| panic!("step two: {error}"));
+        assert_eq!(complete.status, SessionStatusDto::Completed);
+
+        let attempts = core
+            .recent_attempts(10)
+            .unwrap_or_else(|error| panic!("attempts: {error}"));
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].language.as_deref(), Some("python"));
+        let recommendations = core
+            .review_recommendations(10)
+            .unwrap_or_else(|error| panic!("recommendations: {error}"));
+        assert_eq!(recommendations.len(), 1);
+        assert_eq!(recommendations[0].language.as_deref(), Some("python"));
+
         fs::remove_dir_all(data).unwrap_or_else(|error| panic!("cleanup: {error}"));
     }
 
