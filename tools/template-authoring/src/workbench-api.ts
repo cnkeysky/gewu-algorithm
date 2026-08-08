@@ -583,14 +583,17 @@ const server = createServer(async (request, response) => {
         return send(response, 409, { error: "a passing pre-review for the current artifact is required before human acceptance; send {override:true, rationale} only after explicit human review" });
       }
       const existingAcceptance = state.reviews.some((review) => review.draftId === draft.id && review.role === acceptanceRole && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
-      if (!passedReview && humanOverride && !existingAcceptance) {
+      // Record the acceptance review on every approval path (normal or
+      // override) so the audit trail always shows who approved and why, and
+      // the draft never falls back to the neutral "Approved" label.
+      if (!existingAcceptance) {
         const acceptanceReview: ReviewRecord = {
           id: crypto.randomUUID(),
           draftId: draft.id,
           role: acceptanceRole,
           verdict: "pass",
           artifactHash: latestArtifactHash(state.reviews, draft.id),
-          rationale,
+          rationale: rationale || (acceptanceRole === "human_acceptance" ? "Human approval" : "LLM approval"),
           createdAt: new Date().toISOString(),
         };
         state.reviews = [acceptanceReview, ...state.reviews];

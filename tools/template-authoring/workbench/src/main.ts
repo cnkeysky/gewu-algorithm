@@ -939,7 +939,10 @@ function renderDrafts(): void {
     const canValidate = draft.status === "generated";
     const canReview = draft.status === "validated";
     const canAccept = draft.status === "llm_reviewed" || draft.status === "needs_revision" || (draft.status === "validated" && readReviews().some((review) => review.draftId === draft.id && review.role === "human_revision"));
-    const canRollback = ["generated", "validated", "llm_reviewed", "needs_revision"].includes(draft.status);
+    // Regenerate is a repair action: redo a fresh generation, fix an approved
+    // unit, or recover from a failed pre-review. At the validated stage the
+    // only next step is LLM pre-review, so the button is not shown there.
+    const canRollback = ["generated", "llm_reviewed", "needs_revision"].includes(draft.status);
     const canFork = draft.status === "accepted";
     const canDelete = draft.status !== "accepted";
     const stage = draftStage(draft.status);

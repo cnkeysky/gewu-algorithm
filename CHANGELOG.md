@@ -58,6 +58,10 @@ allowed only with explicit migration notes (see
   `--llm-approve provider:model`), recording `llm_acceptance`. `--auto-accept`
   remains the operator (human-tier) override and its rationale is now
   persisted.
+- Regenerate is a repair action and is hidden at the validated stage: the
+  button appears for fresh generations (redo), LLM-approved drafts (change
+  approach), and needs_revision (recover from failed pre-review) — never
+  alongside LLM pre-review, where the only next step is the review itself.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with
