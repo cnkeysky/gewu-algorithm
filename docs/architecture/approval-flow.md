@@ -18,6 +18,10 @@ revision.
 | `llm_reviewed` | All three pre-review roles passed (content gate) | LLM approved |
 | `accepted` | Published; approval tier recorded in the audit trail | Human approved / LLM approved |
 
+Accepted drafts without a recorded acceptance tier default to **Human
+approved** (historically acceptance required a human); the upgrade button
+only appears for units whose approval tier is `llm_acceptance`.
+
 ## Transitions
 
 ```text

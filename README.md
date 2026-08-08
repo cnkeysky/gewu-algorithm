@@ -275,6 +275,29 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 Published units land in `tools/template-authoring/drafts/.workbench/published`
 and become available to a Core started with that content root.
 
+### Approval flow and states
+
+Every draft moves through one pipeline — **01 Generate → 02 Validate →
+03 Review → 04 Approve** — with these states:
+
+| State | Meaning | Label |
+| --- | --- | --- |
+| `queued` | Draft created, not generated | Queued |
+| `generated` | Artifact generated (01, 02 lit) | Generated |
+| `validated` | Deterministic contract validation passed (02 lit) | Contract valid |
+| `needs_revision` | One or more pre-review roles failed (03 lit) | Needs revision |
+| `revision_requested` | Rolled back; awaiting regeneration with feedback (01 lit) | Awaiting regeneration |
+| `llm_reviewed` | All pre-review roles passed (03 lit) | LLM approved |
+| `accepted` | Published; approval tier recorded (04 lit) | Human approved / LLM approved |
+
+Approval is layered: **LLM approved** is the automated tier (pre-review gate
+and/or the batch `--llm-approve` acceptance gate, recorded as
+`llm_acceptance`), and **Human approved** is always superior — a human can
+upgrade an LLM-approved published unit and every published unit can be
+corrected through a new revision (Extend unit). Acceptance rationales are
+persisted in the audit trail. The full state machine and hierarchy live in
+[`docs/architecture/approval-flow.md`](docs/architecture/approval-flow.md).
+
 Problem statements are Markdown and images are **URL references by default**
 (https/data URIs): the web workbench and the VS Code flow panel render the
 same statement, including images, when online. Bundling images as local unit

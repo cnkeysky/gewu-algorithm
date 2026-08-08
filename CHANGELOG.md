@@ -62,6 +62,14 @@ allowed only with explicit migration notes (see
   button appears for fresh generations (redo), LLM-approved drafts (change
   approach), and needs_revision (recover from failed pre-review) — never
   alongside LLM pre-review, where the only next step is the review itself.
+- Accepted drafts no longer show the neutral "Approved" label: without a
+  recorded acceptance tier they default to **Human approved** (historically
+  acceptance required a human), and the Human-approve upgrade button only
+  appears for units whose recorded tier is `llm_acceptance`. The draft
+  pipeline chips now light 03 Review from the validated/needs_revision stage
+  (it previously only lit after review passed), so 01 Generate → 02 Validate
+  → 03 Review → 04 Approve matches the states. The state flow is now also
+  summarized in the README.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with

@@ -809,9 +809,13 @@ function variantLabel(value: { unit_id?: string; mode?: string; implementation?:
 function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM approved", needs_revision: "Needs revision", revision_requested: "Awaiting regeneration", accepted: "Human approved" })[status]; }
 function acceptanceLabel(draft: DraftRecord): string {
   if (draft.status !== "accepted") return statusLabel(draft.status);
-  const human = readReviews().some((review) => review.draftId === draft.id && review.role === "human_acceptance");
-  const llm = readReviews().some((review) => review.draftId === draft.id && review.role === "llm_acceptance");
-  return human ? "Human approved" : llm ? "LLM approved" : "Approved";
+  const reviews = readReviews().filter((review) => review.draftId === draft.id);
+  const human = reviews.some((review) => review.role === "human_acceptance");
+  const llm = reviews.some((review) => review.role === "llm_acceptance");
+  // Accepted drafts without a recorded acceptance tier are treated as human
+  // approved: historically acceptance required a human, so the neutral
+  // "Approved" fallback is removed.
+  return human || !llm ? "Human approved" : "LLM approved";
 }
 function displayRole(role: string): string {
   if (role === "llm_acceptance") return "LLM approve";
@@ -952,7 +956,9 @@ function renderDrafts(): void {
       canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}" title="Run the three role reviews (algorithm correctness, learning design, provenance). All pass marks the draft LLM approved.">LLM pre-review</button>` : "",
       canAccept ? `<button class="inline-action approval-action${draft.status === "needs_revision" ? " override-action" : ""}" type="button" data-accept-id="${draft.id}">${draft.status === "needs_revision" ? "Approve anyway" : "Human approve"}</button>` : "",
-      draft.status === "accepted" && !readReviews().some((review) => review.draftId === draft.id && review.role === "human_acceptance")
+      draft.status === "accepted"
+        && readReviews().some((review) => review.draftId === draft.id && review.role === "llm_acceptance")
+        && !readReviews().some((review) => review.draftId === draft.id && review.role === "human_acceptance")
         ? `<button class="inline-action approval-action" type="button" data-upgrade-id="${draft.id}" title="Record explicit human approval over the LLM approval.">Human approve</button>` : "",
       canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}" title="Roll back and regenerate the artifact using the latest review feedback.">Regenerate</button>` : "",
       canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}" title="Publish a corrected revision of this unit: fix the content, then re-approve.">Extend unit</button>` : "",
@@ -960,7 +966,7 @@ function renderDrafts(): void {
     ].filter(Boolean).join("");
     const pipeline = (label: string, active: boolean) => `<b class="${active ? "active" : ""}">${label}</b>`;
     const separator = `<span class="pipeline-sep" aria-hidden="true">&#8250;</span>`;
-    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow">${pipeline("01 Generate", stage >= 1)}${separator}${pipeline("02 Validate", stage >= 2)}${separator}${pipeline("03 Review", stage >= 4)}${separator}${pipeline("04 Approve", stage >= 5)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${acceptanceLabel(draft)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
+    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small><small class="draft-pipeline" aria-label="Draft workflow">${pipeline("01 Generate", stage >= 1)}${separator}${pipeline("02 Validate", stage >= 2)}${separator}${pipeline("03 Review", stage >= 3)}${separator}${pipeline("04 Approve", stage >= 5)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${acceptanceLabel(draft)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
   }).join("")}</div>${paginationHtml("drafts", draftPage, totalPages, drafts.length, DRAFT_PAGE_SIZE)}` : `<div class="empty-state"><strong>${empty[0]}</strong><span>${empty[1]}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
   renderWorkflow();
 }
