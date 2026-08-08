@@ -293,10 +293,20 @@ Every draft moves through one pipeline — **01 Generate → 02 Validate →
 Approval is layered: **LLM approved** is the automated tier (pre-review gate
 and/or the batch `--llm-approve` acceptance gate, recorded as
 `llm_acceptance`), and **Human approved** is always superior — a human can
-upgrade an LLM-approved published unit and every published unit can be
-corrected through a new revision (Extend unit). Acceptance rationales are
-persisted in the audit trail. The full state machine and hierarchy live in
+upgrade an LLM-approved published unit. Acceptance rationales are persisted
+in the audit trail. The full state machine and hierarchy live in
 [`docs/architecture/approval-flow.md`](docs/architecture/approval-flow.md).
+
+**Published units are immutable in place.** The artifact inspector is read-only
+for every entry point except Drafts' `needs_revision` **Revise artifact**
+(review history is a read-only audit ledger; `View artifact` on any other
+state, including Human approved, is inspection only). If a published unit has
+problems — even a human-approved one — correct it through **Revise unit**
+(fork): a new editable draft is created for the same unit, fix the content
+(or extend modes), re-run generate → validate → pre-review, then re-approve.
+The new revision (r2) is published while the previous one (r1) stays in the
+unit history, so a regression can always be fixed again or restored by
+forking an earlier revision. Practice uses the latest published revision.
 
 Problem statements are Markdown and images are **URL references by default**
 (https/data URIs): the web workbench and the VS Code flow panel render the

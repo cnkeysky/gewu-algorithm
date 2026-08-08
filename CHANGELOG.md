@@ -94,6 +94,12 @@ allowed only with explicit migration notes (see
   The low-level `generate-template` CLI shares the same generation pipeline
   (auto strategies + canonical binding) and needs no approval changes; the
   full draft-to-approval flow lives in the batch CLI.
+- Published-unit semantics are documented in the README and approval-flow
+  doc: published units are immutable in place (the inspector is read-only
+  except `needs_revision` Revise artifact), and post-approval problems — even
+  on Human-approved units — are corrected through **Revise unit** (fork →
+  fix → re-approve → new revision), with every revision kept so a bad fix can
+  be fixed again or an earlier revision restored.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with

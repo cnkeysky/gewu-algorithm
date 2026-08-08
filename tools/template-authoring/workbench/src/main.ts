@@ -1002,7 +1002,7 @@ function renderDrafts(): void {
         && !readReviews().some((review) => review.draftId === draft.id && review.role === "human_acceptance")
         ? `<button class="inline-action approval-action" type="button" data-upgrade-id="${draft.id}" title="Record explicit human approval over the LLM approval.">Human approve</button>` : "",
       canRollback ? `<button class="inline-action" type="button" data-rollback-id="${draft.id}" title="Roll back and regenerate the artifact using the latest review feedback.">Regenerate</button>` : "",
-      canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}" title="Publish a corrected revision of this unit: fix the content, then re-approve.">Extend unit</button>` : "",
+      canFork ? `<button class="inline-action" type="button" data-fork-id="${draft.id}" title="Publish a corrected revision of this unit: fix the content or extend modes, then re-approve.">Revise unit</button>` : "",
       canDelete ? `<button class="inline-action danger-action" type="button" data-delete-id="${draft.id}">Delete</button>` : "",
     ].filter(Boolean).join("");
     const chip = (label: string, step: number) => `<b class="pipeline-${step < stage ? "done" : step === stage ? "current" : "pending"}">${label}</b>`;
@@ -1340,7 +1340,7 @@ document.addEventListener("click", (event) => {
       if (!response.ok || !payload.draft) throw new Error(payload.error ?? "fork failed");
       await syncFromApi();
       loadDraftIntoForm(payload.draft);
-      notify("Extend unit: a new editable draft was created. Adjust the modes, then Generate template.");
+      notify("Revise unit: a new editable draft was created. Fix the content or adjust the modes, then Generate template.");
       showView("new");
     }).catch((error) => { notify(error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable.", true); }).finally(() => unlockAction("fork", id));
     return;

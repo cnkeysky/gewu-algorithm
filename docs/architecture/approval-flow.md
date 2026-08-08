@@ -72,12 +72,20 @@ accepted ──fork (Extend unit)──▶ new draft ──fix──▶ accept �
 Approval is not a dead end. Errors found after publication are fixed through
 a new revision:
 
-- **Extend unit** (fork) on an accepted draft creates a new editable draft for
-  the same unit id; fix the content, run generate → validate → pre-review,
-  then accept. The new revision is published and the previous one stays in
-  the unit history.
+- **Revise unit** (fork) on an accepted draft creates a new editable draft for
+  the same unit id; fix the content (or extend modes), run generate →
+  validate → pre-review, then accept. The new revision is published and the
+  previous one stays in the unit history.
 - **Edit an accepted draft directly** (click the row, change the form, save):
   the same unit id is preserved, so submitting publishes a new revision.
 - The **audit trail** records every review and acceptance verdict, the
   approver role (`human_acceptance` / `llm_acceptance`), and the acceptance
   rationale, so who approved what is always traceable.
+
+Post-approval problems are unavoidable — even a human-approved unit can later
+turn out to have a wrong edge case or complexity claim. The revision model is
+the answer: published units are immutable in place, corrections always land
+as a new revision (fork → fix → re-approve), and because every revision is
+kept, a bad fix can be corrected again or the previous revision restored by
+forking it. Practice consumes the latest published revision, so a known-bad
+revision should be replaced promptly.
