@@ -1769,6 +1769,10 @@ renderHistory();
 renderUnits();
 void syncFromApi();
 void syncProviders();
+// Re-sync from the authoring API whenever the tab regains focus, so stale
+// browser-local snapshots never linger after the backend store is cleared or
+// another client writes drafts.
+window.addEventListener("focus", () => { void syncFromApi(); });
 
 document.querySelectorAll<HTMLElement>("[data-text-layout]").forEach(observeTextElement);
 
