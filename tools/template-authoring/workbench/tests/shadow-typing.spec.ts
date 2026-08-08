@@ -297,6 +297,49 @@ test("focused workspace has a top toolbar with equal-height split and draggable 
   expect(afterWidth).toBeGreaterThan(beforeWidth + 50);
 });
 
+test("workspace and session are separate views with no shared editor elements", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+
+  const sessionSelectors = "#practice-view .problem-pane, #practice-view .session-column, #practice-view #session-heading, #practice-view #split-divider";
+  const workspace = page.locator("#practice-view");
+  const session = page.locator("#practice-session");
+
+  // Fresh workspace page: it owns the start controls and side panels only.
+  await expect(workspace).toBeVisible();
+  await expect(session).toBeHidden();
+  expect(await page.locator(sessionSelectors).count()).toBe(0);
+
+  // Starting a practice opens the dedicated session view and hides the workspace.
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(session).toBeVisible();
+  await expect(workspace).toBeHidden();
+  await expect(page.locator("#session-heading")).toBeVisible();
+  await expect(page.locator(".problem-pane")).toBeVisible();
+
+  // Back returns to a clean workspace while the session stays active in the background.
+  await page.locator("#practice-back").click();
+  await expect(workspace).toBeVisible();
+  await expect(session).toBeHidden();
+  expect(await page.locator(sessionSelectors).count()).toBe(0);
+
+  // Starting the same selection resumes the same session view.
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(session).toBeVisible();
+  await expect(workspace).toBeHidden();
+  await expect(page.locator("#session-status")).toHaveText("active");
+
+  // Starting a different mode stops the old session and opens the new selection.
+  await page.locator("#practice-back").click();
+  await page.locator("#practice-mode").selectOption("flow_recall");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(session).toBeVisible();
+  await expect(page.locator("#session-context")).toContainText("flow recall");
+});
+
 test("cloze recall renders fixed context and submits the active slot", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
@@ -343,6 +386,7 @@ test("reasoning and transfer recall expose step context through the shared answe
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
   await expect(page.locator("#session-answer")).toBeVisible();
   await expect(page.locator("#session-target")).toBeHidden();
+  await expect(page.locator("#session-editor-shell")).toBeHidden();
   await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
   await page.locator("#session-reveal").click();
   await expect(page.locator("#session-prompt")).toHaveText("Why does this frontier order preserve nondecreasing edge distance?");
@@ -353,6 +397,7 @@ test("reasoning and transfer recall expose step context through the shared answe
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
   await expect(page.locator("#session-answer")).toBeVisible();
   await expect(page.locator("#session-progress")).toContainText("Step 1 of 1");
+  await expect(page.locator("#session-editor-shell")).toBeHidden();
   await expect(page.locator("#session-prompt")).toHaveText("Prompt hidden until Reveal");
 });
 
@@ -420,7 +465,7 @@ test("resume replaces the old session boundary before accepting Enter", async ({
   await expect(meta).toContainText("progress 8%");
 });
 
-test("mouse wheel leaves Monaco when the editor cannot scroll further", async ({ page }) => {
+test("focused session workspace keeps the page fixed while Monaco handles the wheel", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();
   await expect(page.locator("#practice-connection")).toContainText("Core connected");
@@ -431,17 +476,15 @@ test("mouse wheel leaves Monaco when the editor cannot scroll further", async ({
   const editor = page.locator("#session-editor");
   await expect(editor).toBeVisible();
   await expect(editor.locator(".monaco-editor")).toBeVisible();
-  await editor.evaluate((element) => window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 80));
-  // The workspace layout (controls + side panels) makes the page tall enough
-  // for the wheel to propagate after Monaco stops scrolling.
-  await page.locator("#practice-back").click();
-  await page.waitForTimeout(200);
+  // The focused session view fills the viewport: the page itself must not scroll.
+  await expect.poll(() => page.evaluate(() => document.scrollingElement?.scrollHeight ?? 0)).toBeLessThanOrEqual(await page.evaluate(() => window.innerHeight));
+  // Wheel inside Monaco must stay inside the editor and never move the page.
   const box = await editor.boundingBox();
   expect(box).not.toBeNull();
-  const before = await page.evaluate(() => window.scrollY);
   await page.mouse.move((box?.x ?? 0) + 200, (box?.y ?? 0) + 200);
   await page.mouse.wheel(0, 700);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
 test("copy, paste, and deletion preserve the strict accepted prefix", async ({ page }) => {

@@ -102,32 +102,34 @@ root.innerHTML = `
     </div>
     <section id="practice-view" class="app-view panel page-panel" hidden>
       <div class="practice-heading panel-heading"><div><p class="eyebrow">Core practice / local first</p><h2>Practice workspace</h2><p class="page-subtitle">Choose a unit, start one projection, and keep the current state visible while you work.</p></div><span class="connection-badge" id="practice-connection">Core offline</span></div>
-      <div class="session-heading" id="session-heading" hidden><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span><span class="session-actions"><button class="button secondary" type="button" id="practice-back" hidden>&#8592; Back to workspace</button><button class="button danger" type="button" id="session-stop">Stop practice</button></span></div></div>
+      <form id="practice-start" class="practice-controls">
+        <label class="field"><span>Algorithm unit</span><select id="practice-unit"><option>Loading units...</option></select></label>
+        <label class="field"><span>Practice mode</span><select id="practice-mode">${modes.map((mode) => `<option value="${mode.id}">${mode.label}</option>`).join("")}</select></label>
+        <label class="field"><span id="practice-option-label">Practice variant <small class="catalog-note">Reviewed choices from this unit</small></span><select id="practice-id"><option value="">Default reviewed variant</option></select></label>
+        <button class="button primary" type="submit">Start practice <span aria-hidden="true">&#8594;</span></button>
+        <p class="form-message" id="practice-message" role="status"></p>
+      </form>
+      <aside class="practice-side">
+        <section><div class="panel-heading"><h3>Interrupted</h3><button class="inline-action" type="button" id="refresh-checkpoints">Refresh</button></div><div id="practice-checkpoints" class="compact-list"></div></section>
+        <section><div class="panel-heading"><h3>Spaced review</h3></div><div id="practice-recommendations" class="compact-list"></div></section>
+        <section><div class="panel-heading"><h3>Recent attempts</h3></div><div id="practice-attempts" class="compact-list"></div></section>
+      </aside>
+    </section>
+    <section id="practice-session" class="app-view panel page-panel" hidden>
+      <div class="session-heading" id="session-heading"><div><p class="eyebrow">Active session</p><h3 id="session-title">Practice</h3><p class="session-context" id="session-context"></p></div><div class="session-heading-meta"><span class="valid-badge" id="session-status">Active</span><span class="session-actions"><button class="button secondary" type="button" id="practice-back">&#8592; Back to workspace</button><button class="button danger" type="button" id="session-stop">Stop practice</button></span></div></div>
       <div class="practice-layout">
-        <form id="practice-start" class="practice-controls">
-          <label class="field"><span>Algorithm unit</span><select id="practice-unit"><option>Loading units...</option></select></label>
-          <label class="field"><span>Practice mode</span><select id="practice-mode">${modes.map((mode) => `<option value="${mode.id}">${mode.label}</option>`).join("")}</select></label>
-          <label class="field"><span id="practice-option-label">Practice variant <small class="catalog-note">Reviewed choices from this unit</small></span><select id="practice-id"><option value="">Default reviewed variant</option></select></label>
-          <button class="button primary" type="submit">Start practice <span aria-hidden="true">&#8594;</span></button>
-          <p class="form-message" id="practice-message" role="status"></p>
-        </form>
-        <section class="problem-pane" hidden>
+        <section class="problem-pane">
           <div class="session-problem"><span>Problem</span><div class="session-question" id="session-question"></div></div>
         </section>
-        <div class="split-divider" id="split-divider" hidden></div>
+        <div class="split-divider" id="split-divider"></div>
         <div class="session-column">
-        <section class="practice-session" id="practice-session" hidden>
+        <section class="practice-session" id="practice-session-body">
           <p class="session-meta" id="session-meta"></p>
           <div id="session-progress" class="session-progress" hidden></div><div id="session-completed" class="session-completed" hidden></div><p id="session-prompt" class="session-prompt" data-text-layout></p><div id="session-scaffold" class="session-scaffold" hidden></div><pre id="session-cloze-template" class="session-cloze-template" hidden data-text-layout></pre><pre id="session-target" class="session-target" data-text-layout></pre>
           <div id="session-editor-shell" class="practice-editor-shell" hidden><div class="practice-editor-toolbar"><span class="session-language" id="session-language">Template language</span><label>Font size <select id="editor-font-size"><option value="12">12</option><option value="13" selected>13</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="20">20</option></select></label></div><div id="session-editor" class="shadow-editor" aria-label="Practice code editor"></div></div><textarea id="session-answer" rows="5" placeholder="Enter your answer or the next code segment."></textarea>
           <div class="form-actions"><button class="button primary" type="button" id="session-submit">Submit answer</button><button class="button secondary" type="button" id="session-reveal" hidden>Reveal</button><button class="button secondary" type="button" id="session-restart" hidden>Restart</button></div>
         </section>
         </div>
-        <aside class="practice-side">
-          <section><div class="panel-heading"><h3>Interrupted</h3><button class="inline-action" type="button" id="refresh-checkpoints">Refresh</button></div><div id="practice-checkpoints" class="compact-list"></div></section>
-          <section><div class="panel-heading"><h3>Spaced review</h3></div><div id="practice-recommendations" class="compact-list"></div></section>
-          <section><div class="panel-heading"><h3>Recent attempts</h3></div><div id="practice-attempts" class="compact-list"></div></section>
-        </aside>
       </div>
     </section>
     <section id="drafts-view" class="app-view panel page-panel" hidden>
@@ -417,33 +419,13 @@ window.addEventListener("pagehide", () => {
     } catch { /* best effort */ }
   })();
 });
-function syncProblemPaneHeight(): void {
-  const pane = document.querySelector<HTMLElement>(".problem-pane");
-  const column = document.querySelector<HTMLElement>(".session-column");
-  if (!pane || !column || pane.hidden || window.matchMedia("(max-width: 940px)").matches) return;
-  if (document.querySelector<HTMLElement>("#practice-view")?.classList.contains("focused")) return;
-  pane.style.height = `${Math.max(0, Math.round(column.scrollHeight))}px`;
-}
 function setPracticeFocus(focused: boolean): void {
-  document.querySelector<HTMLElement>("#practice-view")?.classList.toggle("focused", focused);
-  document.querySelector<HTMLElement>(".practice-layout")?.classList.toggle("focused", focused);
-  const pane = document.querySelector<HTMLElement>(".problem-pane");
-  if (pane) pane.style.height = "";
-  document.querySelector<HTMLButtonElement>("#practice-back")!.hidden = !focused;
-  if (!focused) syncProblemPaneHeight();
-}
-if (typeof ResizeObserver !== "undefined") {
-  const column = document.querySelector<HTMLElement>(".session-column");
-  if (column) new ResizeObserver(() => syncProblemPaneHeight()).observe(column);
+  document.querySelector<HTMLElement>("#practice-view")!.hidden = focused;
+  document.querySelector<HTMLElement>("#practice-session")!.hidden = !focused;
 }
 function renderPracticeSession(session: PracticeSession): void {
   const sessionChanged = activePracticeSnapshot?.session_id !== session.session_id;
   activePracticeSnapshot = session;
-  document.querySelector<HTMLElement>(".problem-pane")!.hidden = false;
-  document.querySelector<HTMLElement>("#practice-session")!.hidden = false;
-  document.querySelector<HTMLElement>("#session-heading")!.hidden = false;
-  document.querySelector<HTMLElement>("#split-divider")!.hidden = false;
-  syncProblemPaneHeight();
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
   document.querySelector<HTMLElement>("#session-question")!.innerHTML = renderProblemStatement(session.problem_statement);
   const unitShort = session.unit_id.split(".").pop() ?? "";
@@ -512,7 +494,7 @@ function renderPracticeSession(session: PracticeSession): void {
   answer.hidden = isCodeEditor;
   submit.hidden = isCodeEditor;
   submit.textContent = isFlow || (isCode && !isStructuredCode) ? "Submit answer" : isStructuredCode ? "Submit code" : "Submit event";
-  document.querySelector<HTMLElement>("#practice-session .form-actions")!.hidden = submit.hidden && reveal.hidden && restart.hidden;
+  document.querySelector<HTMLElement>("#practice-session-body .form-actions")!.hidden = submit.hidden && reveal.hidden && restart.hidden;
   if (isCodeEditor) {
     shadowAcceptedText = session.accepted_text;
     shadowTargetText = session.target_text;
@@ -531,7 +513,6 @@ function renderPracticeSession(session: PracticeSession): void {
     : session.mode === "code_recall"
     ? `slot ${session.completed_steps}/${session.total_steps} · rejected inputs ${session.rejected_input_count} · prompts ${session.prompt_count}`
     : `completed ${session.accepted_input_count} steps · rejected ${session.rejected_input_count} answers · prompts ${session.prompt_count}`;
-  syncProblemPaneHeight();
   if (session.status !== "active") {
     document.querySelector<HTMLButtonElement>("#session-submit")!.disabled = true;
     reveal.disabled = true;
@@ -1221,14 +1202,6 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
   if (practiceStarting) return;
   practiceStarting = true;
   try {
-    if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
-    if (activePracticeSession && activePracticeSnapshot?.status === "active") {
-      await practiceRpc("gewu/stopSession", { session_id: activePracticeSession.session_id, elapsed: { active_ms: 1000, wall_ms: 1000 } });
-    }
-    activePracticeSession = undefined;
-    flowPromptRevealed = false;
-    codePromptRevealed = false;
-    promptRevealedModes.clear();
     const practiceOption = document.querySelector<HTMLSelectElement>("#practice-id")!;
     const selectedOption = practiceOption.value || undefined;
     const unitId = document.querySelector<HTMLSelectElement>("#practice-unit")!.value;
@@ -1237,6 +1210,25 @@ document.querySelector<HTMLFormElement>("#practice-start")!.addEventListener("su
     const defaultOption = practiceUnits.find((unit) => unit.id === unitId)?.practice_options.find((option) => option.mode === mode);
     const expectedImplementation = practiceOption.dataset.selector === "implementation" ? selectedOption ?? defaultOption?.id : undefined;
     const expectedPracticeId = practiceOption.dataset.selector === "practice_id" ? selectedOption : undefined;
+    if (activePracticeSession?.mode === "shadow_typing" || activePracticeSession?.mode === "code_recall") await shadowEditor?.flush();
+    if (activePracticeSession && activePracticeSnapshot?.status === "active") {
+      const sameSelection = activePracticeSnapshot.unit_id === unitId
+        && activePracticeSnapshot.revision === revision
+        && activePracticeSnapshot.mode === mode
+        && (expectedImplementation === undefined || activePracticeSnapshot.implementation === expectedImplementation)
+        && (expectedPracticeId === undefined || activePracticeSnapshot.practice_id === expectedPracticeId);
+      if (sameSelection) {
+        setPracticeFocus(true);
+        practiceMessage("Practice resumed.");
+        await refreshPracticeData();
+        return;
+      }
+      await practiceRpc("gewu/stopSession", { session_id: activePracticeSession.session_id, elapsed: { active_ms: 1000, wall_ms: 1000 } });
+    }
+    activePracticeSession = undefined;
+    flowPromptRevealed = false;
+    codePromptRevealed = false;
+    promptRevealedModes.clear();
     const matching = checkpointItems.find((checkpoint) => checkpoint.unit_id === unitId && checkpoint.revision === revision && checkpoint.mode === mode && (expectedImplementation === undefined || checkpoint.implementation === expectedImplementation) && (expectedPracticeId === undefined || checkpoint.practice_id === expectedPracticeId));
     if (matching) {
       const resumed = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: matching.id });

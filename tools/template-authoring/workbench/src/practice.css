@@ -2,27 +2,32 @@
   padding: 32px 29px 38px;
   background: #fbfcfb;
 }
-#practice-view.focused {
+
+/* Focused session view is its own page: full-bleed LeetCode-style split. */
+#practice-session {
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
+  padding-top: 22px;
+  padding-bottom: 22px;
   padding-left: clamp(18px, 3vw, 44px);
   padding-right: clamp(18px, 3vw, 44px);
   display: flex;
   flex-direction: column;
   height: calc(100vh - 68px - 54px);
+  background: #fbfcfb;
 }
-#practice-view.focused .practice-heading { display: none; }
-#practice-view.focused .session-heading { padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
-#practice-view.focused .practice-layout { flex: 1; min-height: 0; height: auto; grid-template-rows: minmax(0, 1fr); }
-#practice-view.focused .problem-pane { align-self: stretch; }
-#practice-view.focused .session-column { height: 100%; }
-#practice-view.focused .practice-session { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-#practice-view.focused .practice-editor-shell { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 10px; }
-#practice-view.focused .practice-editor-shell .shadow-editor { flex: 1; min-height: 0; height: auto; }
-#practice-view.focused #session-answer { flex: 1; min-height: 0; }
-body:has(#practice-view.focused) .shell { padding-bottom: 0; }
-body:has(#practice-view.focused) footer { display: none; }
-}
+#practice-session[hidden] { display: none; }
+#practice-session .session-heading { padding-bottom: 14px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+#practice-session .practice-layout { flex: 1; min-height: 0; height: auto; }
+#practice-session .problem-pane { align-self: stretch; }
+#practice-session .session-column { height: 100%; }
+#practice-session .session-column > .practice-session { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#practice-session .practice-editor-shell { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 10px; }
+#practice-session .practice-editor-shell[hidden] { display: none; }
+#practice-session .practice-editor-shell .shadow-editor { flex: 1; min-height: 0; height: auto; }
+#practice-session #session-answer { flex: 1; min-height: 0; }
+body:has(#practice-session:not([hidden])) .shell { padding-bottom: 0; }
+body:has(#practice-session:not([hidden])) footer { display: none; }
 
 .practice-heading {
   align-items: start;
@@ -38,13 +43,10 @@ body:has(#practice-view.focused) footer { display: none; }
 .connection-badge.is-connected::before { background: #2f8a59; box-shadow: 0 0 0 3px rgba(47, 138, 89, .12); }
 
 /* Split layout: problem statement on the left, session on the right. */
-.practice-layout { --problem: 1fr; --editor: 1.25fr; display: grid; grid-template-columns: minmax(0, var(--problem)) 20px minmax(0, var(--editor)); row-gap: 24px; }
-.practice-layout.focused { --problem: .8fr; --editor: 1.5fr; grid-template-rows: minmax(0, 1fr); }
-.practice-layout.focused .practice-controls, .practice-layout.focused .practice-side { display: none; }
+.practice-layout { --problem: .8fr; --editor: 1.5fr; display: grid; grid-template-columns: minmax(0, var(--problem)) 20px minmax(0, var(--editor)); grid-template-rows: minmax(0, 1fr); row-gap: 24px; }
 .split-divider { position: relative; cursor: col-resize; touch-action: none; }
 .split-divider::before { position: absolute; top: 0; bottom: 0; left: 9px; width: 2px; border-radius: 2px; background: var(--line); content: ""; transition: background .15s ease; }
 .split-divider:hover::before, .split-divider.dragging::before { background: var(--green); }
-.problem-pane[hidden] { display: none; }
 .problem-pane { min-height: 0; overflow-y: auto; padding: 24px 26px; border: 1px solid var(--line); border-radius: 12px; background: #fff; scrollbar-width: thin; }
 .problem-pane .session-problem { margin: 0; }
 .session-problem > span { display: block; margin-bottom: 10px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
@@ -52,14 +54,14 @@ body:has(#practice-view.focused) footer { display: none; }
 
 .session-column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.practice-controls { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 14px; align-items: end; padding: 18px 24px 20px; border: 1px solid var(--line); border-radius: 12px; background: #f4f8f5; }
+.practice-controls { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 14px; align-items: end; margin-top: 6px; padding: 18px 24px 20px; border: 1px solid var(--line); border-radius: 12px; background: #f4f8f5; }
 .practice-controls .field:first-child { grid-column: 1 / -1; }
 .practice-controls .field { min-width: 0; }
 .practice-controls .field > span { font-size: 11px; }
 .practice-controls .button { width: auto; min-width: 145px; margin-top: 0; align-self: end; }
 .practice-controls .form-message { grid-column: 1 / -1; margin: 0; text-align: right; }
 
-.practice-session { padding: 20px 0 0; border-top: 1px solid var(--line); }
+.practice-session { padding: 0; border-top: 0; }
 .session-heading { display: flex; align-items: start; justify-content: space-between; gap: 18px; }
 .session-heading h3 { margin: 0; font-size: 24px; line-height: 1.2; }
 .session-context { margin: 7px 0 0; color: #2f3d36; font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: capitalize; }
@@ -98,8 +100,8 @@ body:has(#practice-view.focused) footer { display: none; }
 .shadow-editor:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px rgba(38, 105, 72, .12); }
 .gewu-shadow-guidance { color: #536c61; opacity: .95; pointer-events: none; white-space: pre; font: 13px/22px ui-monospace, SFMono-Regular, Menlo, monospace; text-shadow: 0 0 1px rgba(83, 108, 97, .18); }
 
-/* Side panels: full-width row under the split, three equal columns. */
-.practice-side { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch; margin-top: 6px; padding: 22px 24px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+/* Side panels: full-width row under the start form, three equal columns. */
+.practice-side { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: stretch; margin-top: 24px; padding: 22px 24px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 .practice-side section { display: flex; min-width: 0; height: 352px; min-height: 352px; flex-direction: column; overflow: hidden; border-top: 1px solid var(--line); }
 .practice-side section + section { padding-left: 24px; border-left: 1px solid var(--line); }
 .practice-side .panel-heading { flex: 0 0 auto; margin: 0 0 5px; padding: 13px 0 8px; }
@@ -126,14 +128,13 @@ body:has(#practice-view.focused) footer { display: none; }
 .record-state { display: block; width: 124px; color: var(--green); font-size: 10px; font-weight: 700; text-align: right; text-transform: capitalize; white-space: nowrap; }
 
 @media (max-width: 1200px) {
-  .practice-layout { grid-template-columns: minmax(0, 1fr) minmax(440px, 1.05fr); }
+  .practice-layout { grid-template-columns: minmax(0, var(--problem)) 20px minmax(340px, var(--editor)); }
 }
 
 @media (max-width: 940px) {
   #practice-view { padding: 23px 18px 28px; }
   .practice-heading { flex-direction: column; gap: 15px; }
   .practice-layout { grid-template-columns: 1fr; }
-  .practice-layout.focused { grid-template-columns: 1fr; }
   .split-divider { display: none; }
   .problem-pane { min-height: 38vh; max-height: 48vh; }
   .practice-controls { grid-template-columns: 1fr 1fr; }

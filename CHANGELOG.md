@@ -6,6 +6,21 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+### Fixed
+
+- The practice workspace and the focused session workspace are now two
+  separate views instead of one shared layout with toggled `hidden`/classes:
+  the start page never shows editor-area elements, and the session view keeps
+  its own full-bleed LeetCode-style split. This removes the `hidden` vs
+  `display` attribute conflicts that let the draggable divider and session
+  content overlap the editor and the action buttons.
+- Starting the same unit/mode/variant while a session is active now resumes
+  that session in place; choosing a different unit, mode, or variant stops the
+  current session and starts the new selection as before.
+- The code editor shell respects its hidden state again (the flex display rule
+  no longer overrides `hidden`), so answer-based modes no longer leave a
+  phantom editor box in the layout.
+
 ## [0.1.6] - 2026-08-07
 
 ### Changed
