@@ -15,6 +15,10 @@ Read the playbook's relevant section on demand before acting on releases,
 UI/layout changes, data migrations, or any rule whose detail matters — the
 rules above stay resident, the detail is fetched when needed.
 
+A project-independent copy of the global agent rules is shared at
+[`docs/development/global-agent-rules.md`](docs/development/global-agent-rules.md)
+for collaborators who want the same baseline across projects.
+
 These rules are defaults: explicit user instructions override them. If the
 user asks to skip a rule, follow the user and call it out in the closure.
 

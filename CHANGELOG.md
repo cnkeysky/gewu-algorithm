@@ -8,6 +8,9 @@ allowed only with explicit migration notes (see
 
 ### Added
 
+- Share the project-independent global agent rules as a reusable template in
+  `docs/development/global-agent-rules.md`, so collaborators can copy the same
+  baseline into their global config or other repositories.
 - Review history gains a search box (title, role, or artifact hash), matching
   the Drafts / Units / Practice lists; it stacks with the verdict and language
   filters.

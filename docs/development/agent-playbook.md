@@ -5,10 +5,11 @@
 真实教训（例子里会提到 GEWU 的具体场景，替换成你项目的对应场景即可）。
 
 维护说明（供维护者阅读，不是 Agent 的开发规则）：核心规则常驻仓库级
-`AGENTS.md` 与全局 AGENTS.md，细则按需读取；修改规则时，需在同一次提交
-里同步 `AGENTS.md`、本 playbook 与 CHANGELOG；跨工具（Claude Code /
-Cursor）时把同一核心规则写入它们各自读取的文件（`CLAUDE.md` /
-`.cursorrules`）保持一致。
+`AGENTS.md`、全局 AGENTS.md 与项目无关的全局规则模板
+`docs/development/global-agent-rules.md`，细则按需读取；修改规则时，需在
+同一次提交里同步 `AGENTS.md`、本 playbook、全局规则模板与 CHANGELOG；跨
+工具（Claude Code / Cursor）时把同一核心规则写入它们各自读取的文件
+（`CLAUDE.md` / `.cursorrules`）保持一致。
 
 ---
 
