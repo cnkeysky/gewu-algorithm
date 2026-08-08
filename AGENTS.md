@@ -2,6 +2,8 @@
 
 Work here follows the development playbook
 [`docs/development/agent-playbook.md`](docs/development/agent-playbook.md).
+Code-level standards for Rust, TypeScript, protocol, and dependencies live in
+[`docs/development/coding-standards.md`](docs/development/coding-standards.md).
 The rules below are the hard minimum; the playbook holds the detail and the
 project-specific lessons. Severity: rules 1–10 are musts; the closure self-check
 is required after every change. Task triggers: UI changes → run the Playwright
@@ -11,9 +13,10 @@ releases → the checklist in the playbook appendix. Rule changes must be made
 atomically: update this file, the playbook, and CHANGELOG in the same commit.
 Last updated: 2026-08-08.
 
-Read the playbook's relevant section on demand before acting on releases,
-UI/layout changes, data migrations, or any rule whose detail matters — the
-rules above stay resident, the detail is fetched when needed.
+Read the playbook's or coding standards' relevant section on demand before
+acting on releases, UI/layout changes, data migrations, or any rule whose
+detail matters — the rules above stay resident, the detail is fetched when
+needed.
 
 These rules are defaults: explicit user instructions override them. If the
 user asks to skip a rule, follow the user and call it out in the closure.

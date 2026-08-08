@@ -17,6 +17,9 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Repo AGENTS.md links `docs/development/coding-standards.md` as an on-demand
+  detail document alongside the playbook, so code-level standards are fetched
+  when writing or reviewing code rather than kept resident.
 - AGENTS.md gains resident rule 10 (DX and CI parity: top-level commands
   mirror CI gates, managed scripts run non-interactively, and stop terminates
   every spawned background service) and rule 1 now requires
