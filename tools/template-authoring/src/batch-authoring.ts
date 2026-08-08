@@ -3,6 +3,13 @@ import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
+import { Agent, setGlobalDispatcher } from "undici";
+
+// LLM-backed authoring requests can take many minutes (especially with
+// reasoning-mode relays). Node's default fetch (undici) drops connections
+// that do not receive response headers within 5 minutes; disable those
+// internal timeouts and let the explicit --timeout-minutes signal bound work.
+setGlobalDispatcher(new Agent({ headersTimeout: 0, bodyTimeout: 0 }));
 
 /**
  * Batch authoring CLI. Drives the same workbench API used by the web UI so
@@ -24,6 +31,8 @@ import { fileURLToPath } from "node:url";
  *   --force              regenerate problems even when an accepted unit covers them
  *   --yes                skip duplicate prompts (default when not a TTY)
  *   --select <ids>       run only the given ids/slugs/titles (comma list)
+ *   --regenerate <ids>   regenerate the given ids/slugs/titles even when their
+ *                        requested modes are already covered (comma list)
  *   --repair-rounds <n>  regenerate from review feedback after needs_revision (default 1)
  *   --auto-accept        accept needs_revision drafts with an explicit rationale record
  *   --provider, --model  recorded metadata on the draft (generation uses server env)
@@ -68,6 +77,7 @@ type Options = {
   force: boolean;
   yes: boolean;
   select: string[];
+  regenerate: string[];
   repairRounds: number;
   autoAccept: boolean;
   llmApprove?: string;
@@ -114,6 +124,7 @@ export function parseOptions(args: string[]): Options {
   const timeoutMinutes = Number(optionValue(args, "--timeout-minutes") ?? process.env.GEWU_BATCH_TIMEOUT_MINUTES ?? "60");
   if (!Number.isInteger(timeoutMinutes) || timeoutMinutes < 1) fail("--timeout-minutes must be a positive integer");
   const selectValue = optionValue(args, "--select");
+  const regenerateValue = optionValue(args, "--regenerate");
   return {
     problemsFile,
     api: api.replace(/\/+$/, ""),
@@ -123,6 +134,7 @@ export function parseOptions(args: string[]): Options {
     force: args.includes("--force"),
     yes: args.includes("--yes"),
     select: selectValue ? selectValue.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean) : [],
+    regenerate: regenerateValue ? regenerateValue.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean) : [],
     repairRounds: Number(optionValue(args, "--repair-rounds") ?? "1"),
     autoAccept: args.includes("--auto-accept"),
     llmApprove: optionValue(args, "--llm-approve"),
@@ -162,12 +174,16 @@ export async function loadProblems(path: string): Promise<BatchProblem[]> {
  */
 export function selectProblems(problems: BatchProblem[], select: string[]): BatchProblem[] {
   if (select.length === 0) return problems;
-  return problems.filter((problem) => {
-    const id = String(problem.id ?? "").toLowerCase();
-    const slug = String(problem.slug ?? "").toLowerCase();
-    const title = String(problem.title ?? "").toLowerCase();
-    return select.some((wanted) => id === wanted || slug === wanted || title === wanted || title.includes(wanted));
-  });
+  return problems.filter((problem) => matchesRequested(problem, select));
+}
+
+/** Case-insensitive match on id / slug / exact-or-substring title. */
+function matchesRequested(problem: BatchProblem, wanted: string[]): boolean {
+  if (wanted.length === 0) return false;
+  const id = String(problem.id ?? "").toLowerCase();
+  const slug = String(problem.slug ?? "").toLowerCase();
+  const title = String(problem.title ?? "").toLowerCase();
+  return wanted.some((item) => id === item || slug === item || title === item || title.includes(item));
 }
 
 /**
@@ -315,7 +331,7 @@ async function processProblem(
     const language = resolveLanguage(options, problem);
     const accepted = acceptedMap.get(coverageKey(problem.problem, language));
     const covered = accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
-    if (accepted && covered && !options.force) {
+    if (accepted && covered && !options.force && !matchesRequested(problem, options.regenerate)) {
       if (duplicatePolicy === "ask") {
         const outcome = await new Promise<"skip" | "force" | "forceAll" | "quit">((resolveOutcome) => {
           context.promptChain = context.promptChain.then(async () => {
@@ -341,7 +357,7 @@ async function processProblem(
         }
       }
       if (duplicatePolicy === "skip") {
-        return { ...base, status: "skipped", reason: "already covered by accepted unit (use --force to regenerate)" };
+        return { ...base, status: "skipped", reason: `already covered by accepted unit (modes: ${[...accepted.modes].join(", ")}); use --regenerate <id> or --force to regenerate` };
       }
     }
     if (!options.steps.has("draft")) fail("draft step must be enabled to resolve a draft id");
@@ -512,6 +528,19 @@ async function main(): Promise<void> {
   console.log(`batch-authoring: ${problems.length} problems, steps=[${[...options.steps].join(",")}], concurrency=${options.concurrency}${options.force ? ", force" : ", dedupe-covered"}${options.select.length > 0 ? `, select=[${options.select.join(",")}]` : ""}`);
 
   const acceptedMap = await acceptedByProblem(options);
+  if (options.force || options.regenerate.length > 0) {
+    // Explicit regeneration: no pre-run skip summary needed.
+  } else {
+    const covered = problems.filter((problem) => {
+      const language = resolveLanguage(options, problem);
+      const accepted = acceptedMap.get(coverageKey(problem.problem, language));
+      return accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
+    });
+    if (covered.length > 0) {
+      console.log(`batch-authoring: ${covered.length} problem(s) already fully covered by accepted units — they will be skipped unless you pick --regenerate <id>:`);
+      for (const problem of covered) console.log(`  - ${problem.title}`);
+    }
+  }
   const context: RunContext = {
     duplicatePolicy: options.yes || !process.stdin.isTTY ? "skip" : "ask",
     promptChain: Promise.resolve(),

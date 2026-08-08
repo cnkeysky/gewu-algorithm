@@ -8,6 +8,13 @@ allowed only with explicit migration notes (see
 
 ### Added
 
+- Batch authoring pre-checks whether every requested practice mode is already
+  covered by an accepted unit: fully covered problems are reported up front
+  and skipped (interactive choice in a TTY), and `--regenerate <ids>` forces
+  regeneration for specific problems as new revisions. Long LLM-backed
+  requests no longer drop after Node's internal 5-minute fetch timeout
+  (undici headers/body timeouts disabled; `--timeout-minutes` remains the
+  bound).
 - Batch authoring's per-request timeout is configurable via `--timeout-minutes`
   (or `GEWU_BATCH_TIMEOUT_MINUTES`, default 60), because slow reasoning-mode
   relays can exceed the previous fixed 10-minute limit.
