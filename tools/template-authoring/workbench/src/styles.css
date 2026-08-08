@@ -104,6 +104,8 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .empty-state { padding: 40px 16px; border: 1px dashed var(--line); border-radius: 12px; background: #fafcfa; }
 .history-row { padding: 14px 16px; }
 .history-row:hover { background: #f6faf7; }
+.history-row { grid-template-columns: 25px minmax(0, 1fr) auto; }
+.history-actions { display: grid; gap: 8px; justify-items: end; }
 .review-mark { border-radius: 8px; }
 .session-target, .artifact-editor { border-radius: 10px; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }

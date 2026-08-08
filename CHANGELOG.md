@@ -75,6 +75,9 @@ allowed only with explicit migration notes (see
   muted gray (for example a validated draft shows 01/02 done, 03 current, 04
   pending). The confirm and rationale dialogs are restyled with a consistent
   header marker and a separated action row.
+- Review history rows stack the verdict status above the View feedback button
+  (right-aligned in one column), matching the Drafts row arrangement, so a
+  "needs revision" verdict reads as the state of that feedback entry.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with
