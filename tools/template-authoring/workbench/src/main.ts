@@ -943,7 +943,7 @@ function renderDrafts(): void {
     const stage = draftStage(draft.status);
     const actions = [
       draft.artifactPath ? `<button class="inline-action${draft.status === "needs_revision" ? " revision-action" : ""}" type="button" data-view-artifact-id="${draft.id}">${draft.status === "needs_revision" ? "Revise artifact" : "View artifact"}</button>` : "",
-      canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">Generate template</button>` : "",
+      canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">${draft.status === "revision_requested" ? "Regenerate" : "Generate template"}</button>` : "",
       canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}" title="Run the three role reviews (algorithm correctness, learning design, provenance). All pass marks the draft LLM approved.">LLM pre-review</button>` : "",
       canAccept ? `<button class="inline-action approval-action${draft.status === "needs_revision" ? " override-action" : ""}" type="button" data-accept-id="${draft.id}">${draft.status === "needs_revision" ? "Approve anyway" : "Human approve"}</button>` : "",
