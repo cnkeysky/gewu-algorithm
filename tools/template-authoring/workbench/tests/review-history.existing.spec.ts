@@ -24,7 +24,7 @@ test("audit trail verdicts are color-coded with readable labels and paginate", a
   }
 });
 
-test("View feedback opens the artifact modal from Review history", async ({ page }) => {
+test("View report opens the artifact modal from Review history", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Review history", exact: true }).click();
   const button = page.locator("#history-view [data-view-artifact-id]").first();

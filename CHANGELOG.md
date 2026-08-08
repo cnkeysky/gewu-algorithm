@@ -78,6 +78,10 @@ allowed only with explicit migration notes (see
 - Review history rows stack the verdict status above the View feedback button
   (right-aligned in one column), matching the Drafts row arrangement, so a
   "needs revision" verdict reads as the state of that feedback entry.
+- Review history is an immutable audit ledger, not an action surface: the
+  button is renamed **View report** (read-only inspection of the artifact and
+  its review reports, with a tooltip pointing revisions back to Drafts), so
+  "needs revision" no longer suggests fixing it in place.
 - Draft rows no longer shrink inside the fixed list area, so action buttons
   never overflow the card; the Drafts area returns to 600px so six worst-case
   rows fit without internal scroll (History stays 560px, Units 406px), with
