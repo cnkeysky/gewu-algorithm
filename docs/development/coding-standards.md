@@ -1,5 +1,10 @@
 # Coding Standards
 
+Agent workflow rules (the hard minimum, resident) live in
+[`AGENTS.md`](../../AGENTS.md); detail and project lessons are in
+[`agent-playbook.md`](agent-playbook.md). This file is the project's coding
+standards and is read on demand alongside those rules.
+
 ## Objectives
 
 Code should make domain behavior explicit, preserve compatibility, and remain testable without an editor or network connection. Consistency is enforced by tools where possible and by review where judgment is required.
@@ -22,6 +27,8 @@ Code should make domain behavior explicit, preserve compatibility, and remain te
 - Core application services compose domain ports; clients adapt external APIs.
 - Protocol DTOs are converted at the boundary and do not leak into domain state.
 - Persistence formats are versioned and accessed through repositories or stores owned by the core.
+- SQLite schema changes use idempotent migrations; legacy rows remain readable
+  with defined fallback values, never a confusing neutral placeholder.
 - Editor clients do not implement scoring, schema validation, or review scheduling.
 - LLM adapters do not mutate published content directly.
 
@@ -68,9 +75,13 @@ Any exception requires an ADR.
 - Network, process, and provider calls require cancellation and timeouts.
 - Do not hold locks across `.await`.
 - Background tasks must have explicit ownership and shutdown behavior.
+- Throttle or coalesce high-frequency persistence (per-keystroke checkpoints,
+  session saves) to bound disk write amplification.
 
-## TypeScript and VS Code
+## TypeScript (Web, CLI, and VS Code)
 
+- Applies to the web workbench, the template-authoring CLI, and the VS Code
+  extension.
 - Enable `strict` TypeScript settings.
 - Avoid `any`; use `unknown` at untrusted boundaries and narrow it through validation.
 - Use discriminated unions for protocol results and editor session states.
@@ -121,6 +132,8 @@ the same change.
 - Parsers include invalid and unsupported-version cases.
 - Persistent formats include round-trip and migration tests.
 - Editor features include integration coverage for lifecycle and disposal.
+- UI changes include Playwright e2e against the real stack, with geometry
+  assertions and polling to avoid flaky races.
 - Test names describe observable behavior rather than implementation functions.
 
 ## Dependencies

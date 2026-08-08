@@ -17,6 +17,9 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Coding standards now link the resident agent rules for on-demand reading and
+  explicitly cover the web workbench and template-authoring CLI; persistence
+  and async sections gain idempotent-migration and write-throttling rules.
 - The development playbook is now repo-scoped detail: its meta intro and
   maintainer-only maintenance note were removed from the agent-facing file,
   and the cross-tool sync guidance moved into the project-independent rules
