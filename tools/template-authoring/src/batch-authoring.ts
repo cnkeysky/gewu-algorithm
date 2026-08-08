@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
  *   --repair-rounds <n>  regenerate from review feedback after needs_revision (default 1)
  *   --auto-accept        accept needs_revision drafts with an explicit rationale record
  *   --provider, --model  recorded metadata on the draft (generation uses server env)
- *   --language <slug>    implementation language (default python)
+ *   --language <slug>    implementation language (default python; overrides the catalog entry)
  *   --variants <n>       implementation variants per unit (default 1)
  *   --modes <list>       practice modes (default all five)
  *   --assistance <list>  code recall assistance (default comments,cloze)
@@ -63,6 +63,7 @@ type Options = {
   provider?: string;
   model?: string;
   language: string;
+  languageProvided: boolean;
   variants: number;
   modes: string[];
   assistance: string[];
@@ -105,6 +106,7 @@ export function parseOptions(args: string[]): Options {
     provider: optionValue(args, "--provider"),
     model: optionValue(args, "--model"),
     language: optionValue(args, "--language") ?? "python",
+    languageProvided: optionValue(args, "--language") !== undefined,
     variants: Number(optionValue(args, "--variants") ?? "1"),
     modes,
     assistance,
@@ -141,6 +143,15 @@ export function selectProblems(problems: BatchProblem[], select: string[]): Batc
     const title = String(problem.title ?? "").toLowerCase();
     return select.some((wanted) => id === wanted || slug === wanted || title === wanted || title.includes(wanted));
   });
+}
+
+/**
+ * Coverage identity for duplicate detection: a problem in one implementation
+ * language is a separate deliverable from the same problem in another
+ * language, so the key includes both the statement and the language.
+ */
+export function coverageKey(problem: string, language: string): string {
+  return `${problem}\u0000${language}`;
 }
 
 type ApiResult = { ok: true; status: number; body: unknown } | { ok: false; status: number; body: unknown };
@@ -203,16 +214,18 @@ async function askDuplicate(problem: BatchProblem, accepted: AcceptedUnit): Prom
 async function acceptedByProblem(options: Options): Promise<Map<string, AcceptedUnit>> {
   const result = await apiRequest(options, "GET", "/api/drafts");
   if (!result.ok) throw new Error(`cannot list drafts: ${draftError(result)}`);
-  const drafts = (result.body as { drafts?: Array<{ id: string; problem: string; status: string; modes?: string[]; unitId?: string }> }).drafts ?? [];
+  const drafts = (result.body as { drafts?: Array<{ id: string; problem: string; status: string; language?: string; modes?: string[]; unitId?: string }> }).drafts ?? [];
   const map = new Map<string, AcceptedUnit>();
   for (const draft of drafts) {
     if (draft.status !== "accepted") continue;
     const problem = String(draft.problem ?? "").trim();
     if (!problem) continue;
+    const language = String(draft.language ?? "python").trim() || "python";
     const modes = new Set(draft.modes ?? []);
-    const existing = map.get(problem);
+    const key = coverageKey(problem, language);
+    const existing = map.get(key);
     if (existing) for (const mode of existing.modes) modes.add(mode);
-    map.set(problem, { draftId: draft.id, unitId: draft.unitId, modes });
+    map.set(key, { draftId: draft.id, unitId: draft.unitId, modes });
   }
   return map;
 }
@@ -261,7 +274,10 @@ async function processProblem(
   const base: ItemResult = { title: problem.title, status: "failed" };
   let duplicatePolicy = context.duplicatePolicy;
   try {
-    const accepted = acceptedMap.get(problem.problem);
+    // An explicit --language always wins; otherwise the catalog entry (for
+    // example hot100.json pins python) is the default.
+    const language = options.languageProvided ? options.language : (problem.language ?? options.language);
+    const accepted = acceptedMap.get(coverageKey(problem.problem, language));
     const covered = accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     if (accepted && covered && !options.force) {
       if (duplicatePolicy === "ask") {
@@ -295,7 +311,6 @@ async function processProblem(
     if (!options.steps.has("draft")) fail("draft step must be enabled to resolve a draft id");
 
     let draftId: string;
-    const language = problem.language ?? options.language;
     if (accepted !== undefined && (options.force || duplicatePolicy === "force" || !covered)) {
       // Regenerate or extend the existing unit as a new revision.
       const fork = await apiRequest(options, "POST", `/api/drafts/${accepted.draftId}/fork`);

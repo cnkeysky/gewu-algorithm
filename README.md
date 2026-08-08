@@ -190,11 +190,16 @@ extended coverage, and `--force` regenerates everything as a new revision.
 `--yes` skips the prompts (the default when the CLI is not a TTY, e.g. CI).
 `--select 1,15,two-sum` runs only the given LeetCode ids / slugs / titles
 instead of rescanning the whole catalog. Entries without a problem statement
-are skipped with a warning.
+are skipped with a warning. Duplicate identity is `problem + language + modes`:
+a template in one language is never treated as a duplicate of an accepted
+template in another language, so Python and Java templates for the same
+problem coexist as separate units.
 
 `tools/template-authoring/hot100.json` ships the current LeetCode Hot 100
 catalog (official study plan, Chinese statements, `language: "python"` on every
-entry), so batch runs only ever generate Python templates from it. Refresh it
+entry). That pinned value is only the default: an explicit `--language java`
+(or any other slug) overrides it for the whole run, and the batch runner
+forwards `--language` whenever it is given explicitly. Refresh the catalog
 with `cd tools/template-authoring && npm run fetch:hot100`; the catalog is a
 plain list (ids, slugs, titles, statements) — generated units, drafts, and
 review history live in sqlite and per-unit directories, so adding more

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { loadProblems, parseOptions, selectProblems } from "./batch-authoring.js";
+import { coverageKey, loadProblems, parseOptions, selectProblems } from "./batch-authoring.js";
 
 test("parseOptions applies defaults and overrides", () => {
   const defaults = parseOptions(["--problems", "hot100.json"]);
@@ -17,6 +17,7 @@ test("parseOptions applies defaults and overrides", () => {
   assert.equal(defaults.repairRounds, 1);
   assert.equal(defaults.autoAccept, false);
   assert.equal(defaults.language, "python");
+  assert.equal(defaults.languageProvided, false);
   assert.equal(defaults.variants, 1);
   assert.deepEqual(defaults.modes, ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"]);
   assert.deepEqual(defaults.assistance, ["comments", "cloze"]);
@@ -24,7 +25,7 @@ test("parseOptions applies defaults and overrides", () => {
   const custom = parseOptions([
     "--problems", "hot100.json", "--api", "http://127.0.0.1:9999/",
     "--steps", "generate,review", "--concurrency", "4", "--resume",
-    "--force", "--yes", "--select", "two-sum,3sum", "--repair-rounds", "2", "--auto-accept", "--language", "python",
+    "--force", "--yes", "--select", "two-sum,3sum", "--repair-rounds", "2", "--auto-accept", "--language", "java",
     "--variants", "2", "--modes", "shadow_typing,code_recall", "--assistance", "comments",
   ]);
   assert.equal(custom.api, "http://127.0.0.1:9999");
@@ -36,6 +37,8 @@ test("parseOptions applies defaults and overrides", () => {
   assert.deepEqual(custom.select, ["two-sum", "3sum"]);
   assert.equal(custom.repairRounds, 2);
   assert.equal(custom.autoAccept, true);
+  assert.equal(custom.language, "java");
+  assert.equal(custom.languageProvided, true);
   assert.equal(custom.variants, 2);
   assert.deepEqual(custom.modes, ["shadow_typing", "code_recall"]);
   assert.deepEqual(custom.assistance, ["comments"]);
@@ -81,4 +84,11 @@ test("selectProblems filters by id, slug, or title", () => {
   assert.deepEqual(selectProblems(problems, ["valid parentheses"]).map((item) => item.slug), ["valid-parentheses"]);
   assert.deepEqual(selectProblems(problems, ["two-sum", "valid"]).map((item) => item.slug), ["two-sum", "valid-parentheses"]);
   assert.deepEqual(selectProblems(problems, ["missing"]), []);
+});
+
+test("coverageKey separates problems by language", () => {
+  const statement = "Given nums and target, return indices.";
+  assert.equal(coverageKey(statement, "python"), coverageKey(statement, "python"));
+  assert.notEqual(coverageKey(statement, "python"), coverageKey(statement, "java"));
+  assert.notEqual(coverageKey("a", "python"), coverageKey("b", "python"));
 });

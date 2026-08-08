@@ -54,7 +54,7 @@ flags:
   --select LIST     run only the given ids/slugs/titles (comma list)
   --provider ID     recorded provider metadata (default deepseek)
   --model ID        recorded model metadata (default deepseek-v4-flash)
-  --language SLUG   implementation language (default python; hot100.json pins python)
+  --language SLUG   implementation language (default python; overrides the catalog entry, e.g. --language java)
   --variants N      implementation variants per unit (default 1)
   --modes LIST      practice modes (default all five)
   --assistance LIST code recall assistance (default comments,cloze)
@@ -80,6 +80,7 @@ let select;
 let provider;
 let model;
 let language = "python";
+let languageGiven = false;
 let variants = "1";
 let modes;
 let assistance;
@@ -101,7 +102,7 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--resume") { /* Deduplication is the default; kept for compatibility. */ }
   else if (arg === "--provider") provider = args[++i];
   else if (arg === "--model") model = args[++i];
-  else if (arg === "--language") language = args[++i];
+  else if (arg === "--language") { language = args[++i]; languageGiven = true; }
   else if (arg === "--variants") variants = args[++i];
   else if (arg === "--modes") modes = args[++i];
   else if (arg === "--assistance") assistance = args[++i];
@@ -277,7 +278,7 @@ async function doRun() {
   if (select) extraArgs.push("--select", select);
   if (provider) extraArgs.push("--provider", provider);
   if (model) extraArgs.push("--model", model);
-  if (language !== "python") extraArgs.push("--language", language);
+  if (languageGiven) extraArgs.push("--language", language);
   if (variants !== "1") extraArgs.push("--variants", variants);
   if (modes) extraArgs.push("--modes", modes);
   if (assistance) extraArgs.push("--assistance", assistance);

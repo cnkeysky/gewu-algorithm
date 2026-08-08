@@ -41,6 +41,12 @@ allowed only with explicit migration notes (see
   silent for CI; `--force` regenerates everything). `--select` runs only the
   given ids/slugs/titles instead of rescanning the catalog, and problems may
   pin their own `language` (the Hot 100 catalog pins Python).
+- Batch authoring duplicate identity is `problem + language + modes`: a
+  template in one language is never treated as a duplicate of an accepted
+  template in another language, so Python and Java templates for the same
+  problem coexist as separate units. An explicit `--language <slug>` overrides
+  the catalog default (hot100.json defaults to Python); the batch runner
+  forwards `--language` whenever it is given explicitly.
 - The PROBLEM statement renderer supports Markdown images: `img` stays
   allowed through the sanitizer (https/data/relative sources, `alt` preserved)
   and is constrained to the pane width with a rounded, centered layout.
