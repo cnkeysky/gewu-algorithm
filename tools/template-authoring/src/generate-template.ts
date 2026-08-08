@@ -10,7 +10,31 @@ import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationPro
  * contract shape; every algorithm decision (domain, strategy, signatures,
  * complexity, patterns, projections) must be inferred from the author's input.
  */
-export const GENERIC_INSTRUCTION = `Create one AlgorithmUnit for the following problem. Infer domain, category, prerequisites, implementation strategies, complexity, assumptions, tests, patterns, relationships, and the selected practice projections from the problem text; do not assume a fixed algorithm, signature, or naming beyond the requested language. problem.statement must be the complete learner-facing Markdown problem, not a summary; keep $...$, $$...$$, \\(...\\), or \\[...\\] formulas and never leak the solution. Markdown images in the statement are allowed: keep original image references (https URLs or relative asset paths such as assets/diagram.png) when they are part of the problem. The manifest id must be a dotted lowercase identifier with at least one dot (array.two-sum). Implementation keys and language identifiers must be lowercase slugs (python-teaching, python); every shadow_typing and code_recall implementation reference must match a declared implementations[].key. position.domain and position.category must be lowercase slugs (for example "array" or "two-pointers"). Use code/python.py as the implementation source, include tests/python_test.py in test_references, and return both in sources; each implementation normalization must be line_endings "lf" and whitespace "strict". tests/python_test.py must load the implementation via importlib.util.spec_from_file_location from the unit root (never "from code.python import ...", which the standard library shadows). code_recall layouts: full_recall reconstructs the implementation; cloze and comment_guided use structured slots whose expected code appears verbatim in code/python.py (source_template is derived server-side); comment_to_code provides ordered comments. Non-"none" assistance requires a nonempty scaffold; "none" requires an empty one. provenance.authors must be a non-empty array of strings (for example ["GEWU"]); provenance.sources[].role must be "primary", "synthesis", or "lead"; provenance.license must be a non-empty license identifier (for example "MIT"). There is no fixed variant count: generate as many genuinely distinct implementation strategies as the problem warrants — different algorithmic approaches or clear complexity trade-offs — typically a single canonical solution and rarely more than three; never produce variants that differ only cosmetically. practice.shadow_typing includes exactly one item per implementation strategy; flow_recall, code_recall, reasoning_recall, and transfer_practice bind to the canonical first-declared implementation only — their practice variants are exercise formats of that implementation, never additional implementations. Return only the schema fields.`;
+export const GENERIC_INSTRUCTION = `Create one AlgorithmUnit for the given problem. Infer domain, category, prerequisites, implementation strategies, complexity, assumptions, tests, patterns, relationships, and the requested practice projections from the problem text; do not invent an algorithm, signature, or naming beyond the problem.
+
+Statement:
+- problem.statement is the complete learner-facing Markdown problem, never a summary; keep formulas exactly as written ($...$, $$...$$, \\(...\\), \\[...\\]) and never leak the solution.
+- Keep Markdown image references (https URLs or relative asset paths such as assets/diagram.png) when they are part of the problem.
+
+Identifiers:
+- manifest id: dotted lowercase id with at least one dot (array.two-sum).
+- implementation keys and language ids: lowercase slugs (python-teaching, python).
+- position.domain and position.category: lowercase slugs (array, two-pointers).
+- position.prerequisites: dotted lowercase algorithm unit ids (array.two-sum).
+
+Sources:
+- Implementation source is code/python.py; tests are tests/python_test.py; include both in sources and reference the tests in test_references.
+- normalization: line_endings "lf", whitespace "strict".
+- tests/python_test.py loads the implementation with importlib.util.spec_from_file_location from the unit root; never "from code.python import ..." (the standard library shadows that name).
+
+Practice:
+- code_recall layouts: full_recall reconstructs the implementation; cloze and comment_guided use structured slots whose expected code appears verbatim in code/python.py (source_template is derived server-side); comment_to_code provides ordered comments.
+- assistance "none" requires an empty scaffold; any other assistance requires a nonempty scaffold.
+- Variants: no fixed count - only genuinely distinct strategies (different approaches or clear complexity trade-offs); typically one canonical solution, rarely more than three; never cosmetic-only variants.
+- practice.shadow_typing has exactly one item per implementation strategy; flow_recall, code_recall, reasoning_recall, and transfer_practice bind to the canonical first-declared implementation only - their practice variants are exercise formats, never additional implementations.
+- provenance.sources[].role is "primary", "synthesis", or "lead"; the statement's license must reflect its actual origin (do not claim MIT for verbatim third-party problem text).
+
+Return only the schema fields.`;
 
 export const OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
@@ -39,7 +63,7 @@ export const OUTPUT_SCHEMA: Record<string, unknown> = {
           properties: {
             domain: { type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" },
             category: { type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" },
-            prerequisites: { type: "array", items: { type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" } },
+            prerequisites: { type: "array", items: { type: "string", pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*(?:\\.[a-z0-9]+(?:-[a-z0-9]+)*)+$" } },
           },
         },
         problem: {

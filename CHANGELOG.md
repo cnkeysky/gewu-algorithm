@@ -43,6 +43,10 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Core-stage generation now runs the authoritative Rust validator inside the
+  structured retry loop, so contract violations (slug rules, dotted
+  prerequisites, non-empty provenance fields) are fed back to the model and
+  corrected automatically instead of failing the whole generation.
 - The generation schema now enforces Rust's slug rule for
   `position.domain`/`category`/`prerequisites` (`^[a-z0-9]+(-[a-z0-9]+)*$`),
   so schema violations trigger Pi-ai's structured retry instead of failing at

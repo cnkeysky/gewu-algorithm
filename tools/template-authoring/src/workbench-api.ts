@@ -184,7 +184,10 @@ async function generateDraft(
   const coreArtifact = await new PiGenerator(options).generate({
     ...baseTask,
     instruction: coreStageInstruction(instruction, draft.variants),
-    validate: validateCoreStage,
+    validate: async (value: unknown) => {
+      validateCoreStage(value);
+      await validateCoreArtifactWithRust(value);
+    },
   });
   const coreManifest = coreArtifact.manifest;
   if (!isRecord(coreManifest) || !isRecord(coreManifest.manifest) || !isRecord(coreManifest.sources)) throw new Error("core stage returned an invalid artifact");
@@ -241,6 +244,33 @@ async function generateDraft(
 }
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Runs the authoritative Rust template validator on a core-stage artifact so
+ * contract violations surface inside Pi-ai's structured retry loop (the model
+ * receives the exact validation error and corrects it) instead of failing at
+ * the end of generation.
+ */
+async function validateCoreArtifactWithRust(value: unknown): Promise<void> {
+  if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.sources)) throw new Error("core stage returned an invalid artifact");
+  const manifest = value.manifest as Record<string, unknown>;
+  const sources = value.sources as Record<string, string>;
+  const staged = join(storageRoot, "artifacts", `.retry-${crypto.randomUUID()}`);
+  await mkdir(staged, { recursive: true });
+  try {
+    materializeSourceTemplates(manifest, sources);
+    await writeFile(join(staged, "unit.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    for (const [sourcePath, content] of Object.entries(sources)) {
+      if (typeof content !== "string" || sourcePath.includes("..") || sourcePath.startsWith("/")) throw new Error(`invalid generated source path: ${sourcePath}`);
+      const destination = join(staged, sourcePath);
+      await mkdir(dirname(destination), { recursive: true });
+      await writeFile(destination, content, "utf8");
+    }
+    await validateArtifactWithRust(staged, false);
+  } finally {
+    await rm(staged, { recursive: true, force: true });
+  }
+}
 
 /**
  * Final acceptance gate driven by a designated approver model. The model reads
