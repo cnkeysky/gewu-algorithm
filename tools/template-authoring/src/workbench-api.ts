@@ -13,7 +13,7 @@ import { applyContentTransition, assertPublishable, type ContentTransitionId } f
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
-import { normalizeSupersedes, qualifyUnitId } from "./publish.js";
+import { normalizeSupersedes, qualifyUnitId, sourcePathFor, testPathFor } from "./publish.js";
 import { casUpsertDraft, releaseClaim, tryAcquireClaim, upsertDraft, upsertReview } from "./persist.js";
 import {
   STAGE_SPECS,
@@ -354,6 +354,18 @@ async function runModelAcceptance(
 ): Promise<{ review: ReviewRecord; rationale: string }> {
   const root = artifactAbsolutePath(draft);
   const manifest = await readFile(join(root, "unit.json"), "utf8");
+  // The gate must read the actual implementation and tests, not just the
+  // manifest paths — otherwise a strict reviewer correctly reports the
+  // source as "not provided". Missing files are omitted so the gate can
+  // flag an incomplete artifact.
+  const sources: Array<{ path: string; content: string }> = [];
+  for (const relativePath of [sourcePathFor(draft.language), testPathFor(draft.language)]) {
+    try {
+      sources.push({ path: relativePath, content: await readFile(join(root, relativePath), "utf8") });
+    } catch {
+      // Optional: a missing file is a legitimate acceptance finding.
+    }
+  }
   const reports = await Promise.all(
     reviews
       .filter((review) => review.draftId === draft.id && review.reportPath)
@@ -367,7 +379,7 @@ async function runModelAcceptance(
       ? { ...process.env, GEWU_LLM_PROVIDER: overrides.provider, GEWU_LLM_MODEL: overrides.model }
       : undefined,
   );
-  const task = buildAcceptanceTask(draft.problem, manifest, reports);
+  const task = buildAcceptanceTask(draft.problem, manifest, reports, sources);
   const artifact = await new PiGenerator(options).generate(task);
   if (!isRecord(artifact.manifest) || typeof artifact.manifest.verdict !== "string") throw new Error("acceptance review returned an invalid response");
   const verdict = artifact.manifest.verdict === "pass" ? "pass" : "needs_revision";

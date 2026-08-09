@@ -89,17 +89,19 @@ export function buildAcceptanceTask(
     verdict: string;
     report?: { findings?: Array<{ rule_id: string; severity: string; path?: string; problem: string; evidence: string; suggested_change?: string }> };
   }>,
+  sources: Array<{ path: string; content: string }> = [],
 ): DraftTask {
   const findings = reviews
     .flatMap((review) => (review.report?.findings ?? []).map((finding) => `[${review.role}] ${finding.severity} ${finding.rule_id}: ${finding.problem} — ${finding.evidence}`))
     .join("\n");
+  const sourceText = sources.map((source) => `--- ${source.path} ---\n${source.content}`).join("\n");
   return {
     taskId: "algorithm-unit-acceptance",
     taskVersion: "acceptance-v1",
-    selectedInputHash: createHash("sha256").update(`${problem}\n${manifest}\n${findings}`).digest("hex"),
+    selectedInputHash: createHash("sha256").update(`${problem}\n${manifest}\n${findings}\n${sourceText}`).digest("hex"),
     instruction: `You are the final acceptance reviewer (publication gate) for this GEWU algorithm unit. Decide whether this reviewed artifact may be accepted as a practice template.
 Return pass only when the artifact is a faithful, correct, complete template for the problem and every material pre-review finding has been addressed. Otherwise return needs_revision with a concise rationale naming the blocking issue.
-Return only the JSON report shape requested.\n\nProblem:\n${problem}\n\nManifest:\n${manifest}\n\nLLM pre-review findings:\n${findings || "No findings."}`,
+Return only the JSON report shape requested.\n\nProblem:\n${problem}\n\nManifest:\n${manifest}\n${sourceText ? `\nArtifact source and test files:\n${sourceText}` : ""}\n\nLLM pre-review findings:\n${findings || "No findings."}\n\nNote: the artifact's validation.content_review/transfer_review fields are stamped after this gate passes — their pending state before your pass is expected and is not itself a defect.`,
     outputSchema: ACCEPTANCE_SCHEMA,
   };
 }
