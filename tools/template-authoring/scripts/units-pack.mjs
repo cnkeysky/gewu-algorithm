@@ -60,7 +60,7 @@ for (const entry of readdirSync(contentRoot, { withFileTypes: true })) {
     id: typeof manifest.id === "string" ? manifest.id : entry.name,
     title: typeof manifest.title === "string" ? manifest.title : entry.name,
     language: typeof manifest.language === "string" && manifest.language ? manifest.language : "python",
-    revision,
+    revision: Number(revision.slice(1)),
     modes: Object.keys(practice),
     updatedAt: statSync(unitDir).mtime.toISOString(),
     sha256,

@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-08-09T14:34:59.672Z",
+  "generatedAt": "2026-08-09T14:37:53.229Z",
   "units": [
     {
       "id": "3sum.python",
       "title": "Three Sum: Find All Unique Triplets Summing to Zero",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -20,7 +20,7 @@
       "id": "add-two-numbers.python",
       "title": "Add Two Numbers Represented as Reversed Linked Lists",
       "language": "python",
-      "revision": "r2",
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -35,7 +35,7 @@
       "id": "best-time-to-buy-and-sell-stock.python",
       "title": "Best Time to Buy and Sell Stock",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -50,7 +50,7 @@
       "id": "binary-tree-inorder-traversal.python",
       "title": "Binary Tree Inorder Traversal",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -65,7 +65,7 @@
       "id": "binary-tree-maximum-path-sum.python",
       "title": "Binary Tree Maximum Path Sum",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -80,7 +80,7 @@
       "id": "climbing-stairs.python",
       "title": "Climbing Stairs",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -95,7 +95,7 @@
       "id": "combination-sum.python",
       "title": "Combination Sum (Unlimited Repetition)",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -110,7 +110,7 @@
       "id": "container-with-most-water.python",
       "title": "Container With Most Water",
       "language": "python",
-      "revision": "r2",
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -125,7 +125,7 @@
       "id": "convert-sorted-array-to-binary-search-tree.python",
       "title": "Convert Sorted Array to Balanced Binary Search Tree",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -140,7 +140,7 @@
       "id": "daily-temperatures.python",
       "title": "Daily Temperatures",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -155,7 +155,7 @@
       "id": "edit-distance.python",
       "title": "Edit Distance",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -170,7 +170,7 @@
       "id": "find-all-anagrams-in-a-string.python",
       "title": "Find All Anagrams in a String",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -185,7 +185,7 @@
       "id": "find-first-and-last-position-of-element-in-sorted-array.python",
       "title": "Find First and Last Position of Target in Sorted Array",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -200,7 +200,7 @@
       "id": "find-minimum-in-rotated-sorted-array.python",
       "title": "Find Minimum in Rotated Sorted Array",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -215,7 +215,7 @@
       "id": "first-missing-positive.python",
       "title": "First Missing Positive",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -230,7 +230,7 @@
       "id": "generate-parentheses.python",
       "title": "Generate All Valid Parentheses Combinations",
       "language": "python",
-      "revision": "r2",
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -245,7 +245,7 @@
       "id": "group-anagrams.python",
       "title": "Group Anagrams",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -260,7 +260,7 @@
       "id": "jump-game-ii.python",
       "title": "Jump Game II",
       "language": "python",
-      "revision": "r2",
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -275,7 +275,7 @@
       "id": "jump-game.python",
       "title": "Jump Game",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -290,7 +290,7 @@
       "id": "largest-rectangle-in-histogram.python",
       "title": "Largest Rectangle in Histogram",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -305,7 +305,7 @@
       "id": "letter-combinations-of-a-phone-number.python",
       "title": "Letter Combinations of a Phone Number",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -320,7 +320,7 @@
       "id": "linked-list-cycle.python",
       "title": "Linked List Cycle Detection",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -335,7 +335,7 @@
       "id": "longest-palindromic-substring.python",
       "title": "Longest Palindromic Substring",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -350,7 +350,7 @@
       "id": "longest-substring-without-repeating-characters.python",
       "title": "Longest Substring Without Repeating Characters",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -365,7 +365,7 @@
       "id": "longest-valid-parentheses.python",
       "title": "Longest Valid Parentheses Substring",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -380,7 +380,7 @@
       "id": "lru-cache.python",
       "title": "LRU Cache",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -395,7 +395,7 @@
       "id": "maximum-product-subarray.python",
       "title": "Maximum Product Subarray",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -410,7 +410,7 @@
       "id": "maximum-subarray.python",
       "title": "Maximum Subarray (Kadane's Algorithm)",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -425,7 +425,7 @@
       "id": "median-of-two-sorted-arrays.python",
       "title": "Median of Two Sorted Arrays",
       "language": "python",
-      "revision": "r2",
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -440,7 +440,7 @@
       "id": "merge-intervals.python",
       "title": "Merge Intervals",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -455,7 +455,7 @@
       "id": "merge-k-sorted-lists.python",
       "title": "Merge k Sorted Linked Lists",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -470,7 +470,7 @@
       "id": "merge-two-sorted-lists.python",
       "title": "Merge Two Sorted Linked Lists",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -485,7 +485,7 @@
       "id": "minimum-path-sum.python",
       "title": "Minimum Path Sum",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -500,7 +500,7 @@
       "id": "minimum-window-substring.python",
       "title": "Minimum Window Substring",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -515,7 +515,7 @@
       "id": "n-queens.python",
       "title": "N 皇后",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -530,7 +530,7 @@
       "id": "next-permutation.python",
       "title": "Next Permutation",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -545,7 +545,7 @@
       "id": "palindrome-partitioning.python",
       "title": "Palindrome Partitioning",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -560,7 +560,7 @@
       "id": "pascals-triangle.python",
       "title": "Pascal's Triangle",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -575,7 +575,7 @@
       "id": "permutations.python",
       "title": "Permutations of a Distinct-Integer Array",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -590,7 +590,7 @@
       "id": "remove-nth-node-from-end-of-list.python",
       "title": "Remove Nth Node From End of Linked List",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -605,7 +605,7 @@
       "id": "reverse-nodes-in-k-group.python",
       "title": "Reverse Nodes in k-Group",
       "language": "python",
-      "revision": "r2",
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -620,7 +620,7 @@
       "id": "rotate-image.python",
       "title": "Rotate Image 90 Degrees Clockwise In-Place",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -635,7 +635,7 @@
       "id": "rotting-oranges.python",
       "title": "Rotting Oranges",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -650,7 +650,7 @@
       "id": "search-in-rotated-sorted-array.python",
       "title": "Search in Rotated Sorted Array",
       "language": "python",
-      "revision": "r2",
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -665,7 +665,7 @@
       "id": "search-insert-position.python",
       "title": "Search Insert Position",
       "language": "python",
-      "revision": "r3",
+      "revision": 3,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -680,7 +680,7 @@
       "id": "set-matrix-zeroes.python",
       "title": "Set Matrix Zeroes",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -695,7 +695,7 @@
       "id": "single-number.python",
       "title": "Single Number",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -710,7 +710,7 @@
       "id": "sort-colors.python",
       "title": "Sort Colors",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -725,7 +725,7 @@
       "id": "sort-list.python",
       "title": "Sort a Linked List",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -740,7 +740,7 @@
       "id": "spiral-matrix.python",
       "title": "Spiral Matrix",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -755,7 +755,7 @@
       "id": "subsets.python",
       "title": "Subsets",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -770,7 +770,7 @@
       "id": "swap-nodes-in-pairs.python",
       "title": "Swap Nodes in Pairs",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -785,7 +785,7 @@
       "id": "symmetric-tree.python",
       "title": "Symmetric Binary Tree",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -800,7 +800,7 @@
       "id": "trapping-rain-water.python",
       "title": "Trapping Rain Water",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -815,7 +815,7 @@
       "id": "two-sum.python",
       "title": "Two Sum",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "code_recall",
         "flow_recall",
@@ -830,7 +830,7 @@
       "id": "unique-paths.python",
       "title": "Unique Paths",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -845,7 +845,7 @@
       "id": "valid-parentheses.python",
       "title": "Valid Parentheses",
       "language": "python",
-      "revision": "r2",
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -860,7 +860,7 @@
       "id": "validate-binary-search-tree.python",
       "title": "Validate Binary Search Tree",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -875,7 +875,7 @@
       "id": "word-break.python",
       "title": "Word Break",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -890,7 +890,7 @@
       "id": "word-search.python",
       "title": "Word Search",
       "language": "python",
-      "revision": "r1",
+      "revision": 1,
       "modes": [
         "shadow_typing",
         "flow_recall",
