@@ -6,6 +6,7 @@ import {
   GENERIC_INSTRUCTION,
 } from "./generate-template.js";
 import { redactSecretLikeText, validateGenerationProfile } from "./pi-generator.js";
+import { materializeSourceTemplates } from "./generate-template.js";
 
 function validDraft(): Record<string, unknown> {
   return {
@@ -76,6 +77,23 @@ test("credential-like provider text is redacted from surfaced errors", () => {
     "upstream failed for https://[REDACTED]@api.example.com/v1",
   );
   assert.equal(redactSecretLikeText("no secret here"), "no secret here");
+});
+
+test("placeholder implementation sources are rejected deterministically", () => {
+  const manifest = {
+    implementations: [{ source: "code/python.py" }],
+    practice: { code_recall: [{ layout: "full_recall", assistance: "none" }] },
+  };
+  assert.throws(
+    () => materializeSourceTemplates(manifest, { "code/python.py": "code/python.py" }),
+    /placeholder/,
+  );
+  assert.throws(
+    () => materializeSourceTemplates(manifest, { "code/python.py": "pass" }),
+    /placeholder/,
+  );
+  // Real code passes (the code_recall item has no slots, so no template work).
+  assert.doesNotThrow(() => materializeSourceTemplates(manifest, { "code/python.py": "def solve(nums, target):\n    return 0\n" }));
 });
 
 test("adapter overwrites model supplied provenance", () => {

@@ -291,7 +291,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function isTransientPiError(message: string | undefined): boolean {
   const text = (message ?? "").toLowerCase();
   if (/403|401|404|422|<!doctype|cloudflare|blocked|invalid_request|authentication|unauthorized|quota|insufficient_quota/.test(text)) return false;
-  return /429|5\d\d|econnreset|etimedout|timeout|socket|overloaded|try again later|temporarily|stream ended|finish_reason|api_error|no tool call found/.test(text);
+  return /429|5\d\d|econnreset|etimedout|timeout|socket|overloaded|try again later|temporarily|stream ended|stream failed|finish_reason|api_error|no tool call found/.test(text);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

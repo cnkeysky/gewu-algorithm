@@ -305,6 +305,14 @@ export function materializeSourceTemplates(manifest: Record<string, unknown>, so
   const canonicalSource = implementations.length > 0 && typeof implementations[0].source === "string" ? implementations[0].source : undefined;
   const code = canonicalSource ? sources[canonicalSource] : undefined;
   if (typeof code !== "string") return;
+  // Deterministic placeholder guard: some models emit a manifest whose
+  // source value is the file path itself (or whitespace/one-liner stubs).
+  // Such content can never be a valid implementation; reject it here instead
+  // of letting the LLM acceptance gate discover it per artifact.
+  const placeholder = code.trim() === "" || code.trim() === canonicalSource || code.trim().length < 20;
+  if (placeholder) {
+    throw new Error(`implementation source ${canonicalSource} is empty or a placeholder (${code.trim().length} chars); the model must emit the real implementation`);
+  }
   const practice = isRecord(manifest.practice) ? manifest.practice : undefined;
   const items = practice?.code_recall;
   if (!Array.isArray(items)) return;
