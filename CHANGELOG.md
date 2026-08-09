@@ -128,6 +128,13 @@ allowed only with explicit migration notes (see
   published content root serves only the latest revision of each unit;
   earlier revisions live on as accepted drafts in the authoring store (their
   artifacts are retained) and can be restored by forking that draft.
+- The Rust core enforces the content lifecycle at load time: roots passed
+  with `--published-root` may only contain `validated` units, and a stale or
+  mis-stamped published unit fails loudly with the unit path and status
+  instead of being served. The dev runner and workbench core pass the
+  published root through. A one-time idempotent migration
+  (`tools/template-authoring/scripts/stamp-published.mjs`) backfills the
+  pre-fix published units (they were gate-approved) to `validated`.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

@@ -9,7 +9,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use gewu_domain::{AlgorithmUnit, CodeRecallAssistance, CodeRecallLayout};
+use gewu_domain::{AlgorithmUnit, CodeRecallAssistance, CodeRecallLayout, ContentStatus};
 use gewu_practice::{
     CharacterRange, CodeRecallConfig, CodeRecallEvent, CodeRecallGuidance, CodeRecallSession,
     ElapsedTime, FlowRecallConfig, FlowRecallEvent, FlowRecallSession, ReasoningRecallConfig,
@@ -41,6 +41,10 @@ const CHECKPOINT_SAVE_INTERVAL_MS: u64 = 1500;
 /// Offline application service configured with a content root and local data root.
 pub struct Core {
     content_roots: Vec<PathBuf>,
+    /// Roots that must contain only `validated` units (the published content
+    /// root). Loading a non-validated unit from one of these fails loudly, so
+    /// stale or incorrectly stamped published content can never be served.
+    published_roots: Vec<PathBuf>,
     store: LocalStore,
     sessions: BTreeMap<String, ActiveSession>,
     last_checkpoint_save: HashMap<String, u64>,
@@ -102,11 +106,19 @@ impl Core {
         }
         Ok(Self {
             content_roots,
+            published_roots: Vec::new(),
             store: LocalStore::open(data_root)?,
             sessions: BTreeMap::new(),
             last_checkpoint_save: HashMap::new(),
             next_session: 1,
         })
+    }
+
+    /// Marks roots whose units must all be content-`validated` before they
+    /// can be loaded (industry fail-fast at the consumption boundary).
+    pub fn with_published_roots(mut self, roots: Vec<PathBuf>) -> Self {
+        self.published_roots = roots;
+        self
     }
 
     pub fn list_units(&self) -> Result<Vec<UnitSummary>, CoreError> {
@@ -746,11 +758,24 @@ impl Core {
         for root in &self.content_roots {
             collect_unit_paths(root, &mut paths)?;
         }
-        let mut units = paths
-            .into_iter()
-            .map(load_algorithm_unit)
-            .collect::<Result<Vec<_>, LoadError>>()
-            .map_err(CoreError::Template)?;
+        let mut units = Vec::with_capacity(paths.len());
+        for path in paths {
+            let unit = load_algorithm_unit(&path).map_err(CoreError::Template)?;
+            // Published roots must only contain content-validated units: an
+            // unvalidated manifest there is stale or mis-stamped and must
+            // surface immediately instead of being served.
+            let under_published_root = self
+                .published_roots
+                .iter()
+                .any(|root| path.starts_with(root));
+            if under_published_root && unit.status != ContentStatus::Validated {
+                return Err(CoreError::UnvalidatedPublishedUnit {
+                    path,
+                    status: format!("{:?}", unit.status),
+                });
+            }
+            units.push(unit);
+        }
         // Keep only the newest revision per unit id so merged roots cannot expose stale content.
         units.sort_by(|left, right| {
             right
@@ -1962,6 +1987,10 @@ pub enum CoreError {
     Template(#[from] LoadError),
     #[error("unit `{0}` was not found in local content")]
     UnknownUnit(String),
+    #[error(
+        "published unit at {path} is not content-validated (status {status}); republish it through the authoring workbench"
+    )]
+    UnvalidatedPublishedUnit { path: PathBuf, status: String },
     #[error("session `{0}` was not found")]
     UnknownSession(String),
     #[error("unit `{unit_id}` does not support {mode}")]
@@ -2057,6 +2086,58 @@ mod tests {
             active_ms: value,
             wall_ms: value,
         }
+    }
+    #[test]
+    fn published_roots_refuse_unvalidated_units_and_accept_validated_ones() {
+        let fixture_unit = fixture_root().join("graph/bfs");
+        let base = std::env::temp_dir().join(format!(
+            "gewu-published-root-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |value| value.as_nanos())
+        ));
+        for (status, expect_loadable) in [("draft", false), ("validated", true)] {
+            let unit_root = base.join(format!("unit-{status}")).join("r1");
+            fs::create_dir_all(&unit_root).expect("create unit dir");
+            copy_dir_all(&fixture_unit, &unit_root).expect("copy fixture unit");
+            let manifest_path = unit_root.join("unit.json");
+            let mut manifest: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&manifest_path).expect("read manifest"))
+                    .expect("parse fixture manifest");
+            manifest["status"] = serde_json::json!(status);
+            fs::write(
+                &manifest_path,
+                serde_json::to_vec(&manifest).expect("serialize manifest"),
+            )
+            .expect("write unit manifest");
+            let published = unit_root.parent().expect("unit root parent").to_path_buf();
+            let core = Core::open_roots(vec![published.clone()], data_root())
+                .expect("open core")
+                .with_published_roots(vec![published]);
+            let result = core.list_units();
+            if expect_loadable {
+                assert!(result.is_ok(), "validated unit should load: {result:?}");
+            } else {
+                assert!(
+                    matches!(result, Err(CoreError::UnvalidatedPublishedUnit { .. })),
+                    "draft unit in a published root must be refused: {result:?}"
+                );
+            }
+        }
+        let _ = fs::remove_dir_all(&base);
+    }
+    fn copy_dir_all(from: &Path, to: &Path) -> std::io::Result<()> {
+        fs::create_dir_all(to)?;
+        for entry in fs::read_dir(from)? {
+            let entry = entry?;
+            let target = to.join(entry.file_name());
+            if entry.file_type()?.is_dir() {
+                copy_dir_all(&entry.path(), &target)?;
+            } else {
+                fs::copy(entry.path(), &target)?;
+            }
+        }
+        Ok(())
     }
     #[test]
     fn persists_a_completed_flow_attempt_and_does_not_leave_a_checkpoint() {

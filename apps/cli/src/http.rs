@@ -7,12 +7,19 @@ use std::{
 use gewu_core::Core;
 use gewu_protocol::{JsonRpcRequest, JsonRpcResponse, RpcError};
 
-pub fn run(content_roots: Vec<PathBuf>, data_root: PathBuf, port: String) -> Result<(), String> {
+pub fn run(
+    content_roots: Vec<PathBuf>,
+    published_roots: Vec<PathBuf>,
+    data_root: PathBuf,
+    port: String,
+) -> Result<(), String> {
     let listener =
         TcpListener::bind(("127.0.0.1", port.parse::<u16>().map_err(|e| e.to_string())?))
             .map_err(|error| error.to_string())?;
     eprintln!("GEWU HTTP core listening on http://127.0.0.1:{port}");
-    let mut core = Core::open_roots(content_roots, data_root).map_err(|error| error.to_string())?;
+    let mut core = Core::open_roots(content_roots, data_root)
+        .map(|core| core.with_published_roots(published_roots))
+        .map_err(|error| error.to_string())?;
     let mut handshaken = false;
     for stream in listener.incoming() {
         let mut stream = match stream {

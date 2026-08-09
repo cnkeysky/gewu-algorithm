@@ -605,6 +605,7 @@ function startService(name, { core, api, web }) {
       "--port", core,
       "--content-root", "fixtures/algorithm-units/valid",
       "--content-root", "tools/template-authoring/drafts/.workbench/published",
+      "--published-root", "tools/template-authoring/drafts/.workbench/published",
       "--data-root", join(devDir, "data"),
     ], { cwd: repo });
   }

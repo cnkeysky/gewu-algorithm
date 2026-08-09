@@ -17,7 +17,7 @@
     "rule-dedup": "npm run build && node dist/rule-dedup.js",
     "workbench:api": "npm run build && node dist/workbench-api.js",
     "workbench:api:local": "npm run build && node --env-file=.env.local dist/workbench-api.js",
-    "workbench:core": "mkdir -p drafts/.workbench/published && cargo run -p gewu-cli -- serve --content-root ../../fixtures/algorithm-units/valid --content-root drafts/.workbench/published --data-root ../../.gewu-data",
+    "workbench:core": "mkdir -p drafts/.workbench/published && cargo run -p gewu-cli -- serve --content-root ../../fixtures/algorithm-units/valid --content-root drafts/.workbench/published --published-root drafts/.workbench/published --data-root ../../.gewu-data",
     "workbench:dev": "npm --prefix workbench run dev",
     "workbench:build": "npm --prefix workbench run build"
   },

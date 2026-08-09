@@ -47,6 +47,11 @@ structurally guarded:
 - Publishing → `status` becomes `validated`. The publish step refuses any
   artifact whose status is not `validated` or whose four validation stages
   are not all `passed`, so an unstamped artifact can never be served.
+- The Rust core enforces this at load time: roots started with
+  `--published-root` may only contain `validated` units — a stale or
+  mis-stamped published unit fails loudly with its path and status instead of
+  being served. The dev runner and the workbench core already pass the
+  published root this way.
 
 ## Backend guarantees
 

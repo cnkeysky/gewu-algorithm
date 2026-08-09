@@ -22,6 +22,7 @@ fn main() {
     let arguments: Vec<String> = env::args().skip(1).collect();
     let command = arguments.first().map(String::as_str).unwrap_or("help");
     let content_roots = content_roots_from(&arguments);
+    let published_roots = option_values(&arguments, "--published-root");
     let data_root = option_value(&arguments, "--data-root")
         .map(PathBuf::from)
         .unwrap_or_else(default_data_root);
@@ -31,25 +32,29 @@ fn main() {
         .unwrap_or_else(|| "4175".to_owned());
     match command {
         "stdio" => {
-            if let Err(error) = run_stdio(content_roots, data_root) {
+            if let Err(error) = run_stdio(content_roots, published_roots, data_root) {
                 eprintln!("GEWU core host failed: {error}");
                 std::process::exit(1);
             }
         }
         "serve" => {
-            if let Err(error) = http::run(content_roots, data_root, http_port) {
+            if let Err(error) = http::run(content_roots, published_roots, data_root, http_port) {
                 eprintln!("GEWU HTTP core host failed: {error}");
                 std::process::exit(1);
             }
         }
         "list-units" => {
-            match Core::open_roots(content_roots, data_root).and_then(|core| core.list_units()) {
+            match Core::open_roots(content_roots, data_root)
+                .map(|core| core.with_published_roots(published_roots.clone()))
+                .and_then(|core| core.list_units())
+            {
                 Ok(units) => print_json(&units),
                 Err(error) => fail(&error.to_string()),
             }
         }
         "recent-attempts" => {
             match Core::open_roots(content_roots, data_root)
+                .map(|core| core.with_published_roots(published_roots.clone()))
                 .and_then(|core| core.recent_attempts(20))
             {
                 Ok(attempts) => print_json(&attempts),
@@ -59,6 +64,7 @@ fn main() {
         // Projects deterministic review recommendations without starting an editor.
         "review" => {
             match Core::open_roots(content_roots, data_root)
+                .map(|core| core.with_published_roots(published_roots.clone()))
                 .and_then(|core| core.review_recommendations(100))
             {
                 Ok(recommendations) => print_json(&recommendations),
@@ -66,7 +72,9 @@ fn main() {
             }
         }
         "delete-history" => {
-            match Core::open_roots(content_roots, data_root).and_then(|core| core.delete_history())
+            match Core::open_roots(content_roots, data_root)
+                .map(|core| core.with_published_roots(published_roots))
+                .and_then(|core| core.delete_history())
             {
                 Ok(deleted_attempts) => print_json(&DeleteHistoryResult { deleted_attempts }),
                 Err(error) => fail(&error.to_string()),
@@ -76,8 +84,14 @@ fn main() {
     }
 }
 
-fn run_stdio(content_roots: Vec<PathBuf>, data_root: PathBuf) -> Result<(), String> {
-    let mut core = Core::open_roots(content_roots, data_root).map_err(|error| error.to_string())?;
+fn run_stdio(
+    content_roots: Vec<PathBuf>,
+    published_roots: Vec<PathBuf>,
+    data_root: PathBuf,
+) -> Result<(), String> {
+    let mut core = Core::open_roots(content_roots, data_root)
+        .map(|core| core.with_published_roots(published_roots))
+        .map_err(|error| error.to_string())?;
     let stdin = io::stdin();
     let mut handshaken = false;
     for line in stdin.lock().lines() {
@@ -215,6 +229,12 @@ fn option_value<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
         .find(|window| window[0] == name)
         .map(|window| window[1].as_str())
 }
+fn option_values(args: &[String], name: &str) -> Vec<PathBuf> {
+    args.windows(2)
+        .filter(|window| window[0] == name)
+        .map(|window| PathBuf::from(&window[1]))
+        .collect()
+}
 fn content_roots_from(arguments: &[String]) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     let mut index = 0;
@@ -261,6 +281,6 @@ fn fail(message: &str) {
 }
 fn print_help() {
     println!(
-        "gewu <stdio|serve|list-units|recent-attempts|review|delete-history> [--content-root PATH] [--data-root PATH] [--port PORT]"
+        "gewu <stdio|serve|list-units|recent-attempts|review|delete-history> [--content-root PATH]... [--published-root PATH]... [--data-root PATH] [--port PORT]"
     );
 }
