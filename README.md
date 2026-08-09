@@ -226,6 +226,10 @@ Non-accepted drafts (failed, interrupted, needs-revision) are reused and reset
 on re-runs, so repeated runs never accumulate duplicate entries.
 Requested-mode coverage then decides the action — fully covered is skipped,
 partially covered forks and publishes an extended revision.
+**Accepted units are skipped by default**: a published unit whose accepted
+revision already covers all requested modes is never regenerated on a re-run;
+only an explicit `--force` or `--regenerate <ids>` regenerates it as a new
+revision.
 
 `tools/template-authoring/hot100.json` ships the current LeetCode Hot 100
 catalog (official study plan, Chinese statements, `language: "python"` on every

@@ -129,7 +129,6 @@ let report = "batch-report.json";
 let ensureApi = true;
 let timeoutMinutes = "60";
 let regenerate;
-let showResults = false;
 
 for (let i = 0; i < args.length; i += 1) {
   const arg = args[i];
@@ -156,7 +155,7 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--assistance") assistance = args[++i];
   else if (arg === "--report") report = args[++i];
   else if (arg === "--no-ensure-api") ensureApi = false;
-  else if (arg === "--results") showResults = true;
+  else if (arg === "--results") { /* Accepted for compatibility; per-item results are always shown. */ }
   else die(`unknown argument: ${arg} (run with 'help')`);
 }
 if (!command) command = isTTY ? "run" : "help";
@@ -371,6 +370,7 @@ async function doRun() {
 }
 
 async function doStatus() {
+  let liveDrafts = [];
   const healthy = await fetchOk(apiUrl());
   log(`authoring API ${healthy ? "healthy" : "down"} at ${apiUrl()}`);
   if (healthy) {
@@ -383,6 +383,7 @@ async function doStatus() {
       for (const draft of drafts) by.set(draft.status ?? "unknown", (by.get(draft.status ?? "unknown") ?? 0) + 1);
       const counts = [...by.entries()].map(([status, count]) => `${status} ${count}`).join(", ");
       log(`live drafts: ${drafts.length} — ${counts || "none"}`);
+      liveDrafts = drafts;
     } catch {
       log("could not read live draft counts from the authoring API");
     }
@@ -404,10 +405,19 @@ async function doStatus() {
   }
   const summary = JSON.parse(readFileSync(reportPath, "utf8"));
   log(`last finished batch (${reportPath}): ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
-  if (showResults) {
+  const newestDraftAt = liveDrafts.reduce((latest, draft) => (draft.createdAt && draft.createdAt > latest ? draft.createdAt : latest), "");
+  const reportIsCurrent = !newestDraftAt || (typeof summary.generatedAt === "string" && summary.generatedAt >= newestDraftAt);
+  if (reportIsCurrent) {
     for (const item of summary.results ?? []) {
       if (item.status === "failed" || item.status === "needs_review") {
         log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
+      }
+    }
+  } else {
+    log(`a newer run is in progress (newest draft ${newestDraftAt} is newer than the last report ${summary.generatedAt}) — live non-accepted drafts:`);
+    for (const draft of liveDrafts) {
+      if (draft.status !== "accepted") {
+        log(`  ${draft.status}  ${draft.title ?? ""}${draft.error ? ` — ${draft.error}` : ""}`);
       }
     }
   }
