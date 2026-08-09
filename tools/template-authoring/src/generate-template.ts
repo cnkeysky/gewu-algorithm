@@ -12,9 +12,10 @@ import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationPro
  */
 export const GENERIC_INSTRUCTION = `Create one AlgorithmUnit for the problem. Infer domain, category, prerequisites, implementations, complexity, assumptions, tests, patterns, relationships, and practice projections from the text; do not invent an algorithm or signature beyond it.
 
-Statement:
-- problem.statement: complete learner-facing Markdown in your own words - rephrase the provided problem text rather than copying it verbatim (the input may be a third-party statement, e.g., LeetCode); keep all constraints, example values, formulas ($...$, $$...$$, \\(...\\), \\[...\\]), and image references; never leak the solution.
-- Keep Markdown image references (https URLs or relative paths).
+Statement (hard rules):
+- Rewrite the provided problem text in your own words. Copying it verbatim, even partially, is a publish-blocking defect: the learner-facing statement must not match the source wording sentence-for-sentence.
+- Preserve every constraint, example value, formula ($...$, $$...$$, \\(...\\), \\[...\\]), and image reference exactly as given; keep image references (https URLs or relative paths).
+- Never leak the solution.
 
 Identifiers:
 - manifest id: dotted lowercase, at least one dot (array.two-sum).
@@ -28,12 +29,16 @@ Sources:
 - normalization: line_endings "lf", whitespace "strict".
 - tests/python_test.py loads the implementation via importlib.util.spec_from_file_location from the unit root; never "from code.python import ...".
 
+Provenance:
+- provenance.sources cites the actual origin (title, URL, accessed_at) with role "primary", "synthesis", or "lead".
+- provenance.license is "all-rights-reserved" when the statement is derived from a third-party problem page (e.g., LeetCode); never claim MIT or another open license for third-party-derived content.
+
 Practice:
 - code_recall layouts: full_recall reconstructs the code; cloze/comment_guided use slots whose expected code appears verbatim in code/python.py (source_template is server-derived); comment_to_code provides ordered comments.
 - assistance "none": empty scaffold; otherwise nonempty.
 - Variants: distinct strategies only (different approaches or complexity trade-offs); usually one canonical solution, at most three; never cosmetic-only.
 - shadow_typing: one item per strategy; flow_recall/code_recall/reasoning_recall/transfer_practice bind to the first implementation only - their variants are exercise formats, not new implementations.
-- provenance.sources: cite the actual origin (title, URL, accessed_at) with role "primary", "synthesis", or "lead"; transfer/example arithmetic and indices must be correct.
+- transfer/example arithmetic and indices must be correct.
 
 Return only the schema fields.`;
 
@@ -367,12 +372,16 @@ export function applyTrustedProvenance(
   generatedAt: string,
 ): Record<string, unknown> {
   const existing = isRecord(manifest.provenance) ? manifest.provenance : {};
+  const sources = Array.isArray(existing.sources) ? existing.sources : [];
+  const hasExternalSource = sources.some((entry) => isRecord(entry) && typeof entry.url === "string" && /^https?:\/\//i.test(entry.url));
   return {
     ...manifest,
     provenance: {
       ...existing,
       authors: Array.isArray(existing.authors) && existing.authors.length > 0 ? existing.authors : ["GEWU"],
-      license: typeof existing.license === "string" && existing.license.trim() ? existing.license : "all-rights-reserved",
+      // Policy enforcement, not a fallback: content derived from an external
+      // source (e.g., LeetCode) must never claim MIT or another open license.
+      license: hasExternalSource ? "all-rights-reserved" : (typeof existing.license === "string" && existing.license.trim() ? existing.license : "all-rights-reserved"),
       generated_by: {
         provider,
         model,

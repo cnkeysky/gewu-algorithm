@@ -30,7 +30,10 @@ import { fileURLToPath } from "node:url";
  *   --repair-rounds <n>  regenerate from review feedback after needs_revision (default 1)
  *   --auto-accept        accept needs_revision drafts with an explicit rationale record
  *   --provider, --model  recorded metadata on the draft (generation uses server env)
- *   --llm-approve [provider:model]  run the LLM final approval gate before publishing
+ *   --llm-approve [provider:model]  run the decisive LLM approval gate before
+ *                        publishing (a pass publishes with the LLM-approved
+ *                        label; pair with --steps draft,generate,validate,accept
+ *                        to make the LLM gate the sole reviewer)
  *   --creator-models <list>  round-robin creator models across problems (provider:model,provider:model)
  *   --language <slug>    implementation language (default python; overrides the catalog entry)
  *   --variants <n>       implementation strategy count (default auto: the model decides 1-3 meaningful strategies)

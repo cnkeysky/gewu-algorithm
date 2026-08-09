@@ -47,6 +47,17 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- The LLM acceptance gate is decisive: a passing `llm_acceptance` review
+  publishes the unit with the **LLM approved** label without any human step,
+  even when advisory pre-review roles found issues; the acceptance endpoint
+  can also run directly on a validated artifact, so a batch run can use
+  `--steps draft,generate,validate,accept --llm-approve` with the LLM gate as
+  the sole reviewer.
+- Licensing is enforced server-side: any artifact citing an external source
+  (e.g., LeetCode) is forced to `all-rights-reserved` — the model can never
+  claim MIT for third-party-derived content. The generation instruction makes
+  paraphrasing the provided statement a hard publish-blocking rule and states
+  the license policy explicitly.
 - Publishing normalizes `supersedes` to reference only earlier revisions and
   validates the final published artifact with the Rust validator, so an
   invalid unit (e.g., revision 1 superseding itself) can never break the

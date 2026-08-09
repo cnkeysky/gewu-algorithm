@@ -630,7 +630,7 @@ const server = createServer(async (request, response) => {
       const draft = state.drafts.find((item) => item.id === acceptanceMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
       if (!draft.artifactPath || !["validated", "llm_reviewed", "needs_revision"].includes(draft.status)) {
-        return send(response, 409, { error: "model acceptance requires a validated and reviewed draft" });
+        return send(response, 409, { error: "model acceptance requires a validated artifact (generate + validate first)" });
       }
       const payload = await body(request).catch(() => ({}));
       const overrides = isRecord(payload) && (typeof payload.provider === "string" || typeof payload.model === "string")
@@ -669,14 +669,21 @@ const server = createServer(async (request, response) => {
         await saveState(state);
         return send(response, 200, { status: "accepted", draft, publishedPath: draft.publishedPath });
       }
-      const humanEdited = state.reviews.some((review) => review.draftId === draft.id && review.role === "human_revision" && review.verdict === "pass");
-      if (!["llm_reviewed", "needs_revision"].includes(draft.status) && !(draft.status === "validated" && humanEdited)) {
-        return send(response, 409, { error: "LLM pre-review must pass or the artifact must be human-edited and reviewed before acceptance" });
-      }
-      if (draft.status === "needs_revision" && !humanOverride && !humanEdited) return send(response, 409, { error: "draft needs revision; send {override:true, rationale} only after explicit human review" });
-      const passedReview = humanEdited || state.reviews.some((review) => review.draftId === draft.id && review.verdict === "pass" && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
-      if (!passedReview && !humanOverride) {
-        return send(response, 409, { error: "a passing pre-review for the current artifact is required before human acceptance; send {override:true, rationale} only after explicit human review" });
+      // The LLM acceptance gate is decisive: a passing llm_acceptance review
+      // for the current artifact publishes with the LLM label without any
+      // human step, even when advisory pre-review roles found issues.
+      const llmAcceptancePass = acceptanceRole === "llm_acceptance"
+        && state.reviews.some((review) => review.draftId === draft.id && review.role === "llm_acceptance" && review.verdict === "pass" && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
+      if (!llmAcceptancePass) {
+        const humanEdited = state.reviews.some((review) => review.draftId === draft.id && review.role === "human_revision" && review.verdict === "pass");
+        if (!["llm_reviewed", "needs_revision"].includes(draft.status) && !(draft.status === "validated" && humanEdited)) {
+          return send(response, 409, { error: "LLM pre-review must pass or the artifact must be human-edited and reviewed before acceptance" });
+        }
+        if (draft.status === "needs_revision" && !humanOverride && !humanEdited) return send(response, 409, { error: "draft needs revision; send {override:true, rationale} only after explicit human review" });
+        const passedReview = humanEdited || state.reviews.some((review) => review.draftId === draft.id && review.verdict === "pass" && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
+        if (!passedReview && !humanOverride) {
+          return send(response, 409, { error: "a passing pre-review for the current artifact is required before human acceptance; send {override:true, rationale} only after explicit human review" });
+        }
       }
       const existingAcceptance = state.reviews.some((review) => review.draftId === draft.id && review.role === acceptanceRole && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
       // Record the acceptance review on every approval path (normal or

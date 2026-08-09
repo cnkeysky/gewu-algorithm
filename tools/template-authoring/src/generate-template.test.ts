@@ -92,6 +92,38 @@ test("adapter overwrites model supplied provenance", () => {
   });
 });
 
+test("external sources force all-rights-reserved licensing (never MIT)", () => {
+  const manifest = validDraft().manifest as Record<string, unknown>;
+  manifest.provenance = {
+    authors: ["model"],
+    generated_by: null,
+    reviewed_by: [],
+    sources: [
+      { title: "LeetCode 1. Two Sum", url: "https://leetcode.com/problems/two-sum/", role: "primary", accessed_at: "2026-08-01T00:00:00Z" },
+    ],
+    license: "MIT",
+  };
+  const trusted = applyTrustedProvenance(manifest, "deepseek", "deepseek-v4-flash", "1", "2026-08-05T00:00:00.000Z");
+  const provenance = trusted.provenance as Record<string, unknown>;
+  assert.equal(provenance.license, "all-rights-reserved");
+});
+
+test("internal-only sources keep an explicitly declared license", () => {
+  const manifest = validDraft().manifest as Record<string, unknown>;
+  manifest.provenance = {
+    authors: ["model"],
+    generated_by: null,
+    reviewed_by: [],
+    sources: [
+      { title: "Implementation source", url: "code/python.py", role: "lead", accessed_at: "2026-08-01T00:00:00Z" },
+    ],
+    license: "MIT",
+  };
+  const trusted = applyTrustedProvenance(manifest, "deepseek", "deepseek-v4-flash", "1", "2026-08-05T00:00:00.000Z");
+  const provenance = trusted.provenance as Record<string, unknown>;
+  assert.equal(provenance.license, "MIT");
+});
+
 test("adapter overwrites model supplied lifecycle and validation claims", () => {
   const manifest = validDraft().manifest as Record<string, unknown>;
   manifest.status = "validated";
