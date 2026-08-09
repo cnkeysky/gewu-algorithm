@@ -47,6 +47,11 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- The batch runner binds and remembers its authoring API port
+  (`.gewu-dev/pids/batch-api.port`): `status`/`stop` reuse the last port
+  without repeating `--api-port`, and if the configured port is occupied by a
+  wedged process the runner auto-falls back to the next candidate ports and
+  reports which one it bound.
 - The batch runner (`npm run batch`) now auto-stops the authoring API it
   started when the run finishes, the menu exits, the process is interrupted
   (Ctrl+C / SIGTERM), or an error aborts it — no more orphaned background

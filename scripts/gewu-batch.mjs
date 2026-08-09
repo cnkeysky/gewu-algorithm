@@ -26,6 +26,7 @@ const isWin = process.platform === "win32";
 const npm = isWin ? "npm.cmd" : "npm";
 const isTTY = Boolean(process.stdin.isTTY);
 const apiName = "batch-api";
+const portFile = join(pidDir, `${apiName}.port`);
 
 const log = (message) => console.log(`\x1b[36m>>\x1b[0m ${message}`);
 const die = (message) => {
@@ -52,7 +53,10 @@ commands:
 
 flags:
   --problems FILE   problems file (JSON array or TSV) — required for 'run'
-  --api-port N      authoring API port (default 4174, env GEWU_WORKBENCH_PORT)
+  --api-port N      authoring API port (default: last used port, else 4174,
+                    env GEWU_WORKBENCH_PORT). The chosen port is remembered in
+                    .gewu-dev/pids/batch-api.port so status/stop reuse it; if
+                    the port is occupied, the runner tries the next ports.
   --steps LIST      default draft,generate,validate,accept (the LLM gate is the
                     sole reviewer); add 'review' for the three pre-review roles
   --concurrency N   parallel problems (default 1)
@@ -87,7 +91,20 @@ Core started with that content root.`);
 
 const args = process.argv.slice(2);
 let command;
-let apiPort = process.env.GEWU_WORKBENCH_PORT ?? "4174";
+function readStoredPort() {
+  try {
+    return readFileSync(portFile, "utf8").trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+function writePortFile() {
+  mkdirSync(pidDir, { recursive: true });
+  writeFileSync(portFile, apiPort);
+}
+// Bind the port across commands: --api-port wins, then the port this runner
+// last used (so status/stop work without repeating it), then the default.
+let apiPort = process.env.GEWU_WORKBENCH_PORT ?? readStoredPort() ?? "4174";
 let problemsFile;
 let steps;
 let concurrency = "1";
@@ -259,30 +276,46 @@ function stopApi() {
   }
   try {
     rmSync(join(pidDir, `${apiName}.pid`), { force: true });
+    rmSync(portFile, { force: true });
   } catch {
     // No pid file.
   }
 }
 
 async function ensureApiRunning() {
-  if (await fetchOk(apiUrl())) {
-    log(`authoring API already healthy at ${apiUrl()}`);
-    return;
-  }
-  if (!ensureApi) die(`authoring API is not running at ${apiUrl()} (--no-ensure-api)`);
-  log(`authoring API is down at ${apiUrl()}; starting it`);
-  const pid = startApi();
-  startedApi = true;
-  const deadline = Date.now() + 90_000;
-  while (Date.now() < deadline) {
-    if (!alive(pid)) die(`authoring API exited early; see ${logDir}/${apiName}.log`);
+  const candidates = [apiPort, ...Array.from({ length: 5 }, (_, index) => String(Number(apiPort) + 10 * (index + 1)))];
+  for (const candidate of candidates) {
+    apiPort = candidate;
     if (await fetchOk(apiUrl())) {
-      log(`authoring API ready (pid ${pid})`);
+      log(`authoring API already healthy at ${apiUrl()}`);
+      writePortFile();
       return;
     }
-    await new Promise((resolveWait) => setTimeout(resolveWait, 1000));
+    if (!ensureApi) die(`authoring API is not running at ${apiUrl()} (--no-ensure-api)`);
+    log(`authoring API is down at ${apiUrl()}; starting it`);
+    const pid = startApi();
+    startedApi = true;
+    const deadline = Date.now() + 45_000;
+    let earlyExit = false;
+    while (Date.now() < deadline) {
+      if (!alive(pid)) {
+        earlyExit = true;
+        break;
+      }
+      if (await fetchOk(apiUrl())) {
+        log(`authoring API ready (pid ${pid}) on port ${apiPort}`);
+        writePortFile();
+        return;
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, 1000));
+    }
+    // The candidate port is occupied by a wedged process (EADDRINUSE) or the
+    // API failed to become healthy: stop this attempt and try the next port.
+    stopPid(pid);
+    startedApi = false;
+    log(earlyExit ? `port ${candidate} unavailable; trying the next port` : `port ${candidate} did not become healthy; trying the next port`);
   }
-  die(`timed out waiting for the authoring API at ${apiUrl()}; see ${logDir}/${apiName}.log`);
+  die(`could not start the authoring API on any candidate port; see ${logDir}/${apiName}.log`);
 }
 
 function runBatchCli(extraArgs) {
