@@ -29,9 +29,17 @@ const apiName = "batch-api";
 
 const log = (message) => console.log(`\x1b[36m>>\x1b[0m ${message}`);
 const die = (message) => {
+  cleanupApi();
   console.error(`\x1b[31merror:\x1b[0m ${message}`);
   process.exit(1);
 };
+let startedApi = false;
+function cleanupApi() {
+  if (!startedApi) return;
+  startedApi = false;
+  stopApi();
+  log("stopped the authoring API started by this run");
+}
 
 function usage() {
   console.log(`usage: gewu-batch <command> [flags]
@@ -264,6 +272,7 @@ async function ensureApiRunning() {
   if (!ensureApi) die(`authoring API is not running at ${apiUrl()} (--no-ensure-api)`);
   log(`authoring API is down at ${apiUrl()}; starting it`);
   const pid = startApi();
+  startedApi = true;
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     if (!alive(pid)) die(`authoring API exited early; see ${logDir}/${apiName}.log`);
@@ -352,7 +361,7 @@ async function menu() {
     options.forEach(([label], index) => console.log(`  ${index + 1}) ${label}`));
     console.log("  0) Exit");
     const choice = (await ask("Choose", "1")).trim() || "1";
-    if (choice === "0") return;
+    if (choice === "0") { cleanupApi(); return; }
     const option = options[Number(choice) - 1];
     if (!option) {
       console.log("invalid choice");
@@ -367,9 +376,11 @@ if (command === "run") {
     usage();
     die("--problems FILE is required for non-interactive runs");
   }
-  doRun().catch((error) => die(error instanceof Error ? error.message : String(error)));
+  doRun().then(cleanupApi).catch((error) => die(error instanceof Error ? error.message : String(error)));
 } else if (command === "status") {
   doStatus().catch((error) => die(error instanceof Error ? error.message : String(error)));
 } else {
   stopApi();
 }
+process.on("SIGINT", () => { cleanupApi(); process.exit(130); });
+process.on("SIGTERM", () => { cleanupApi(); process.exit(143); });

@@ -47,6 +47,11 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- The batch runner (`npm run batch`) now auto-stops the authoring API it
+  started when the run finishes, the menu exits, the process is interrupted
+  (Ctrl+C / SIGTERM), or an error aborts it — no more orphaned background
+  APIs from interrupted runs. `dev:stop` already sweeps the batch API via its
+  pid file.
 - Test suite updated for the language-aware pipeline and web approval flow:
   unit coverage for language-derived source/test paths, the
   python-only importlib guard, and `validateGeneratedShape` per-implementation
