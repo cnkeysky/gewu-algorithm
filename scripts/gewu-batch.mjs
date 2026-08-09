@@ -49,7 +49,8 @@ function usage() {
 commands:
   run      run batch authoring (interactive menu when no command and a TTY)
   status   show the authoring API health and the last batch report summary
-          (add --results to list failed/needs-review items of the last run)
+          (default: the actionable failed/needs-review or live non-accepted
+           items; add --results for the full per-item results of the last run)
   stop     stop the authoring API started by this script
   help     show this help
 
@@ -129,6 +130,7 @@ let report = "batch-report.json";
 let ensureApi = true;
 let timeoutMinutes = "60";
 let regenerate;
+let showResults = false;
 
 for (let i = 0; i < args.length; i += 1) {
   const arg = args[i];
@@ -155,7 +157,7 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--assistance") assistance = args[++i];
   else if (arg === "--report") report = args[++i];
   else if (arg === "--no-ensure-api") ensureApi = false;
-  else if (arg === "--results") { /* Accepted for compatibility; per-item results are always shown. */ }
+  else if (arg === "--results") showResults = true;
   else die(`unknown argument: ${arg} (run with 'help')`);
 }
 if (!command) command = isTTY ? "run" : "help";
@@ -413,11 +415,25 @@ async function doStatus() {
         log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
       }
     }
+    if (showResults) {
+      log("full results of the last finished batch:");
+      for (const item of summary.results ?? []) {
+        log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : item.reason ? ` — ${item.reason}` : ""}`);
+      }
+    }
   } else {
     log(`a newer run is in progress (newest draft ${newestDraftAt} is newer than the last report ${summary.generatedAt}) — live non-accepted drafts:`);
     for (const draft of liveDrafts) {
       if (draft.status !== "accepted") {
         log(`  ${draft.status}  ${draft.title ?? ""}${draft.error ? ` — ${draft.error}` : ""}`);
+      }
+    }
+    if (showResults) {
+      log("previous (last finished) batch items:");
+      for (const item of summary.results ?? []) {
+        if (item.status === "failed" || item.status === "needs_review") {
+          log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
+        }
       }
     }
   }
