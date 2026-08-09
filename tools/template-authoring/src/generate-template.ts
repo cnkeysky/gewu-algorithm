@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationProfile } from "./pi-generator.js";
-import { sourcePathFor } from "./publish.js";
+import { sourcePathFor, testPathFor } from "./publish.js";
 
 /**
  * Algorithm-agnostic generation instruction. It constrains only the GEWU
@@ -28,7 +28,7 @@ Identifiers:
 - shadow_typing/code_recall implementation references must match implementations[].key.
 
 Sources:
-- Implementation source: code/<language>.<extension> (e.g. code/python.py, code/java.py); tests: tests/<language>_test.<extension>; include both in sources, reference tests in test_references.
+- Implementation source: code/<language>.<extension> (e.g. code/python.py, code/java.java); tests: tests/<language>_test.<extension>; include both in sources, reference tests in test_references.
 - normalization: line_endings "lf", whitespace "strict".
 - For Python, the test file loads the implementation via importlib.util.spec_from_file_location from the unit root; never "from code.python import ...".
 
@@ -37,7 +37,7 @@ Provenance:
 - provenance.license is "all-rights-reserved" when the statement is derived from a third-party problem page (e.g., LeetCode); never claim MIT or another open license for third-party-derived content.
 
 Practice:
-- code_recall layouts: full_recall reconstructs the code; cloze/comment_guided use slots whose expected code appears verbatim in code/python.py (source_template is server-derived); comment_to_code provides ordered comments.
+- code_recall layouts: full_recall reconstructs the code; cloze/comment_guided use slots whose expected code appears verbatim in the canonical implementation source (source_template is server-derived); comment_to_code provides ordered comments.
 - assistance "none": empty scaffold; otherwise nonempty.
 - Variants: distinct strategies only (different approaches or complexity trade-offs); usually one canonical solution, at most three; never cosmetic-only.
 - shadow_typing: one item per strategy; flow_recall/code_recall/reasoning_recall/transfer_practice bind to the first implementation only - their variants are exercise formats, not new implementations.
@@ -214,9 +214,11 @@ export function validateGeneratedShape(value: unknown): void {
     if (typeof implementation.purpose !== "string" || !IMPLEMENTATION_PURPOSES.has(implementation.purpose)) {
       throw new Error(`implementations[${index}].purpose must be one of teaching, concise, iterative, recursive, optimized`);
     }
-    if (implementation.source !== "code/python.py") throw new Error("implementation source must be code/python.py");
-    if (!Array.isArray(implementation.test_references) || !implementation.test_references.includes("tests/python_test.py")) {
-      throw new Error("implementation test_references must include tests/python_test.py");
+    const sourcePath = sourcePathFor(String(implementation.language ?? "python"));
+    const testPath = testPathFor(String(implementation.language ?? "python"));
+    if (implementation.source !== sourcePath) throw new Error(`implementation source must be ${sourcePath}`);
+    if (!Array.isArray(implementation.test_references) || !implementation.test_references.includes(testPath)) {
+      throw new Error(`implementation test_references must include ${testPath}`);
     }
     if (!isRecord(implementation.normalization) || implementation.normalization.line_endings !== "lf" || implementation.normalization.whitespace !== "strict") {
       throw new Error(`implementations[${index}].normalization must use line_endings "lf" and whitespace "strict"`);
@@ -275,7 +277,16 @@ export function validateGeneratedShape(value: unknown): void {
       }
     }
   }
-  for (const required of ["code/python.py", "tests/python_test.py"]) {
+  const requiredSources = new Set<string>();
+  for (const implementation of manifest.implementations as Array<Record<string, unknown>>) {
+    if (typeof implementation.source === "string") requiredSources.add(implementation.source);
+    if (Array.isArray(implementation.test_references)) {
+      for (const reference of implementation.test_references) {
+        if (typeof reference === "string") requiredSources.add(reference);
+      }
+    }
+  }
+  for (const required of requiredSources) {
     if (typeof value.sources[required] !== "string" || (value.sources[required] as string).trim() === "") {
       throw new Error(`source is missing or empty: ${required}`);
     }
@@ -290,7 +301,9 @@ const SLOT_MARKER = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * reconstructability check deterministic and keeps the repair loop focused on slot selection.
  */
 export function materializeSourceTemplates(manifest: Record<string, unknown>, sources: Record<string, unknown>): void {
-  const code = sources["code/python.py"];
+  const implementations = Array.isArray(manifest.implementations) ? manifest.implementations.filter(isRecord) : [];
+  const canonicalSource = implementations.length > 0 && typeof implementations[0].source === "string" ? implementations[0].source : undefined;
+  const code = canonicalSource ? sources[canonicalSource] : undefined;
   if (typeof code !== "string") return;
   const practice = isRecord(manifest.practice) ? manifest.practice : undefined;
   const items = practice?.code_recall;
@@ -355,7 +368,7 @@ export function materializeSourceTemplates(manifest: Record<string, unknown>, so
       }
       if (typeof slot.cue === "string" && slot.cue.trim() === "") delete slot.cue;
       if (!template.includes(expected)) {
-        throw new Error(`practice.code_recall[${index}] slot ${slotId} expected code does not appear verbatim in code/python.py`);
+        throw new Error(`practice.code_recall[${index}] slot ${slotId} expected code does not appear verbatim in the canonical implementation source`);
       }
       template = template.replace(expected, `{{${slotId}}}`);
     }

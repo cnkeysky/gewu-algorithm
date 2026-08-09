@@ -47,6 +47,11 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Test suite updated for the language-aware pipeline and web approval flow:
+  unit coverage for language-derived source/test paths, the
+  python-only importlib guard, and `validateGeneratedShape` per-implementation
+  paths; new Playwright specs for the web **LLM approve** action and the
+  duplicate-submit warning. Full e2e suite passes (52 passed).
 - Generation is language-aware (ADR 0019): source/test paths derive from the
   language (`code/<lang>.<ext>`, `tests/<lang>_test.<ext>`), Python-specific
   importlib/compile rules apply only to Python, and the server forces every

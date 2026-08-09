@@ -187,7 +187,10 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
     if (item.implementation !== canonical) item.implementation = canonical;
   };
   if (mode === "code_recall") {
-    const pseudoManifest = { practice: { code_recall: items } };
+    const pseudoManifest = {
+      implementations: [{ source: context.sourcePath }],
+      practice: { code_recall: items },
+    };
     materializeSourceTemplates(pseudoManifest, { [context.sourcePath]: context.code });
     const ids = new Set<string>();
     for (const [index, item] of items.entries()) {

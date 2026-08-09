@@ -40,6 +40,14 @@ test("core stage instruction keeps practice extras empty", () => {
   assert.match(coreStageInstruction("base", 2), /bind to the canonical first-declared implementation/);
 });
 
+test("core stage instruction is language-aware: python rule only for python", () => {
+  const python = coreStageInstruction("base", 1, "python");
+  assert.match(python, /tests\/python_test\.py/);
+  assert.match(python, /importlib\.util\.spec_from_file_location/);
+  const java = coreStageInstruction("base", 1, "java");
+  assert.doesNotMatch(java, /importlib|from code\.python|tests\/python_test\.py/);
+});
+
 test("code recall stage embeds the canonical code and enforces verbatim slots", () => {
   const task = buildStageTask({ mode: "code_recall", layout: "cloze" }, PROFILE, CONTEXT);
   assert.match(task.instruction, /canonical implementation/);
@@ -80,6 +88,20 @@ test("core stage rejects extra practice projections", () => {
   validateCoreStage(core);
   core.manifest.practice.code_recall = [{ id: "extra", implementation: "python-teaching", layout: "full_recall", assistance: "none", prompt: "nope", scaffold: [] }];
   assert.throws(() => validateCoreStage(core), /core stage must leave practice\.code_recall/);
+});
+
+test("validateCoreStage applies the importlib guard only for python", () => {
+  const baseManifest = {
+    schema_version: "2", status: "draft", id: "graph.cycle", problem: { statement: "Detect a directed cycle in a graph given as an adjacency list." },
+    implementations: [{ key: "java-teaching", language: "java", source: "code/java.java", purpose: "teaching", strategy: "dfs", complexity: { time: "O(V+E)", space: "O(V+E)" }, assumptions: [], test_references: ["tests/java_test.java"], normalization: { line_endings: "lf", trailing_newline: true, whitespace: "strict" } }],
+    practice: { shadow_typing: [{ implementation: "java-teaching", strict: true }], flow_recall: { steps: [{ id: "start", prompt: "Begin", concepts: ["frontier"], aliases: [] }] }, code_recall: [], reasoning_recall: [], transfer_practice: [] },
+  };
+  const javaCore = { manifest: baseManifest, sources: { "code/java.java": "class Solve {}", "tests/java_test.java": "// test" } };
+  validateCoreStage(javaCore, "java");
+  const badJava = { manifest: baseManifest, sources: { "code/java.java": "class Solve {}", "tests/java_test.java": "// from code.python import solve" } };
+  // The python-only guard must not reject a Java artifact that mentions the
+  // python import string by coincidence.
+  validateCoreStage(badJava, "java");
 });
 
 test("stage artifacts normalize recall and transfer bindings to the canonical implementation", () => {
