@@ -10,6 +10,7 @@ import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type 
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
+import { normalizeSupersedes } from "./publish.js";
 import {
   STAGE_SPECS,
   assertExplicitVariantCount,
@@ -400,13 +401,9 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
   // unit. When this is the first published revision (or the model claimed a
   // revision that is not earlier), drop the invalid entries so the published
   // artifact can never supersede itself or a revision that does not exist.
-  if (Array.isArray(manifest.supersedes)) {
-    const valid = manifest.supersedes.filter(
-      (entry) => isRecord(entry) && Number.isInteger(entry.revision) && Number(entry.revision) > 0 && Number(entry.revision) < nextRevision,
-    );
-    if (valid.length === 0) delete manifest.supersedes;
-    else manifest.supersedes = valid;
-  }
+  const supersedes = normalizeSupersedes(manifest.supersedes, nextRevision);
+  if (supersedes === undefined) delete manifest.supersedes;
+  else manifest.supersedes = supersedes;
   const destination = resolve(unitRoot, `r${nextRevision}`);
   if (!destination.startsWith(`${publishedRoot}/`)) throw new Error("published artifact path escaped configured root");
   await mkdir(publishedRoot, { recursive: true });
@@ -426,6 +423,31 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
   }
   await buildPublishedPackManifest();
   return relative(resolve(here, "../..", ".."), destination);
+}
+
+/**
+ * Startup guard: validate every published unit revision and quarantine any
+ * invalid one (move it under `.invalid/`) so a bad artifact can never break
+ * the Core's unit list (the symptom behind "Rust Core is unavailable").
+ */
+async function validatePublishedContent(): Promise<void> {
+  if (!existsSync(publishedRoot)) return;
+  for (const unitDir of await readdir(publishedRoot, { withFileTypes: true })) {
+    if (!unitDir.isDirectory() || unitDir.name === ".invalid" || !/^[a-z0-9.-]+$/.test(unitDir.name)) continue;
+    for (const revisionDir of await readdir(join(publishedRoot, unitDir.name), { withFileTypes: true })) {
+      if (!revisionDir.isDirectory() || !/^r\d+$/.test(revisionDir.name)) continue;
+      const revisionPath = join(publishedRoot, unitDir.name, revisionDir.name);
+      try {
+        await validateArtifactWithRust(revisionPath, false);
+      } catch {
+        const quarantine = join(publishedRoot, ".invalid", `${unitDir.name}-${revisionDir.name}`);
+        await mkdir(dirname(quarantine), { recursive: true });
+        await rm(quarantine, { recursive: true, force: true });
+        await rename(revisionPath, quarantine);
+        console.error(`published unit quarantined: ${unitDir.name}/${revisionDir.name} -> .invalid/`);
+      }
+    }
+  }
 }
 
 async function buildPublishedPackManifest(): Promise<void> {
@@ -827,3 +849,4 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => console.log(`GEWU authoring API listening on http://127.0.0.1:${PORT}`));
+void validatePublishedContent().catch((error) => console.error(`published content validation failed: ${error instanceof Error ? error.message : String(error)}`));
