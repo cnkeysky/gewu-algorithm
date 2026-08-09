@@ -47,6 +47,17 @@ import { fileURLToPath } from "node:url";
  * four layouts (full_recall, comment_guided, comment_to_code, cloze), so a
  * default run produces 8 practice kinds, plus one shadow typing item per
  * implementation strategy.
+ *
+ * Deduplication: identity is the problem's slug/id + language, unified with a
+ * statement fingerprint — a problem matches an existing draft when its slug
+ * OR its normalized-statement fingerprint hits (cross-catalog slug variants
+ * and slug-less web drafts resolve to the same problem). Fully covered
+ * problems are skipped (interactive choice in a TTY), partially covered ones
+ * fork into a new revision, and non-accepted drafts are reused (reset to
+ * queued) instead of accumulating duplicates. Unit ids are language-qualified
+ * (`<slug>.<language>`). Gateway 429s retry with exponential backoff; the
+ * default LLM approver follows GEWU_LLM_PROVIDER/GEWU_LLM_MODEL, then
+ * --provider/--model, then deepseek:deepseek-v4-flash.
  */
 
 const REVIEW_ROLES = ["algorithm_correctness", "learning_design", "provenance_safety"] as const;

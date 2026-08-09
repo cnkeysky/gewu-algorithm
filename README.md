@@ -222,6 +222,8 @@ of an accepted template in another language, so Python and Java templates for
 the same problem coexist as separate units (unit ids are language-qualified,
 `<slug>.<language>` — see
 [ADR 0019](docs/decisions/0019-language-qualified-unit-identity.md)).
+Non-accepted drafts (failed, interrupted, needs-revision) are reused and reset
+on re-runs, so repeated runs never accumulate duplicate entries.
 Requested-mode coverage then decides the action — fully covered is skipped,
 partially covered forks and publishes an extended revision.
 
@@ -261,6 +263,10 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 - `--yes` — skip the duplicate prompts (default when the CLI is not a TTY).
 - `--repair-rounds n` — after a failed LLM pre-review, regenerate from the
   review feedback up to `n` times (default 1).
+- `--regenerate <ids>` — force regeneration for the given ids/slugs/titles as
+  new revisions even when their requested modes are already covered.
+- `--timeout-minutes n` — per-request timeout for LLM-backed API calls
+  (default 60; raise it for slow reasoning-mode relays).
 - `--auto-accept` — publish drafts that still need revision after the repair
   rounds, recording an explicit `human_acceptance` rationale in the audit
   trail (LLM pre-review verdicts stay visible in Review history). This is the
