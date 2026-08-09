@@ -119,11 +119,16 @@ function loadState(): State {
 function saveState(state: State): void {
   database.exec("BEGIN");
   try {
-    database.exec("DELETE FROM reviews; DELETE FROM drafts;");
-    const draftInsert = database.prepare("INSERT INTO drafts (id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const draft of state.drafts) draftInsert.run(draft.id, draft.taskId ?? null, draft.slug ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.unitId ?? null, draft.artifactPath ?? null, draft.publishedPath ?? null, draft.error ?? null);
-    const reviewInsert = database.prepare("INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const review of state.reviews.filter((item) => item.role !== "all")) reviewInsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.reportPath ?? null, review.rationale ?? null, review.createdAt);
+    // Per-row upserts instead of DELETE-all + re-insert: concurrent requests
+    // (and any stale process) can only update their own rows, so a later save
+    // can never clobber another request's accepted status or resurrect
+    // unrelated rows.
+    const draftUpsert = database.prepare(`INSERT INTO drafts (id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET task_id=excluded.task_id, slug=excluded.slug, title=excluded.title, problem=excluded.problem, provider=excluded.provider, model=excluded.model, language=excluded.language, variants=excluded.variants, modes_json=excluded.modes_json, assistance_json=excluded.assistance_json, status=excluded.status, created_at=excluded.created_at, unit_id=excluded.unit_id, artifact_path=excluded.artifact_path, published_path=excluded.published_path, error=excluded.error`);
+    for (const draft of state.drafts) draftUpsert.run(draft.id, draft.taskId ?? null, draft.slug ?? null, draft.title, draft.problem, draft.provider, draft.model, draft.language, draft.variants, JSON.stringify(draft.modes), JSON.stringify(draft.assistance), draft.status, draft.createdAt, draft.unitId ?? null, draft.artifactPath ?? null, draft.publishedPath ?? null, draft.error ?? null);
+    const reviewUpsert = database.prepare(`INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET draft_id=excluded.draft_id, role=excluded.role, verdict=excluded.verdict, artifact_hash=excluded.artifact_hash, report_path=excluded.report_path, rationale=excluded.rationale, created_at=excluded.created_at`);
+    for (const review of state.reviews.filter((item) => item.role !== "all")) reviewUpsert.run(review.id, review.draftId, review.role, review.verdict, review.artifactHash, review.reportPath ?? null, review.rationale ?? null, review.createdAt);
     database.exec("COMMIT");
   } catch (error) {
     database.exec("ROLLBACK");
@@ -590,6 +595,7 @@ const server = createServer(async (request, response) => {
       validatePersistedDraft(updated);
       state.drafts = state.drafts.map((item) => item.id === draft.id ? updated : item);
       state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
+      database.prepare("DELETE FROM reviews WHERE draft_id = ?").run(draft.id);
       await saveState(state);
       return send(response, 200, { draft: updated });
     }
@@ -827,6 +833,7 @@ const server = createServer(async (request, response) => {
       await rm(root, { recursive: true, force: true });
       await rename(staging, root);
       state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
+      database.prepare("DELETE FROM reviews WHERE draft_id = ?").run(draft.id);
       const humanRevision: ReviewRecord = {
         id: crypto.randomUUID(),
         draftId: draft.id,
@@ -873,6 +880,8 @@ const server = createServer(async (request, response) => {
       }
       state.drafts = state.drafts.filter((item) => item.id !== draft.id);
       state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
+      database.prepare("DELETE FROM reviews WHERE draft_id = ?").run(draft.id);
+      database.prepare("DELETE FROM drafts WHERE id = ?").run(draft.id);
       await saveState(state);
       return send(response, 200, { status: "deleted", id: draft.id });
     }

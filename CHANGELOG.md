@@ -47,6 +47,11 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Fix a concurrency race in the authoring store: `saveState` now upserts
+  drafts and reviews per row instead of deleting the whole table and
+  re-inserting an in-memory snapshot. Under parallel batch requests, a stale
+  snapshot could previously overwrite another request's accepted status,
+  drop rows, and resurrect already-deleted drafts.
 - The batch runner binds and remembers its authoring API port
   (`.gewu-dev/pids/batch-api.port`): `status`/`stop` reuse the last port
   without repeating `--api-port`, and if the configured port is occupied by a
