@@ -20,6 +20,7 @@ test("transient gateway errors are retried, hard blocks fail fast", () => {
   assert.equal(isTransientPiError("HTTP 429 Too Many Requests"), true);
   assert.equal(isTransientPiError("upstream 500 Internal Server Error"), true);
   assert.equal(isTransientPiError("socket hang up ETIMEDOUT"), true);
+  assert.equal(isTransientPiError("Stream ended without finish_reason"), true);
   assert.equal(isTransientPiError(undefined), false);
   assert.equal(isTransientPiError("403 <!DOCTYPE html> Cloudflare blocked"), false);
   assert.equal(isTransientPiError("401 authentication failed"), false);

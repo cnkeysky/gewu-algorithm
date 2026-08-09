@@ -2,7 +2,7 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createHash } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
@@ -696,7 +696,8 @@ async function main(): Promise<void> {
   // generate the same drafts, double-spending gateway quota and racing each
   // other's state. The lock is a pid file with a liveness check (the common
   // portable pattern; flock is unavailable on Windows without a dependency).
-  const lockDirPath = join(resolve(dirname(fileURLToPath(import.meta.url)), "../../.."), ".gewu-dev", "pids");
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const lockDirPath = join(repoRoot, ".gewu-dev", "pids");
   const lockPath = join(lockDirPath, "batch-run.lock");
   mkdirSync(lockDirPath, { recursive: true });
   const existingPid = existsSync(lockPath) ? Number(await readFile(lockPath, "utf8")) : 0;
@@ -841,7 +842,7 @@ async function main(): Promise<void> {
   const reportTmpPath = `${reportPath}.tmp`;
   await writeFile(reportTmpPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
   await rename(reportTmpPath, reportPath);
-  console.log(`batch-authoring: done — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped. Report: ${options.report}`);
+  console.log(`batch-authoring: done — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped. Report: ${relative(repoRoot, reportPath)}`);
   if (context.aborted) {
     console.error("batch-authoring: aborted by user; partial results written to the report");
     process.exitCode = 1;

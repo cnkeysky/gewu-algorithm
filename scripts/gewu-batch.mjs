@@ -13,7 +13,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import readline from "node:readline";
@@ -56,9 +56,8 @@ function logActionableItems(items) {
   }
   for (const [key, titles] of groups) {
     const [status, detail] = key.split("\u0000");
-    log(`  ${status} ${titles.length}${detail ? ` — ${detail}` : ""}`);
     const shown = titles.slice(0, 8);
-    log(`    ${shown.join(", ")}${titles.length > shown.length ? ` \u2026 (+${titles.length - shown.length} more)` : ""}`);
+    log(`  ${status} ${titles.length} · ${shown.join(", ")}${titles.length > shown.length ? ` … (+${titles.length - shown.length} more)` : ""}${detail ? ` — ${detail}` : ""}`);
   }
 }
 let startedApi = false;
@@ -456,7 +455,7 @@ async function doRun() {
 
   log(`running batch authoring for ${problemsPath}`);
   runBatchCli(extraArgs);
-  log(`batch finished; report written to ${resolve(repo, report)}`);
+  log(`batch finished; report written to ${relative(repo, resolve(repo, report))}`);
 }
 
 async function doStatus() {
@@ -495,11 +494,11 @@ async function doStatus() {
     return;
   }
   const summary = JSON.parse(readFileSync(reportPath, "utf8"));
-  log(`last finished batch (${reportPath}): ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
+  log(`last finished batch (${relative(repo, reportPath)}): ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
   const newestDraftAt = liveDrafts.reduce((latest, draft) => (draft.createdAt && draft.createdAt > latest ? draft.createdAt : latest), "");
   const reportIsCurrent = !newestDraftAt || (typeof summary.generatedAt === "string" && summary.generatedAt >= newestDraftAt);
   if (reportIsCurrent) {
-    log("actionable items from the last finished batch:");
+    log("actionable items:");
     logActionableItems((summary.results ?? []).filter((item) => item.status === "failed" || item.status === "needs_review"));
     if (showResults) {
       log("full results of the last finished batch:");

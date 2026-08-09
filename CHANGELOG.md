@@ -110,6 +110,13 @@ allowed only with explicit migration notes (see
   text; reuse of a failed/needs-revision draft keeps its
   needs_revision/reject reviews so the next generation is informed by the
   previous gate rationale.
+- The artifact manifest's `validation` fields are stamped after real checks:
+  `schema`/`code` pass when the deterministic Rust validation passes, and
+  `content_review`/`transfer_review` pass when the LLM acceptance gate
+  passes — artifacts no longer claim `pending` forever, which a strict gate
+  misread as an unvalidated template. `batch:status` shows report paths
+  relative to the project root and renders actionable items as one compact
+  line per group (status · count · titles — error).
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

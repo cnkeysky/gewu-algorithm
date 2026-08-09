@@ -186,6 +186,25 @@ async function revisionFeedbackFor(draft: DraftRecord, reviews: ReviewRecord[]):
   return chunks.join("\n");
 }
 
+/** Stamps the artifact manifest's validation fields after real validation or
+ * the decisive acceptance gate passes. The model output schema pins these to
+ * "pending"; without stamping, every artifact would claim unvalidated state
+ * forever and a strict acceptance gate would reject it. */
+function stampArtifactValidation(draft: DraftRecord, fields: Record<string, string>): void {
+  if (!draft.artifactPath) return;
+  const unitPath = join(artifactAbsolutePath(draft), "unit.json");
+  try {
+    const manifest = JSON.parse(readFileSync(unitPath, "utf8")) as Record<string, unknown>;
+    const validation = isRecord(manifest.validation) ? manifest.validation : {};
+    for (const [key, value] of Object.entries(fields)) validation[key] = value;
+    validation.last_validated_at = new Date().toISOString();
+    manifest.validation = validation;
+    writeFileSync(unitPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  } catch {
+    // Stamping is best-effort; the validation status still gates approval.
+  }
+}
+
 async function generateDraft(
   draft: DraftRecord,
   reviews: ReviewRecord[],
@@ -710,6 +729,7 @@ const server = createServer(async (request, response) => {
       }
       draft.status = "validated";
       draft.error = undefined;
+      stampArtifactValidation(draft, { schema: "passed", code: "passed" });
       await saveState(state);
       return send(response, 200, { status: "passed", draft });
     }
@@ -730,6 +750,12 @@ const server = createServer(async (request, response) => {
           ? { provider: typeof payload.provider === "string" ? payload.provider : undefined, model: typeof payload.model === "string" ? payload.model : undefined }
           : undefined;
         const { review, rationale } = await runModelAcceptance(draft, state.reviews, overrides);
+        if (review.verdict === "pass") {
+          // The acceptance gate is the decisive content/transfer review in
+          // the automated flow; stamp the manifest so published units do not
+          // claim pending validation.
+          stampArtifactValidation(draft, { content_review: "passed", transfer_review: "passed" });
+        }
         state.reviews = [review, ...state.reviews];
         // The acceptance gate is the decisive LLM reviewer: a needs_revision
         // verdict moves the draft to that state so the UI offers revision,
