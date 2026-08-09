@@ -71,6 +71,10 @@ test("credential-like provider text is redacted from surfaced errors", () => {
     redactSecretLikeText("Pi-ai error with sk-abcdef1234567890 and key-0987654321fedcba"),
     "Pi-ai error with [REDACTED] and [REDACTED]",
   );
+  assert.equal(
+    redactSecretLikeText("upstream failed for https://user:supersecret@api.example.com/v1"),
+    "upstream failed for https://[REDACTED]@api.example.com/v1",
+  );
   assert.equal(redactSecretLikeText("no secret here"), "no secret here");
 });
 
