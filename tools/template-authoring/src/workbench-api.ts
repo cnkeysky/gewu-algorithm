@@ -418,7 +418,9 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
   // revision that is not earlier), drop the invalid entries so the published
   // artifact can never supersede itself or a revision that does not exist.
   const supersedes = normalizeSupersedes(manifest.supersedes, nextRevision);
-  if (supersedes === undefined) delete manifest.supersedes;
+  // `supersedes` is a required manifest field: an empty array for a first
+  // revision (or when every entry referenced a non-earlier revision).
+  if (supersedes === undefined) manifest.supersedes = [];
   else manifest.supersedes = supersedes;
   const destination = resolve(unitRoot, `r${nextRevision}`);
   if (!destination.startsWith(`${publishedRoot}/`)) throw new Error("published artifact path escaped configured root");
