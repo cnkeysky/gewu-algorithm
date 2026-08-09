@@ -141,6 +141,13 @@ allowed only with explicit migration notes (see
   `npm run stamp:published`, and the error message points to it; manual
   `gewu serve` commands in the docs pass `--published-root` for the published
   root.
+- The LLM acceptance gate now reads the artifact's actual source and test
+  files (previously only the manifest with paths), so a strict reviewer no
+  longer reports the implementation as "not provided" — it can verify the
+  code it is publishing. Pending `validation.content_review` /
+  `transfer_review` before the gate passes is documented in the gate prompt
+  as expected (they are stamped after its pass), removing the
+  chicken-and-egg misread.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring
