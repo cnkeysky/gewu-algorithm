@@ -18,7 +18,9 @@ Statement (hard rules):
 - Never leak the solution.
 
 Identifiers:
-- manifest id: dotted lowercase, at least one dot (array.two-sum).
+- manifest id: dotted lowercase with at least one dot, ending with the
+  implementation language segment (array.two-sum.python); the server enforces
+  the language suffix.
 - implementation keys and language ids: lowercase slugs (python-teaching, python).
 - position.domain/category: lowercase slugs (array, two-pointers).
 - position.prerequisites: dotted algorithm unit ids (array.two-sum).

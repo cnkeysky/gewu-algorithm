@@ -141,7 +141,7 @@ root.innerHTML = `
       <div class="panel-heading"><div><p class="eyebrow">Saved work</p><h2>Drafts</h2></div><button class="button primary" type="button" data-go="new">New draft <span aria-hidden="true">&#8594;</span></button></div>
       <div class="filter-row"><div class="filter-pills" id="draft-filters"></div><span class="filter-tools"><input id="draft-search" class="filter-search" type="search" placeholder="Search title or problem…" aria-label="Search drafts" /><select id="draft-language" class="filter-select" aria-label="Filter drafts by language"><option value="all">All languages</option></select></span></div>
       <div class="draft-list" id="draft-list"></div>
-      <p class="view-note">Generated artifacts and LLM pre-review reports remain inspectable; only Human approve promotes a draft.</p>
+      <p class="view-note">Generated artifacts and LLM pre-review reports remain inspectable; Human or LLM approval promotes a draft, and human approval is the superior tier.</p>
     </section>
     <section id="history-view" class="app-view panel page-panel" hidden>
       <div class="panel-heading"><div><p class="eyebrow">Audit trail</p><h2>Review history</h2></div><span class="lock">Immutable reports</span></div>
@@ -1057,7 +1057,7 @@ function renderWorkflow(): void {
   const reviewKind = awaitingRegeneration ? "ready" : allRolesPassed ? "passed" : humanReviewed ? "passed" : blockedReview ? "blocked" : draft.status === "validated" ? "ready" : "pending";
   setStatus(review, reviewValue, reviewKind);
   const acceptanceReady = draft.status === "llm_reviewed" || draft.status === "needs_revision" || (draft.status === "validated" && humanReviewed);
-  setStatus(acceptance, draft.status === "accepted" ? "Human approved" : acceptanceReady ? "Ready for you" : "Pending", draft.status === "accepted" ? "passed" : acceptanceReady ? "ready" : "pending");
+  setStatus(acceptance, draft.status === "accepted" ? acceptanceLabel(draft) : acceptanceReady ? "Ready for you" : "Pending", draft.status === "accepted" ? "passed" : acceptanceReady ? "ready" : "pending");
   const revise = document.querySelector<HTMLButtonElement>("#workflow-revise")!;
   revise.hidden = draft.status !== "needs_revision";
 }

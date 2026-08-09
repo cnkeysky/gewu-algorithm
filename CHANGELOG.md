@@ -47,6 +47,27 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Unit identity is language-qualified (ADR 0019): batch runs derive
+  deterministic `manifest.id` = `<slug>.<language>`, web drafts get an
+  idempotent language suffix, the generation instruction and server enforce
+  the suffix, and stored slugs are validated. Python and Java templates of the
+  same problem now publish as separate units instead of overwriting each
+  other. The web workbench also fixes the approval labels: the workflow panel
+  shows `acceptanceLabel` (Human/LLM approved) and the stale "only Human
+  approve promotes" copy is corrected.
+- Dedup identity: slugs/ids are normalized (lowercase, trimmed, valid
+  identifier shape) and problems without a stable slug/id fall back to a
+  **normalized content fingerprint** (NFKC + lowercase + collapsed whitespace,
+  then SHA-256) instead of raw statement text, so formatting changes never
+  break dedup; the batch preflights the catalog and warns when the same
+  identity key maps to different titles (possible slug collision). The change
+  is CLI-only — the backend already stores the optional `slug` and the
+  frontend type already carries it.
+- Root README corrections: duplicate identity is now documented as
+  `slug`/id + language (modes decide skip-vs-fork coverage, not identity),
+  `--steps` defaults distinguish the raw CLI (all) from the interactive runner
+  (gate-only), the provider list mentions the custom relay, and the
+  Contributing section no longer refers to the v0.1.0 implementation.
 - The interactive `npm run batch` runner defaults to the gate-only flow:
   steps `draft,generate,validate,accept` (the LLM acceptance gate is the sole
   reviewer), the approver is derived from `.env.local` or

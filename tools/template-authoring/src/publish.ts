@@ -24,3 +24,15 @@ export function normalizeSupersedes(value: unknown, nextRevision: number): unkno
   );
   return valid.length === 0 ? undefined : valid;
 }
+
+/**
+ * Unit identity includes the implementation language: python and Java
+ * templates of the same problem are separate units (`array.two-sum.python`
+ * vs `array.two-sum.java`). When the base id is missing or invalid, falls
+ * back to `unit.<language>`.
+ */
+export function qualifyUnitId(baseId: string | undefined, language: string): string {
+  const validBase = typeof baseId === "string" && /^[a-z0-9]+(?:[-.][a-z0-9]+)+$/.test(baseId) ? baseId : "unit";
+  const lang = /^[a-z0-9]+$/.test(language) ? language : "python";
+  return validBase.endsWith(`.${lang}`) ? validBase : `${validBase}.${lang}`;
+}

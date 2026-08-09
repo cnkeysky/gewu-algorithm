@@ -175,12 +175,23 @@ the published units.
 
 ```sh
 npm run batch                      # interactive menu (starts the API if needed)
-npm run batch:run -- --problems tools/template-authoring/hot100.json --llm-approve deepseek:deepseek-v4-flash
+npm run batch:run -- --problems tools/template-authoring/hot100.json \
+  --steps draft,generate,validate,accept --llm-approve relay:deepseek-v4-flash
 ```
+
+**Default approval role**: the LLM acceptance gate is the decisive approver —
+with `--steps draft,generate,validate,accept`, the gate reviews the validated
+artifact and a pass publishes the unit with the **LLM approved** label, no
+human step. Human approval remains the superior upgrade tier, never a
+prerequisite. The interactive `npm run batch` runner defaults to exactly these
+steps and derives the approver from `.env.local` /
+`GEWU_LLM_PROVIDER`/`GEWU_LLM_MODEL`; include `review` in `--steps` to run the
+three advisory pre-review roles first.
 
 `npm run batch` mirrors the one-command dev runner: it starts the authoring
 API when it is down, asks the batch questions interactively (problems file,
-concurrency, repair rounds, auto-accept), runs the batch, and reports.
+concurrency, repair rounds), runs the batch, and reports. `--auto-accept` is an
+explicit operator override and is not part of the interactive default.
 Non-interactive flags are supported (`run --problems FILE --steps ...`);
 `npm run batch:status` shows API health and the last report, and
 `npm run batch:stop` stops the API that the script started. The raw CLI still
@@ -188,23 +199,29 @@ lives in `tools/template-authoring` (`npm run batch -- --problems FILE ...`).
 
 The CLI is problem-agnostic: any algorithm problem text works, not just
 LeetCode. Generation uses the provider/model configured on the authoring API
-(DeepSeek, OpenAI, Moonshot, Xiaomi and any model in their catalogs); switch
-by setting `GEWU_LLM_PROVIDER` / `GEWU_LLM_MODEL` and the matching API key,
-then restart the API (or re-run `npm run dev:prepare`).
+(DeepSeek, OpenAI, Moonshot, Xiaomi, any model in their catalogs, or a custom
+OpenAI-compatible relay via `GEWU_LLM_BASE_URL`); switch by setting
+`GEWU_LLM_PROVIDER` / `GEWU_LLM_MODEL` and the matching API key, then restart
+the API (or re-run `npm run dev:prepare`).
 
 Duplicate protection is on by default: a problem whose accepted unit already
 covers the requested modes is skipped — in an interactive terminal you are
 asked first (skip / regenerate this problem / regenerate all remaining
 duplicates / quit), so a re-run never silently overwrites your work. Adding
 modes to an existing problem forks it and publishes a new revision with the
-extended coverage, and `--force` regenerates everything as a new revision.
-`--yes` skips the prompts (the default when the CLI is not a TTY, e.g. CI).
-`--select 1,15,two-sum` runs only the given LeetCode ids / slugs / titles
-instead of rescanning the whole catalog. Entries without a problem statement
-are skipped with a warning. Duplicate identity is `problem + language + modes`:
-a template in one language is never treated as a duplicate of an accepted
-template in another language, so Python and Java templates for the same
-problem coexist as separate units.
+extended coverage, and `--force` (or `--regenerate <ids>`) regenerates
+specific problems as new revisions. `--yes` skips the prompts (the default
+when the CLI is not a TTY, e.g. CI). `--select 1,15,two-sum` runs only the
+given LeetCode ids / slugs / titles instead of rescanning the whole catalog.
+Entries without a problem statement are skipped with a warning. Duplicate
+identity is the problem's `slug`/id + language (falling back to the statement
+text): a template in one language is never treated as a duplicate of an
+accepted template in another language, so Python and Java templates for the
+same problem coexist as separate units (unit ids are language-qualified,
+`<slug>.<language>` — see
+[ADR 0019](docs/decisions/0019-language-qualified-unit-identity.md)).
+Requested-mode coverage then decides the action — fully covered is skipped,
+partially covered forks and publishes an extended revision.
 
 `tools/template-authoring/hot100.json` ships the current LeetCode Hot 100
 catalog (official study plan, Chinese statements, `language: "python"` on every
@@ -233,7 +250,9 @@ Problems file (JSON):
 
 TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 
-- `--steps draft,generate,validate,review,accept` — run a subset (default all).
+- `--steps draft,generate,validate,review,accept` — run a subset. The raw CLI
+  defaults to all steps; the interactive `npm run batch` runner defaults to
+  `draft,generate,validate,accept` (the LLM gate is the sole reviewer).
 - `--select 1,15,two-sum` — run only the given ids / slugs / titles.
 - `--force` — regenerate problems even when an accepted unit covers them
   (published as a new revision).
@@ -268,8 +287,8 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
   bind to the canonical implementation.
 - `--language <slug>` — global override. Without it each catalog entry's
   `language` applies (hot100.json pins python); catalogs may mix languages by
-  giving entries different `language` values, and dedup stays per
-  problem + language + modes. Generate a non-Python Hot 100 catalog with
+  giving entries different `language` values, and dedup stays per slug/id +
+  language. Generate a non-Python Hot 100 catalog with
   `cd tools/template-authoring && npm run fetch:hot100 -- --language java --out hot100-java.json`.
 
 Published units land in `tools/template-authoring/drafts/.workbench/published`
@@ -377,7 +396,7 @@ Directories are introduced as implementation begins. The intended architecture i
 
 ## Contributing
 
-The v0.1.0 implementation provides a Rust core with five practice modes
+The current implementation provides a Rust core with five practice modes
 (shadow typing, flow recall, code recall with four layouts, reasoning recall,
 and transfer practice), versioned local persistence, a Vite web workbench
 (authoring and practice), and a VS Code adapter. Extension-host, IME, and

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { coverageKey, defaultApproverSpec, loadProblems, parseOptions, resolveLanguage, selectProblems } from "./batch-authoring.js";
+import { coverageKey, defaultApproverSpec, draftKey, loadProblems, parseOptions, problemKey, resolveLanguage, selectProblems } from "./batch-authoring.js";
 
 test("parseOptions applies defaults and overrides", () => {
   const defaults = parseOptions(["--problems", "hot100.json"]);
@@ -125,4 +125,27 @@ test("default approver follows env provider/model, then flags, then built-in", (
   assert.equal(defaultApproverSpec({}, { GEWU_LLM_PROVIDER: "relay", GEWU_LLM_MODEL: "deepseek-v4-flash" }), "relay:deepseek-v4-flash");
   assert.equal(defaultApproverSpec({ provider: "moonshotai", model: "kimi-k2" }, {}), "moonshotai:kimi-k2");
   assert.equal(defaultApproverSpec({}, {}), "deepseek:deepseek-v4-flash");
+});
+
+test("problemKey normalizes slugs and falls back for invalid ones", () => {
+  assert.equal(problemKey({ title: "T", slug: "Two-Sum", problem: "P" }, "python"), coverageKey("two-sum", "python"));
+  const fallback = problemKey({ title: "T", slug: "two sum", problem: "P" }, "python");
+  assert.notEqual(fallback, coverageKey("P", "python"));
+  assert.equal(problemKey({ title: "T", id: "1", problem: "P" }, "python"), coverageKey("lc-1", "python"));
+  const plain = problemKey({ title: "T", problem: "P" }, "python");
+  assert.notEqual(plain, coverageKey("P", "python"));
+  assert.equal(plain, fallback);
+});
+
+test("draftKey normalizes stored slugs identically to problemKey", () => {
+  assert.equal(draftKey({ slug: "Two-Sum", problem: "P" }, "python"), coverageKey("two-sum", "python"));
+  assert.equal(draftKey({ slug: "two sum", problem: "P" }, "python"), draftKey({ problem: "P" }, "python"));
+});
+
+test("text identity is a normalized fingerprint, robust to formatting changes", () => {
+  const a = problemKey({ title: "T", problem: "Given   an array   [1, 2],  target 9" }, "python");
+  const b = problemKey({ title: "T", problem: "Given an array [1, 2], target 9" }, "python");
+  assert.equal(a, b);
+  const different = problemKey({ title: "T", problem: "Given an array [1, 2], target 10" }, "python");
+  assert.notEqual(a, different);
 });

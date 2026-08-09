@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
@@ -209,13 +210,31 @@ export function coverageKey(problem: string, language: string): string {
  * else the statement text. Same-slug problems never create duplicates even
  * when their statement wording or title differs. */
 export function problemKey(problem: BatchProblem, language: string): string {
-  const identity = problem.slug ?? (problem.id ? `lc-${problem.id}` : problem.problem);
+  const identity = normalizeIdentity(problem.slug)
+    ?? (problem.id ? `lc-${normalizeIdentity(String(problem.id)) ?? String(problem.id)}` : textIdentity(problem.problem));
   return coverageKey(identity, language);
 }
 
 /** Mirrors problemKey for stored drafts: slug when present, else text. */
-function draftKey(draft: { slug?: string; problem: string }, language: string): string {
-  return coverageKey(draft.slug ?? draft.problem, language);
+export function draftKey(draft: { slug?: string; problem: string }, language: string): string {
+  return coverageKey(normalizeIdentity(draft.slug) ?? textIdentity(draft.problem), language);
+}
+
+/** A slug must be a stable lowercase identifier; anything else (spaces,
+ * uppercase, invalid characters) falls back to statement-text identity. */
+function normalizeIdentity(value: string | undefined): string | undefined {
+  const trimmed = value?.trim().toLowerCase();
+  return trimmed && /^[a-z0-9]+(?:[-.][a-z0-9]+)*$/.test(trimmed) ? trimmed : undefined;
+}
+
+/**
+ * Content-fingerprint fallback for problems without a stable slug/id:
+ * normalize (NFKC, lowercase, collapse whitespace) then hash, so formatting
+ * differences never break dedup and near-duplicate statements collapse.
+ */
+function textIdentity(statement: string): string {
+  const normalized = statement.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  return `txt:${createHash("sha256").update(normalized).digest("hex").slice(0, 24)}`;
 }
 
 /**
@@ -590,6 +609,19 @@ async function main(): Promise<void> {
   if (empty > 0) console.log(`batch-authoring: skipped ${empty} entries without a problem statement`);
   if (deselected > 0) console.log(`batch-authoring: selected ${problems.length} of ${withStatements.length} problems (--select)`);
   if (problems.length === 0) fail("problems file contains no entries");
+  // Preflight: same identity key mapping to different titles means two distinct
+  // problems share a slug/id — dedup would wrongly treat them as one unit.
+  const identityTitles = new Map<string, string>();
+  let identityCollisions = 0;
+  for (const problem of problems) {
+    const key = problemKey(problem, resolveLanguage(options, problem));
+    const previous = identityTitles.get(key);
+    if (previous !== undefined && previous !== problem.title) identityCollisions += 1;
+    else identityTitles.set(key, problem.title);
+  }
+  if (identityCollisions > 0) {
+    console.warn(`batch-authoring: ${identityCollisions} identity key(s) map to different titles — dedup treats the same slug/id as the same unit; verify the catalog's slugs`);
+  }
   if (options.creatorModels.length > 0) {
     problems.forEach((problem, index) => {
       if (problem.provider || problem.model) return;

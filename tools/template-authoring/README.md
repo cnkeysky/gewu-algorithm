@@ -210,7 +210,9 @@ authoring pipeline for many problems. Defaults:
   operator-tier override instead.
 - **Deduplication**: identity is `slug`/id + language (falling back to the
   statement text), so re-runs reuse the same draft instead of accumulating
-  duplicates; `--regenerate <ids>` forces specific problems as new revisions.
+  duplicates; unit ids are language-qualified (`<slug>.<language>`), so Python
+  and Java templates publish as separate units; `--regenerate <ids>` forces
+  specific problems as new revisions.
 - **Rate limits**: gateway 429s retry with exponential backoff; use
   `--concurrency 2` on shared relays and keep `--timeout-minutes` above the
   slowest generation.

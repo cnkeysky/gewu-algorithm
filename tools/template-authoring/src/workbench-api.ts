@@ -10,7 +10,7 @@ import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type 
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
-import { normalizeSupersedes } from "./publish.js";
+import { normalizeSupersedes, qualifyUnitId } from "./publish.js";
 import {
   STAGE_SPECS,
   assertExplicitVariantCount,
@@ -195,7 +195,15 @@ async function generateDraft(
   const coreManifest = coreArtifact.manifest;
   if (!isRecord(coreManifest) || !isRecord(coreManifest.manifest) || !isRecord(coreManifest.sources)) throw new Error("core stage returned an invalid artifact");
   const manifest = coreManifest.manifest as Record<string, unknown>;
-  if (draft.unitId) manifest.id = draft.unitId;
+  if (draft.unitId) {
+    manifest.id = draft.unitId;
+  } else if (draft.slug) {
+    // Deterministic per-slug, per-language unit identity for batch runs.
+    manifest.id = `${draft.slug}.${draft.language}`;
+  } else {
+    // Web-created drafts: keep the model's base id, language-qualified.
+    manifest.id = qualifyUnitId(typeof manifest.id === "string" ? manifest.id : undefined, draft.language);
+  }
   assertExplicitVariantCount(
     Array.isArray(manifest.implementations)
       ? manifest.implementations.filter(isRecord).map((item) => String(item.key ?? ""))
@@ -518,7 +526,7 @@ function draftFrom(value: unknown): DraftRecord {
   return {
     id: crypto.randomUUID(),
     taskId: typeof value.taskId === "string" ? value.taskId : undefined,
-    slug: typeof value.slug === "string" && value.slug.trim() ? value.slug.trim().toLowerCase() : undefined,
+    slug: typeof value.slug === "string" && /^[a-z0-9]+(?:[-.][a-z0-9]+)*$/.test(value.slug.trim().toLowerCase()) ? value.slug.trim().toLowerCase() : undefined,
     title: value.title,
     problem: value.problem,
     provider: typeof value.provider === "string" ? value.provider : "deepseek",
