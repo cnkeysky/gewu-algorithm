@@ -336,13 +336,26 @@ async function doRun() {
 async function doStatus() {
   const healthy = await fetchOk(apiUrl());
   log(`authoring API ${healthy ? "healthy" : "down"} at ${apiUrl()}`);
+  if (healthy) {
+    try {
+      const response = await fetch(apiUrl(), { signal: AbortSignal.timeout(5000) });
+      const body = await response.json();
+      const drafts = Array.isArray(body.drafts) ? body.drafts : [];
+      const by = new Map();
+      for (const draft of drafts) by.set(draft.status ?? "unknown", (by.get(draft.status ?? "unknown") ?? 0) + 1);
+      const counts = [...by.entries()].map(([status, count]) => `${status} ${count}`).join(", ");
+      log(`live drafts: ${drafts.length} — ${counts || "none"}`);
+    } catch {
+      log("could not read live draft counts from the authoring API");
+    }
+  }
   const reportPath = resolve(repo, report);
   if (!existsSync(reportPath)) {
-    log(`no batch report at ${reportPath} yet`);
+    log(`no finished batch report at ${reportPath} yet`);
     return;
   }
   const summary = JSON.parse(readFileSync(reportPath, "utf8"));
-  log(`last batch: ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
+  log(`last finished batch: ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
   for (const item of summary.results ?? []) {
     if (item.status === "failed" || item.status === "needs_review") {
       log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
