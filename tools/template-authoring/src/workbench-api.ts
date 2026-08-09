@@ -175,6 +175,14 @@ async function revisionFeedbackFor(draft: DraftRecord, reviews: ReviewRecord[]):
       // A report that cannot be read must not block regeneration; the reviewer verdict still gates approval.
     }
   }
+  // The decisive LLM acceptance gate records its needs_revision rationale as
+  // a review without a report file; feed it back so the repair regeneration
+  // is informed by the gate instead of blind.
+  for (const review of reviews) {
+    if (review.draftId === draft.id && review.role === "llm_acceptance" && review.verdict === "needs_revision" && review.rationale) {
+      chunks.push(`- [llm acceptance gate] ${review.rationale}`);
+    }
+  }
   return chunks.join("\n");
 }
 

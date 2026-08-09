@@ -1,5 +1,5 @@
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
-import { existsSync, mkdirSync } from "node:fs";
+import { readFile, rename, writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
@@ -118,10 +118,14 @@ export function defaultApproverSpec(
   return "deepseek:deepseek-v4-flash";
 }
 
-function fail(message: string): never {
-  console.error(`batch-authoring: ${message}`);
+class UsageError extends Error {}
+
+function printUsage(): void {
   console.error("usage: node dist/batch-authoring.js --problems <file.json|tsv> [--api url] [--steps draft,generate,validate,review,accept] [--concurrency n] [--force] [--yes] [--select id1,id2] [--repair-rounds n] [--auto-accept] [--language python] [--variants 1] [--modes ...] [--assistance ...] [--request-delay-ms n] [--report path]");
-  process.exit(2);
+}
+
+function fail(message: string): never {
+  throw new UsageError(message);
 }
 
 function optionValue(args: string[], name: string): string | undefined {
@@ -144,6 +148,9 @@ export function parseOptions(args: string[]): Options {
   const steps = new Set<Step>(stepsValue ? stepsValue.split(",").map((step) => step.trim() as Step) : [...ALL_STEPS]);
   for (const step of steps) if (!(ALL_STEPS as readonly string[]).includes(step)) fail(`unknown step: ${step}`);
   if (steps.has("draft") && !steps.has("generate")) fail("draft without generate is not useful; include generate or drop draft");
+  if ((steps.has("review") || steps.has("accept")) && !steps.has("validate")) {
+    fail("review and accept require the validate step: a reviewable or publishable artifact must be contract-validated first");
+  }
   const modes = optionValue(args, "--modes")?.split(",").map((mode) => mode.trim()) ?? [...ALL_MODES];
   const assistance = optionValue(args, "--assistance")?.split(",").map((item) => item.trim()) ?? [...ALL_ASSISTANCE];
   const timeoutMinutes = Number(optionValue(args, "--timeout-minutes") ?? process.env.GEWU_BATCH_TIMEOUT_MINUTES ?? "60");
@@ -586,15 +593,12 @@ async function processProblem(
       apiRequest(options, "POST", `/api/drafts/${draftId}/generate`, Object.keys(generationBody).length ? generationBody : undefined);
 
     if (options.steps.has("generate")) {
-      let generated = await generateDraft();
-      let retries = 0;
-      // A failed generation (LLM error or contract validation) is retried on
-      // the same draft: the backend allows generate from the failed state.
-      while (!generated.ok && retries < options.repairRounds) {
-        retries += 1;
-        generated = await generateDraft();
-      }
-      if (retries > 0) base.repairRoundsUsed = (base.repairRoundsUsed ?? 0) + retries;
+      // No blind batch-level retry: the generator already retries transient
+      // gateway errors and re-prompts with validation feedback internally, so
+      // re-running the identical prompt here would only spend quota twice on
+      // persistent failures (403 blocks, exhausted quota, invalid output).
+      // Failed drafts stay failed and a later run reuses them.
+      const generated = await generateDraft();
       if (!generated.ok) return { ...base, status: "failed", error: `generate: ${draftError(generated)}` };
     }
     if (options.steps.has("validate")) {
@@ -610,7 +614,7 @@ async function processProblem(
         const reviewed = await runReviews(options, draftId);
         reviewVerdicts = reviewed.verdicts;
         allPassed = reviewed.allPassed;
-        if (allPassed || repairs >= options.repairRounds || !options.steps.has("generate")) break;
+        if (allPassed || repairs >= options.repairRounds || !options.steps.has("generate") || !options.steps.has("validate")) break;
         const rollback = await apiRequest(options, "POST", `/api/drafts/${draftId}/rollback`);
         if (!rollback.ok) break;
         const regenerated = await generateDraft();
@@ -710,16 +714,16 @@ async function main(): Promise<void> {
     process.exit(2);
   }
   await writeFile(lockPath, String(process.pid));
-  const releaseLock = async (): Promise<void> => {
+  const releaseLock = (): void => {
     try {
-      await rm(lockPath, { force: true });
+      rmSync(lockPath, { force: true });
     } catch {
       // Best effort on exit paths.
     }
   };
-  process.on("exit", () => { void releaseLock(); });
-  process.on("SIGINT", () => { void releaseLock(); process.exit(130); });
-  process.on("SIGTERM", () => { void releaseLock(); process.exit(143); });
+  process.on("exit", releaseLock);
+  process.on("SIGINT", () => { releaseLock(); process.exit(130); });
+  process.on("SIGTERM", () => { releaseLock(); process.exit(143); });
 
   const options = parseOptions(process.argv.slice(2));
   if (!Number.isInteger(options.concurrency) || options.concurrency < 1) fail("--concurrency must be a positive integer");
@@ -846,7 +850,13 @@ async function main(): Promise<void> {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
+    if (error instanceof UsageError) {
+      console.error(`batch-authoring: ${error.message}`);
+      printUsage();
+      process.exitCode = 2;
+    } else {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 1;
+    }
   });
 }

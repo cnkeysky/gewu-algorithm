@@ -67,8 +67,9 @@ allowed only with explicit migration notes (see
   across processes: only one worker can hold the same operation, crashed
   workers' leases are reclaimed after expiry, and the three pre-review roles
   still run concurrently because their keys differ by role. The batch CLI
-  refuses to start while another run holds its lock, and the batch report is
-  written atomically (tmp + rename).
+  refuses to start while another run holds its lock (released synchronously
+  on exit/signals so an interrupt never leaves a stale live lock), and the
+  batch report is written atomically (tmp + rename).
 - `batch:stop` is more reliable: the API writes its own pid trace
   (`.gewu-dev/pids/api-<port>.pid`) on startup so it can be stopped even when
   it was not started by the runner, and the stop sweep uses `ss` before
@@ -84,6 +85,17 @@ allowed only with explicit migration notes (see
   upstream is not hammered — and 5xx retries at the batch level are limited
   to idempotent GET/PATCH calls so a `POST /generate` that already spent
   quota is never double-charged.
+- Batch generation no longer blind-retries a failed generation
+  (`--repair-rounds` previously re-ran the identical prompt, doubling quota
+  spend on persistent failures like 403 blocks or exhausted quota). The
+  generator's internal transient + validation-feedback retries are the retry
+  mechanism; failed drafts stay failed and a later run reuses them.
+  `--steps` now rejects `review`/`accept` without `validate` at startup (such
+  configs failed at runtime anyway), and the LLM acceptance gate's
+  needs_revision rationale is fed back into repair regenerations so those
+  repairs are informed instead of blind. Option validation throws a
+  `UsageError` that the CLI entry point reports with exit code 2, making the
+  parser unit-testable.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

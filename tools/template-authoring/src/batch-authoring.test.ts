@@ -27,13 +27,13 @@ test("parseOptions applies defaults and overrides", () => {
 
   const custom = parseOptions([
     "--problems", "hot100.json", "--api", "http://127.0.0.1:9999/",
-    "--steps", "generate,review", "--concurrency", "4", "--resume",
+    "--steps", "generate,validate,review", "--concurrency", "4", "--resume",
     "--force", "--yes", "--select", "two-sum,3sum", "--repair-rounds", "2", "--auto-accept", "--language", "java",
     "--request-delay-ms", "2000",
     "--variants", "2", "--llm-approve", "openai:gpt-4.1", "--creator-models", "deepseek:deepseek-v4-flash,openai:gpt-4.1", "--modes", "shadow_typing,code_recall", "--assistance", "comments",
   ]);
   assert.equal(custom.api, "http://127.0.0.1:9999");
-  assert.deepEqual([...custom.steps], ["generate", "review"]);
+  assert.deepEqual([...custom.steps], ["generate", "validate", "review"]);
   assert.equal(custom.concurrency, 4);
   assert.equal(custom.resume, true);
   assert.equal(custom.force, true);
@@ -122,6 +122,13 @@ test("parseOptions defaults to all five practice modes and empty regenerate list
   assert.deepEqual(defaults.modes, ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"]);
   assert.deepEqual(defaults.regenerate, []);
   assert.equal(defaults.timeoutMinutes, 60);
+});
+
+test("parseOptions requires validate before review or accept", () => {
+  assert.throws(() => parseOptions(["--problems", "hot100.json", "--steps", "draft,generate,review"]), /validate/);
+  assert.throws(() => parseOptions(["--problems", "hot100.json", "--steps", "draft,generate,accept"]), /validate/);
+  parseOptions(["--problems", "hot100.json", "--steps", "draft,generate,validate,accept"]);
+  parseOptions(["--problems", "hot100.json", "--steps", "draft,generate,validate,review,accept"]);
 });
 
 test("default approver follows env provider/model, then flags, then built-in", () => {
