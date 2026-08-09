@@ -49,6 +49,7 @@ function usage() {
 commands:
   run      run batch authoring (interactive menu when no command and a TTY)
   status   show the authoring API health and the last batch report summary
+          (add --results to list failed/needs-review items of the last run)
   stop     stop the authoring API started by this script
   help     show this help
 
@@ -401,9 +402,11 @@ async function doStatus() {
   }
   const summary = JSON.parse(readFileSync(reportPath, "utf8"));
   log(`last finished batch (${reportPath}): ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
-  for (const item of summary.results ?? []) {
-    if (item.status === "failed" || item.status === "needs_review") {
-      log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
+  if (args.includes("--results")) {
+    for (const item of summary.results ?? []) {
+      if (item.status === "failed" || item.status === "needs_review") {
+        log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
+      }
     }
   }
 }
