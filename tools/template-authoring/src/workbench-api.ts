@@ -186,9 +186,9 @@ async function generateDraft(
 
   const coreArtifact = await new PiGenerator(options).generate({
     ...baseTask,
-    instruction: coreStageInstruction(instruction, draft.variants),
+    instruction: coreStageInstruction(instruction, draft.variants, draft.language),
     validate: async (value: unknown) => {
-      validateCoreStage(value);
+      validateCoreStage(value, draft.language);
       await validateCoreArtifactWithRust(value);
     },
   });
@@ -204,6 +204,14 @@ async function generateDraft(
     // Web-created drafts: keep the model's base id, language-qualified.
     manifest.id = qualifyUnitId(typeof manifest.id === "string" ? manifest.id : undefined, draft.language);
   }
+  // Unit identity is language-qualified (ADR 0019): every implementation of a
+  // unit must be in the unit's language, so the generated code matches the
+  // language suffix and the language-specific source/test paths.
+  if (Array.isArray(manifest.implementations)) {
+    for (const implementation of manifest.implementations) {
+      if (isRecord(implementation)) implementation.language = draft.language;
+    }
+  }
   assertExplicitVariantCount(
     Array.isArray(manifest.implementations)
       ? manifest.implementations.filter(isRecord).map((item) => String(item.key ?? ""))
@@ -211,7 +219,7 @@ async function generateDraft(
     draft.variants,
   );
 
-  const stageContext = stageContextFromCore(manifest, coreManifest.sources, draft.problem);
+  const stageContext = stageContextFromCore(manifest, coreManifest.sources, draft.problem, draft.language);
   for (const spec of STAGE_SPECS) {
     if (spec.mode === "code_recall") {
       if (!draft.modes.includes("code_recall") || !profile.code_recall_layouts.includes(spec.layout!)) continue;

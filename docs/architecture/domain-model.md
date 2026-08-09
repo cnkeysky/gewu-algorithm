@@ -43,7 +43,10 @@ Review state is user-specific and mutable. It references attempts and records th
 
 ## Identity and Revision
 
-- Unit IDs are stable lowercase ASCII identifiers such as `graph.bfs`.
+- Unit IDs are stable lowercase ASCII identifiers such as `graph.bfs`; since
+  [ADR 0019](../decisions/0019-language-qualified-unit-identity.md) they are
+  language-qualified (`<slug>.<language>`, e.g. `two-sum.python`), and every
+  implementation of a unit is in that language.
 - A content revision is a positive integer within one stable ID.
 - Published revisions are immutable.
 - `problem.statement`, implementations, and practice projections are one immutable revision snapshot; changing any of them requires a new revision.

@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationProfile } from "./pi-generator.js";
+import { sourcePathFor } from "./publish.js";
 
 /**
  * Algorithm-agnostic generation instruction. It constrains only the GEWU
@@ -27,9 +28,9 @@ Identifiers:
 - shadow_typing/code_recall implementation references must match implementations[].key.
 
 Sources:
-- Implementation source: code/python.py; tests: tests/python_test.py; include both in sources, reference tests in test_references.
+- Implementation source: code/<language>.<extension> (e.g. code/python.py, code/java.py); tests: tests/<language>_test.<extension>; include both in sources, reference tests in test_references.
 - normalization: line_endings "lf", whitespace "strict".
-- tests/python_test.py loads the implementation via importlib.util.spec_from_file_location from the unit root; never "from code.python import ...".
+- For Python, the test file loads the implementation via importlib.util.spec_from_file_location from the unit root; never "from code.python import ...".
 
 Provenance:
 - provenance.sources cites the actual origin (title, URL, accessed_at) with role "primary", "synthesis", or "lead".
@@ -487,8 +488,11 @@ export async function generateTemplateDraft(problem: string): Promise<void> {
       "utf8",
     );
 
-    const sourcePath = join(stagingRoot, "code/python.py");
-    runChecked("python3", ["-c", "import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], 'exec')", sourcePath], repoRoot);
+    const language = profile.implementation_languages[0] ?? "python";
+    const sourcePath = join(stagingRoot, sourcePathFor(language));
+    if (language === "python") {
+      runChecked("python3", ["-c", "import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_text(), sys.argv[1], 'exec')", sourcePath], repoRoot);
+    }
     runChecked(
       "cargo",
       ["run", "--quiet", "--manifest-path", join(repoRoot, "Cargo.toml"), "-p", "gewu-template", "--bin", "validate", "--", manifestPath],

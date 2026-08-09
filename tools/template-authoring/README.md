@@ -125,6 +125,14 @@ The command requires the ignored `.env.local` file to contain `DEEPSEEK_API_KEY`
 It writes `unit.json`, `code/python.py`, and non-secret `generation.json`, then
 performs response-shape checks, deterministic source-template derivation,
 Python syntax, and the real Rust `gewu-template` manifest loader. It first
+
+Generation is language-aware: source/test paths follow
+`code/<language>.<extension>` / `tests/<language>_test.<extension>`, the
+manifest id ends with the language segment (ADR 0019), and every
+implementation is forced to the unit's language. Python-specific rules
+(importlib loader, `from code.python import ...` guard, in-memory syntax
+check) apply only to Python; non-Python executable validation is a follow-up
+item — the Rust manifest validator remains language-agnostic.
 writes to an ignored staging directory and exposes the final draft only after
 those checks pass. The adapter overwrites `provenance.generated_by` with its
 own trusted provider, model, task version, and timestamp, and resets all

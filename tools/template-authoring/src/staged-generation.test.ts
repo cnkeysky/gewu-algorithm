@@ -22,6 +22,9 @@ const PROFILE: GenerationProfile = {
 
 const CONTEXT = {
   problem: "Detect a cycle in a directed graph.",
+  language: "python",
+  sourcePath: "code/python.py",
+  testPath: "tests/python_test.py",
   implementations: [{ key: "python-teaching", strategy: "Three-color DFS over an adjacency list." }],
   code: "def solve():\n    return True\n",
   patterns: [{ id: "cycle-detection", summary: "Detect directed cycles with DFS." }],
@@ -82,6 +85,9 @@ test("core stage rejects extra practice projections", () => {
 test("stage artifacts normalize recall and transfer bindings to the canonical implementation", () => {
   const multiContext = {
     problem: "Two Sum",
+    language: "python",
+    sourcePath: "code/python.py",
+    testPath: "tests/python_test.py",
     implementations: [
       { key: "python-hash", strategy: "Hash map lookups" },
       { key: "python-sort", strategy: "Sort then two pointers" },
@@ -102,6 +108,9 @@ test("stage artifacts normalize recall and transfer bindings to the canonical im
 test("stage instructions name the canonical key and forbid other bindings", () => {
   const multiContext = {
     problem: "Two Sum",
+    language: "python",
+    sourcePath: "code/python.py",
+    testPath: "tests/python_test.py",
     implementations: [
       { key: "python-hash", strategy: "Hash map lookups" },
       { key: "python-sort", strategy: "Sort then two pointers" },

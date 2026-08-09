@@ -36,3 +36,25 @@ export function qualifyUnitId(baseId: string | undefined, language: string): str
   const lang = /^[a-z0-9]+$/.test(language) ? language : "python";
   return validBase.endsWith(`.${lang}`) ? validBase : `${validBase}.${lang}`;
 }
+
+const LANGUAGE_EXTENSIONS: Record<string, string> = {
+  python: "py",
+  java: "java",
+  javascript: "js",
+  typescript: "ts",
+  go: "go",
+  cpp: "cpp",
+  rust: "rs",
+};
+
+export function languageExtension(language: string): string {
+  return LANGUAGE_EXTENSIONS[language] ?? language;
+}
+
+export function sourcePathFor(language: string): string {
+  return `code/${language}.${languageExtension(language)}`;
+}
+
+export function testPathFor(language: string): string {
+  return `tests/${language}_test.${languageExtension(language)}`;
+}

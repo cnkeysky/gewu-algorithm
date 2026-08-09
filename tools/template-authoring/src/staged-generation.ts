@@ -1,6 +1,7 @@
 import { OUTPUT_SCHEMA, materializeSourceTemplates, practicePropertySchema, validateGeneratedShape } from "./generate-template.js";
 import type { DraftTask, GenerationProfile, PracticeModeSelection } from "./pi-generator.js";
 import { createHash } from "node:crypto";
+import { languageExtension, sourcePathFor, testPathFor } from "./publish.js";
 
 export const EXTRA_PRACTICE_MODES = ["code_recall", "reasoning_recall", "transfer_practice"] as const;
 export type ExtraPracticeMode = (typeof EXTRA_PRACTICE_MODES)[number];
@@ -76,18 +77,24 @@ function modePropertySchema(mode: ExtraPracticeMode): Record<string, unknown> {
   };
 }
 
-export function coreStageInstruction(baseInstruction: string, variants: number): string {
+export function coreStageInstruction(baseInstruction: string, variants: number, language = "python"): string {
   const variantRule = variants > 1
     ? ` Generate exactly ${variants} distinct implementation strategies, each with its own lowercase-slug key and a strategy describing that variant. practice.shadow_typing must include exactly one item per implementation, each referencing its key.`
     : variants === 0
       ? " There is no fixed variant count. Generate as many genuinely distinct implementation strategies as the problem warrants — different algorithmic approaches or clear complexity trade-offs — typically a single canonical solution and rarely more than three; never produce variants that differ only cosmetically. practice.shadow_typing must include exactly one item per implementation, each referencing its key."
       : " Generate exactly one implementation strategy.";
   const bindingRule = " flow_recall, code_recall, reasoning_recall, and transfer_practice bind to the canonical first-declared implementation only; their practice variants are exercise formats of that implementation, never additional implementations.";
-  return `${baseInstruction}\n\nThis is the CORE stage of a staged generation.${variantRule}${bindingRule} tests/python_test.py must load the implementation with importlib.util.spec_from_file_location from the unit root; never use "from code.python import ..." because the Python standard library "code" module shadows the local package. Generate the complete manifest with shadow typing and flow recall populated, but leave practice.code_recall, practice.reasoning_recall, and practice.transfer_practice as empty arrays. Those projections are generated in separate follow-up stages.`;
+  const pythonRule = language === "python"
+    ? ` ${testPathFor(language)} must load the implementation with importlib.util.spec_from_file_location from the unit root; never use "from code.python import ..." because the Python standard library "code" module shadows the local package.`
+    : "";
+  return `${baseInstruction}\n\nThis is the CORE stage of a staged generation.${variantRule}${bindingRule}${pythonRule} Generate the complete manifest with shadow typing and flow recall populated, but leave practice.code_recall, practice.reasoning_recall, and practice.transfer_practice as empty arrays. Those projections are generated in separate follow-up stages.`;
 }
 
 export interface StageContext {
   readonly problem: string;
+  readonly language: string;
+  readonly sourcePath: string;
+  readonly testPath: string;
   readonly implementations: Array<{ key: string; strategy: string }>;
   readonly code: string;
   readonly patterns: Array<{ id: string; summary: string }>;
@@ -113,7 +120,7 @@ export function buildStageTask(
       comment_to_code: `Generate one or more items with layout "comment_to_code" and assistance "comments". Provide an ordered nonempty scaffold of reviewed algorithm-operation comments. Never declare slots or source_template.`,
       cloze: `Generate one or more items with layout "cloze" and assistance "cloze". Every slot must declare expected code that appears verbatim in the canonical implementation; the server derives source_template from those slots.`,
     };
-    instruction = `Generate ONLY practice.code_recall items with layout "${layout}" for the algorithm unit described below. The unit declares these implementation strategies:\n${implementationList}\nEvery item's implementation field MUST be "${canonical}" — code recall is an exercise format of the canonical implementation, never of another strategy. The canonical implementation source is:\n\`\`\`python\n${codeBlock}\n\`\`\`\n${layoutRules[layout]} Every slot expected value must be copied character-for-character from the canonical implementation; never invent expected text. Keep every prompt aligned with the canonical implementation. Return one JSON object matching the schema: {"practice": {"code_recall": [items with layout "${layout}" only]}}.`;
+    instruction = `Generate ONLY practice.code_recall items with layout "${layout}" for the algorithm unit described below. The unit declares these implementation strategies:\n${implementationList}\nEvery item's implementation field MUST be "${canonical}" — code recall is an exercise format of the canonical implementation, never of another strategy. The canonical implementation source is:\n\`\`\`${context.language}\n${codeBlock}\n\`\`\`\n${layoutRules[layout]} Every slot expected value must be copied character-for-character from the canonical implementation; never invent expected text. Keep every prompt aligned with the canonical implementation. Return one JSON object matching the schema: {"practice": {"code_recall": [items with layout "${layout}" only]}}.`;
   } else if (mode === "reasoning_recall") {
     instruction = `Generate ONLY the practice.reasoning_recall projection for the algorithm unit described below. The unit declares these implementation strategies:\n${implementationList}\nEvery item targets the CANONICAL implementation "${canonical}" — its states, invariants, boundaries, and failure modes. The optional implementation field must be "${canonical}" or omitted (both mean the canonical implementation). When several strategies are declared, trade_off items may compare them, but the implemented reference remains the canonical strategy. Each item must use one aspect from mechanism, invariant, trade_off, boundary, or failure_condition; prompts must be concrete and answerable without revealing the solution; concepts must be lowercase slugs. Return one JSON object matching the schema: {"practice": {"reasoning_recall": [...]}}.`;
   } else {
@@ -134,13 +141,14 @@ export function buildStageTask(
   };
 }
 
-export function validateCoreStage(value: unknown): void {
+export function validateCoreStage(value: unknown, language = "python"): void {
   validateGeneratedShape(value);
   if (!isRecord(value) || !isRecord(value.manifest) || !isRecord(value.manifest.practice)) throw new Error("core stage artifact must contain manifest.practice");
   const practice = value.manifest.practice;
-  const testsSource = isRecord(value.sources) && typeof value.sources["tests/python_test.py"] === "string" ? value.sources["tests/python_test.py"] : "";
-  if (/from\s+code\s*\.\s*python\s+import/.test(testsSource)) {
-    throw new Error("tests/python_test.py must load the implementation via importlib.util.spec_from_file_location; `from code.python import ...` is shadowed by the Python standard library `code` module");
+  const testPath = testPathFor(language);
+  const testsSource = isRecord(value.sources) && typeof value.sources[testPath] === "string" ? value.sources[testPath] : "";
+  if (language === "python" && /from\s+code\s*\.\s*python\s+import/.test(testsSource)) {
+    throw new Error(`${testPath} must load the implementation via importlib.util.spec_from_file_location; \`from code.python import ...\` is shadowed by the Python standard library \`code\` module`);
   }
   const implementations = Array.isArray(value.manifest.implementations) ? value.manifest.implementations.filter(isRecord) : [];
   if (implementations.length === 0) throw new Error("core stage must declare at least one implementation");
@@ -180,7 +188,7 @@ export function validateStageArtifact(spec: StageSpec, parsed: unknown, context:
   };
   if (mode === "code_recall") {
     const pseudoManifest = { practice: { code_recall: items } };
-    materializeSourceTemplates(pseudoManifest, { "code/python.py": context.code });
+    materializeSourceTemplates(pseudoManifest, { [context.sourcePath]: context.code });
     const ids = new Set<string>();
     for (const [index, item] of items.entries()) {
       if (!isRecord(item)) throw new Error(`practice.code_recall[${index}] must be an object`);
@@ -277,7 +285,7 @@ export function assertVariantCoverage(manifest: Record<string, unknown>): void {
   }
 }
 
-export function stageContextFromCore(coreManifest: Record<string, unknown>, sources: Record<string, unknown>, problem: string): StageContext {
+export function stageContextFromCore(coreManifest: Record<string, unknown>, sources: Record<string, unknown>, problem: string, language = "python"): StageContext {
   const implementations = Array.isArray(coreManifest.implementations)
     ? coreManifest.implementations
         .filter(isRecord)
@@ -287,10 +295,14 @@ export function stageContextFromCore(coreManifest: Record<string, unknown>, sour
   const patterns = Array.isArray(coreManifest.patterns)
     ? coreManifest.patterns.filter(isRecord).map((item) => ({ id: String(item.id ?? ""), summary: String(item.summary ?? "") })).filter((item) => item.id)
     : [];
+  const source = sources[sourcePathFor(language)];
   return {
     problem,
+    language,
+    sourcePath: sourcePathFor(language),
+    testPath: testPathFor(language),
     implementations,
-    code: typeof sources["code/python.py"] === "string" ? sources["code/python.py"] : "",
+    code: typeof source === "string" ? source : "",
     patterns,
   };
 }

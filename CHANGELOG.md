@@ -47,6 +47,11 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Generation is language-aware (ADR 0019): source/test paths derive from the
+  language (`code/<lang>.<ext>`, `tests/<lang>_test.<ext>`), Python-specific
+  importlib/compile rules apply only to Python, and the server forces every
+  implementation's language to the unit's language. Non-Python executable
+  validation is a follow-up item.
 - Dedup identity is unified around slug **and** statement fingerprint: a
   problem matches an existing draft when its slug or its normalized-statement
   fingerprint hits, so cross-catalog slug variants and slug-less web drafts
