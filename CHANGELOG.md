@@ -57,6 +57,15 @@ allowed only with explicit migration notes (see
   treats a draft accepted mid-run as already covered, and reconciles the
   finished report against the live store so it can never contradict the API.
   The runner also forwards `--api` to the raw CLI, fixing custom-port runs.
+- Draft status transitions are centralized in one explicit state machine
+  (`draft-lifecycle.ts`): every endpoint validates its move through
+  `assertDraftTransition` instead of ad-hoc status lists, and the reuse/reset
+  transition is a compare-and-set (`casUpsertDraft`) at the storage layer so
+  concurrent writers can never silently overwrite each other. LLM-backed
+  endpoints take a per-draft (+ per-role for the three concurrent pre-review
+  roles) in-flight lock so the same operation cannot double-spend gateway
+  quota, and the batch CLI refuses to start while another run holds its lock.
+  The batch report is written atomically (tmp + rename).
 - `batch:stop` is more reliable: the API writes its own pid trace
   (`.gewu-dev/pids/api-<port>.pid`) on startup so it can be stopped even when
   it was not started by the runner, and the stop sweep uses `ss` before
@@ -66,7 +75,12 @@ allowed only with explicit migration notes (see
   HTTP client retries JSON 403s and transient 5xx with exponential backoff
   (HTML 403 security blocks are returned immediately so they are not
   hammered). This avoids tripping Cloudflare-style rate/security limits on
-  relay endpoints like `api.nico.de5.net`.
+  relay endpoints like `api.nico.de5.net`. The generator itself now only
+  retries transient gateway errors (429/5xx/network) — 403 security blocks,
+  auth/quota errors and invalid requests fail fast so a broken or exhausted
+  upstream is not hammered — and 5xx retries at the batch level are limited
+  to idempotent GET/PATCH calls so a `POST /generate` that already spent
+  quota is never double-charged.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

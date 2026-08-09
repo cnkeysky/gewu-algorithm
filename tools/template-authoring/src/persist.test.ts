@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { upsertDraft, upsertReview } from "./persist.js";
+import { casUpsertDraft, upsertDraft, upsertReview } from "./persist.js";
 
 function openDb() {
   const dir = mkdtempSync(join(tmpdir(), "gewu-persist-"));
@@ -76,6 +76,24 @@ test("reviews upsert independently and deletion removes only the target rows", (
     assert.equal(db.prepare("SELECT COUNT(*) n FROM drafts WHERE id='a'").get()!.n, 0);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM drafts WHERE id='b'").get()!.n, 1);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM reviews WHERE draft_id='b'").get()!.n, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("casUpsertDraft applies only when the row still has the expected status", () => {
+  const { db, dir } = openDb();
+  try {
+    upsertDraft(db, draft("a", "queued"));
+    // Matching expectation wins the CAS.
+    assert.equal(casUpsertDraft(db, { ...draft("a", "queued") }, "queued"), true);
+    // A stale writer whose expectation no longer matches is refused.
+    assert.equal(casUpsertDraft(db, { ...draft("a", "queued") }, "failed"), false);
+    assert.equal(db.prepare("SELECT status FROM drafts WHERE id='a'").get()!.status, "queued");
+    // The CAS is the concurrency primitive; keeping accepted terminal is the
+    // state machine guard's job (draftReuseGuard), which refuses before CAS.
+    assert.equal(casUpsertDraft(db, { ...draft("a", "accepted") }, "queued"), true);
+    assert.equal(db.prepare("SELECT status FROM drafts WHERE id='a'").get()!.status, "accepted");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

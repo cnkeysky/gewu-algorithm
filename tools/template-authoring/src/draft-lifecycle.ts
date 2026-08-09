@@ -10,6 +10,40 @@ export type DraftStatus =
   | "accepted"
   | "failed";
 
+/** State-machine events: every status change goes through the transition
+ * table below, so the allowed-move knowledge lives in one place instead of
+ * ad-hoc status lists scattered across endpoints. */
+export type DraftEvent =
+  | "reuse"       // PATCH: reset a non-accepted draft to queued for retry
+  | "generate"    // run the LLM generation
+  | "validate"    // deterministic Rust contract validation
+  | "pre_review"  // LLM pre-review roles (content gate)
+  | "acceptance"  // decisive LLM acceptance gate
+  | "accept"      // record an acceptance and publish
+  | "rollback"    // regenerate with feedback
+  | "fork"        // create a new revision draft from an accepted unit
+  | "delete";     // remove a non-accepted draft
+
+/** Allowed source statuses per event (single source of truth). */
+export const DRAFT_TRANSITIONS: Record<DraftEvent, readonly DraftStatus[]> = {
+  reuse: ["draft", "queued", "generated", "validated", "llm_reviewed", "needs_revision", "revision_requested", "failed"],
+  generate: ["queued", "revision_requested", "failed"],
+  validate: ["generated"],
+  pre_review: ["validated", "needs_revision"],
+  acceptance: ["validated", "llm_reviewed", "needs_revision"],
+  accept: ["validated", "llm_reviewed", "needs_revision"],
+  rollback: ["generated", "llm_reviewed", "needs_revision", "failed"],
+  fork: ["accepted"],
+  delete: ["draft", "queued", "generated", "validated", "llm_reviewed", "needs_revision", "revision_requested", "failed"],
+};
+
+/** Returns an error message when the transition is not allowed. */
+export function assertDraftTransition(status: string, event: DraftEvent): string | undefined {
+  const allowed = DRAFT_TRANSITIONS[event];
+  if (allowed.includes(status as DraftStatus)) return undefined;
+  return `draft status ${status} does not allow ${event} (allowed from: ${allowed.join(", ")})`;
+}
+
 /**
  * Guard for the reuse/reset transition (PATCH /api/drafts/:id -> queued).
  *
@@ -24,8 +58,30 @@ export function draftReuseGuard(draft: { id: string; status: string }, expectedS
   if (draft.status === "accepted") {
     return "an accepted draft is published and terminal; POST /api/drafts/{id}/fork to create a revision";
   }
+  const transitionError = assertDraftTransition(draft.status, "reuse");
+  if (transitionError) return transitionError;
   if (expectedStatus !== undefined && draft.status !== expectedStatus) {
     return `draft state changed since it was loaded (expected ${expectedStatus}, found ${draft.status}); reload and retry`;
   }
   return undefined;
+}
+
+/**
+ * Per-key in-flight guard for LLM-backed endpoints. Two concurrent clients
+ * (e.g. a batch run and a web action, or two batch runs) could otherwise both
+ * pass the status check and generate/accept/review the same draft — spending
+ * gateway quota twice. The guard makes the second caller get a 409 instead.
+ */
+export function createInFlightGuard() {
+  const busy = new Set<string>();
+  return {
+    tryAcquire(key: string): boolean {
+      if (busy.has(key)) return false;
+      busy.add(key);
+      return true;
+    },
+    release(key: string): void {
+      busy.delete(key);
+    },
+  };
 }

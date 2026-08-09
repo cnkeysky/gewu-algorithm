@@ -8,12 +8,12 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
-import { draftReuseGuard } from "./draft-lifecycle.js";
+import { assertDraftTransition, createInFlightGuard, draftReuseGuard } from "./draft-lifecycle.js";
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
 import { normalizeSupersedes, qualifyUnitId } from "./publish.js";
-import { upsertDraft, upsertReview } from "./persist.js";
+import { casUpsertDraft, upsertDraft, upsertReview } from "./persist.js";
 import {
   STAGE_SPECS,
   assertExplicitVariantCount,
@@ -31,6 +31,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 /** Short build id of the executing API bundle: lets dev scripts detect a
  * stale API process and restart it instead of silently reusing old code. */
 const BUILD_ID = createHash("sha256").update(readFileSync(fileURLToPath(import.meta.url))).digest("hex").slice(0, 12);
+/** Serializes LLM-backed work per draft (+ role for reviews) so concurrent
+ * clients can never double-generate, double-accept, or double-review. */
+const inFlight = createInFlightGuard();
 const storageRoot = resolve(here, "../drafts/.workbench");
 const databasePath = join(storageRoot, "authoring.sqlite");
 mkdirSync(storageRoot, { recursive: true });
@@ -609,17 +612,33 @@ const server = createServer(async (request, response) => {
       updated.publishedPath = undefined;
       updated.error = undefined;
       validatePersistedDraft(updated);
+      // Compare-and-set at the storage layer: the update only lands if the
+      // row still has the status the caller observed (or the current status
+      // when no expectation was given), so a concurrent writer can never be
+      // silently overwritten. The DB is already correct after this, so we do
+      // not re-save the whole in-memory snapshot (which could clobber other
+      // rows changed concurrently since loadState).
+      const casApplied = casUpsertDraft(database, updated, expectedStatus ?? draft.status);
+      if (!casApplied) {
+        return send(response, 409, {
+          error: "draft changed concurrently; reload and retry",
+          currentStatus: state.drafts.find((item) => item.id === draft.id)?.status ?? "unknown",
+          expectedStatus,
+        });
+      }
+      database.prepare("DELETE FROM reviews WHERE draft_id = ?").run(draft.id);
       state.drafts = state.drafts.map((item) => item.id === draft.id ? updated : item);
       state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
-      database.prepare("DELETE FROM reviews WHERE draft_id = ?").run(draft.id);
-      await saveState(state);
       return send(response, 200, { draft: updated });
     }
     const generationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/generate$/);
     if (request.method === "POST" && generationMatch) {
       const draft = state.drafts.find((item) => item.id === generationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (!["queued", "revision_requested", "failed"].includes(draft.status)) return send(response, 409, { error: "only a queued, failed, or revision-requested draft can be generated" });
+      const generateError = assertDraftTransition(draft.status, "generate");
+      if (generateError) return send(response, 409, { error: generateError });
+      const generateLock = `${draft.id}:generate`;
+      if (!inFlight.tryAcquire(generateLock)) return send(response, 409, { error: "draft generation is already in progress" });
       const generationPayload = await body(request).catch(() => ({}));
       const generationOverrides = isRecord(generationPayload) && (typeof generationPayload.provider === "string" || typeof generationPayload.model === "string")
         ? { provider: typeof generationPayload.provider === "string" ? generationPayload.provider : undefined, model: typeof generationPayload.model === "string" ? generationPayload.model : undefined }
@@ -640,13 +659,16 @@ const server = createServer(async (request, response) => {
         draft.artifactPath = undefined;
         await saveState(state);
         return send(response, 422, { status: "failed", error: draft.error, draft });
+      } finally {
+        inFlight.release(generateLock);
       }
     }
     const validationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/validate$/);
     if (request.method === "POST" && validationMatch) {
       const draft = state.drafts.find((item) => item.id === validationMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (!draft.artifactPath || draft.status !== "generated") return send(response, 409, { error: "generate the draft before deterministic validation" });
+      const validateError = assertDraftTransition(draft.status, "validate");
+      if (!draft.artifactPath || validateError) return send(response, 409, { error: "generate the draft before deterministic validation" });
       const errors = validateDraft(draft);
       if (errors.length > 0) {
         draft.status = "failed";
@@ -669,23 +691,30 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && acceptanceMatch) {
       const draft = state.drafts.find((item) => item.id === acceptanceMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (!draft.artifactPath || !["validated", "llm_reviewed", "needs_revision"].includes(draft.status)) {
+      const acceptanceError = assertDraftTransition(draft.status, "acceptance");
+      if (!draft.artifactPath || acceptanceError) {
         return send(response, 409, { error: "model acceptance requires a validated artifact (generate + validate first)" });
       }
-      const payload = await body(request).catch(() => ({}));
-      const overrides = isRecord(payload) && (typeof payload.provider === "string" || typeof payload.model === "string")
-        ? { provider: typeof payload.provider === "string" ? payload.provider : undefined, model: typeof payload.model === "string" ? payload.model : undefined }
-        : undefined;
-      const { review, rationale } = await runModelAcceptance(draft, state.reviews, overrides);
-      state.reviews = [review, ...state.reviews];
-      // The acceptance gate is the decisive LLM reviewer: a needs_revision
-      // verdict moves the draft to that state so the UI offers revision,
-      // while a pass leaves the draft ready for the llm_acceptance publish.
-      if (review.verdict === "needs_revision" && draft.status !== "needs_revision") {
-        draft.status = "needs_revision";
+      const acceptanceLock = `${draft.id}:acceptance`;
+      if (!inFlight.tryAcquire(acceptanceLock)) return send(response, 409, { error: "LLM acceptance is already in progress for this draft" });
+      try {
+        const payload = await body(request).catch(() => ({}));
+        const overrides = isRecord(payload) && (typeof payload.provider === "string" || typeof payload.model === "string")
+          ? { provider: typeof payload.provider === "string" ? payload.provider : undefined, model: typeof payload.model === "string" ? payload.model : undefined }
+          : undefined;
+        const { review, rationale } = await runModelAcceptance(draft, state.reviews, overrides);
+        state.reviews = [review, ...state.reviews];
+        // The acceptance gate is the decisive LLM reviewer: a needs_revision
+        // verdict moves the draft to that state so the UI offers revision,
+        // while a pass leaves the draft ready for the llm_acceptance publish.
+        if (review.verdict === "needs_revision" && draft.status !== "needs_revision") {
+          draft.status = "needs_revision";
+        }
+        await saveState(state);
+        return send(response, 200, { verdict: review.verdict, rationale, review });
+      } finally {
+        inFlight.release(acceptanceLock);
       }
-      await saveState(state);
-      return send(response, 200, { verdict: review.verdict, rationale, review });
     }
     const acceptMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/accept$/);
     if (request.method === "POST" && acceptMatch) {
@@ -725,7 +754,8 @@ const server = createServer(async (request, response) => {
         && state.reviews.some((review) => review.draftId === draft.id && review.role === "llm_acceptance" && review.verdict === "pass");
       if (!llmAcceptancePass) {
         const humanEdited = state.reviews.some((review) => review.draftId === draft.id && review.role === "human_revision" && review.verdict === "pass");
-        if (!["llm_reviewed", "needs_revision"].includes(draft.status) && !(draft.status === "validated" && humanEdited)) {
+        const acceptError = assertDraftTransition(draft.status, "accept");
+        if (acceptError || (draft.status === "validated" && !humanEdited)) {
           return send(response, 409, { error: "LLM pre-review must pass or the artifact must be human-edited and reviewed before acceptance" });
         }
         if (draft.status === "needs_revision" && !humanOverride && !humanEdited) return send(response, 409, { error: "draft needs revision; send {override:true, rationale} only after explicit human review" });
@@ -763,6 +793,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && forkMatch) {
       const source = state.drafts.find((item) => item.id === forkMatch[1]);
       if (!source) return send(response, 404, { error: "draft not found" });
+      const forkError = assertDraftTransition(source.status, "fork");
+      if (forkError) return send(response, 409, { error: forkError });
       const now = new Date().toISOString();
       const publishedId = source.publishedPath ? /\/published\/([^/]+)\/r\d+$/.exec(source.publishedPath)?.[1] : undefined;
       const fork: DraftRecord = {
@@ -793,23 +825,33 @@ const server = createServer(async (request, response) => {
       if (!draft) return send(response, 404, { error: "draft not found" });
       // A failing role flips the draft to needs_revision; the remaining roles
       // must still be able to complete so the review report is whole.
-      if (!draft.artifactPath || !["validated", "needs_revision"].includes(draft.status)) {
+      const preReviewError = assertDraftTransition(draft.status, "pre_review");
+      if (!draft.artifactPath || preReviewError) {
         return send(response, 409, { error: "validate the generated draft before requesting review" });
       }
-      const repoRoot = resolve(here, "../..", "..");
-      const artifactAbsolutePath = resolve(repoRoot, draft.artifactPath);
-      await reviewTemplateDraft(relative(repoRoot, artifactAbsolutePath), payload.role);
-      const reportPath = join(artifactAbsolutePath, "reviews", `${payload.role}.json`);
-      const report = JSON.parse(await readFile(reportPath, "utf8")) as { verdict?: ReviewRecord["verdict"]; artifact_hash?: string };
-      const reportPathRelative = relative(resolve(here, "../..", ".."), reportPath);
-      const review: ReviewRecord = { id: crypto.randomUUID(), draftId: draft.id, role: payload.role, verdict: report.verdict ?? "pending", artifactHash: report.artifact_hash ?? null, reportPath: reportPathRelative, createdAt: new Date().toISOString() };
-      state.reviews = [review, ...state.reviews];
-      const currentHash = review.artifactHash;
-      const allRolesPassed = [...REVIEW_ROLES].every((role) => latestReviewForRole(state.reviews, draft.id, role)?.verdict === "pass" && latestReviewForRole(state.reviews, draft.id, role)?.artifactHash === currentHash);
-      if (allRolesPassed) draft.status = "llm_reviewed";
-      else if (review.verdict === "needs_revision" || review.verdict === "reject") draft.status = "needs_revision";
-      await saveState(state);
-      return send(response, 201, { review });
+      // Per-role lock: the three roles run concurrently on the same draft
+      // (batch fires them in parallel), so the key includes the role — only a
+      // duplicate of the same role on the same draft is refused.
+      const reviewLock = `${draft.id}:review:${payload.role}`;
+      if (!inFlight.tryAcquire(reviewLock)) return send(response, 409, { error: `review role ${payload.role} is already in progress for this draft` });
+      try {
+        const repoRoot = resolve(here, "../..", "..");
+        const artifactAbsolutePath = resolve(repoRoot, draft.artifactPath);
+        await reviewTemplateDraft(relative(repoRoot, artifactAbsolutePath), payload.role);
+        const reportPath = join(artifactAbsolutePath, "reviews", `${payload.role}.json`);
+        const report = JSON.parse(await readFile(reportPath, "utf8")) as { verdict?: ReviewRecord["verdict"]; artifact_hash?: string };
+        const reportPathRelative = relative(resolve(here, "../..", ".."), reportPath);
+        const review: ReviewRecord = { id: crypto.randomUUID(), draftId: draft.id, role: payload.role, verdict: report.verdict ?? "pending", artifactHash: report.artifact_hash ?? null, reportPath: reportPathRelative, createdAt: new Date().toISOString() };
+        state.reviews = [review, ...state.reviews];
+        const currentHash = review.artifactHash;
+        const allRolesPassed = [...REVIEW_ROLES].every((role) => latestReviewForRole(state.reviews, draft.id, role)?.verdict === "pass" && latestReviewForRole(state.reviews, draft.id, role)?.artifactHash === currentHash);
+        if (allRolesPassed) draft.status = "llm_reviewed";
+        else if (review.verdict === "needs_revision" || review.verdict === "reject") draft.status = "needs_revision";
+        await saveState(state);
+        return send(response, 201, { review });
+      } finally {
+        inFlight.release(reviewLock);
+      }
     }
     const artifactMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/artifact$/);
     if (request.method === "GET" && artifactMatch) {
@@ -868,12 +910,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && rollbackMatch) {
       const draft = state.drafts.find((item) => item.id === rollbackMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      // The backend is the source of truth for the state machine: regenerate
-      // is only valid from a fresh generation, an LLM-approved draft, or a
-      // draft whose pre-review failed — matching the UI.
-      if (!["generated", "llm_reviewed", "needs_revision", "failed"].includes(draft.status)) {
-        return send(response, 409, { error: "regenerate is only available after generation, after LLM approval, after a failed pre-review, or after a failed generation" });
-      }
+      const rollbackError = assertDraftTransition(draft.status, "rollback");
+      if (rollbackError) return send(response, 409, { error: rollbackError });
       draft.status = "revision_requested";
       draft.artifactPath = undefined;
       draft.publishedPath = undefined;
@@ -885,7 +923,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "DELETE" && deleteMatch) {
       const draft = state.drafts.find((item) => item.id === deleteMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      if (draft.status === "accepted") return send(response, 409, { error: "an accepted draft is published and cannot be deleted" });
+      const deleteError = assertDraftTransition(draft.status, "delete");
+      if (deleteError) return send(response, 409, { error: deleteError });
       if (draft.artifactPath) {
         try {
           const absolute = artifactAbsolutePath(draft);

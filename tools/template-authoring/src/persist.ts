@@ -62,6 +62,38 @@ export function upsertDraft(database: DatabaseSync, draft: PersistedDraft): void
     );
 }
 
+/**
+ * Compare-and-set draft update: applies only when the row's current status
+ * matches `expectedStatus`, returning whether the update was applied. This is
+ * the optimistic-concurrency primitive for the reuse/reset transition: two
+ * concurrent writers can never both pass, regardless of which process or
+ * stale snapshot they came from.
+ */
+export function casUpsertDraft(database: DatabaseSync, draft: PersistedDraft, expectedStatus: string): boolean {
+  const result = database.prepare(`UPDATE drafts SET task_id=?, slug=?, title=?, problem=?, provider=?, model=?, language=?, variants=?, modes_json=?, assistance_json=?, status=?, created_at=?, unit_id=?, artifact_path=?, published_path=?, error=? WHERE id=? AND status=?`)
+    .run(
+      draft.taskId ?? null,
+      draft.slug ?? null,
+      draft.title,
+      draft.problem,
+      draft.provider,
+      draft.model,
+      draft.language,
+      draft.variants,
+      JSON.stringify(draft.modes),
+      JSON.stringify(draft.assistance),
+      draft.status,
+      draft.createdAt,
+      draft.unitId ?? null,
+      draft.artifactPath ?? null,
+      draft.publishedPath ?? null,
+      draft.error ?? null,
+      draft.id,
+      expectedStatus,
+    );
+  return result.changes === 1;
+}
+
 export function upsertReview(database: DatabaseSync, review: PersistedReview): void {
   database.prepare(`INSERT INTO reviews (id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET draft_id=excluded.draft_id, role=excluded.role, verdict=excluded.verdict, artifact_hash=excluded.artifact_hash, report_path=excluded.report_path, rationale=excluded.rationale, created_at=excluded.created_at`)

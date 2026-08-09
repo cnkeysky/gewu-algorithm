@@ -1,7 +1,8 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
@@ -302,13 +303,15 @@ async function apiRequest(options: Options, method: string, path: string, payloa
       if (payload !== undefined) req.write(JSON.stringify(payload));
       req.end();
     });
-    // Gateway rate limits (429) and transient 5xx are retried with
-    // exponential backoff; a JSON 403 (quota/access style) gets one short
-    // retry. HTML 403 responses are security blocks (e.g. Cloudflare) and are
-    // returned immediately — retrying them only extends the block.
+    // Gateway rate limits (429) are retried; transient 5xx only for
+    // idempotent calls (GET/PATCH) — retrying a POST /generate that already
+    // spent gateway quota would double-charge. A JSON 403 (quota/access
+    // style) gets one short retry; HTML 403 responses are security blocks
+    // (e.g. Cloudflare) and are returned immediately.
     const body = result.body;
     const htmlBlock = result.status === 403 && typeof body === "string" && body.trim().startsWith("<");
-    const retryable = !htmlBlock && (result.status === 429 || (result.status >= 500 && result.status < 600) || (result.status === 403 && attempt < 2));
+    const idempotent = method === "GET" || method === "HEAD" || method === "PATCH";
+    const retryable = !htmlBlock && (result.status === 429 || (idempotent && result.status >= 500 && result.status < 600) || (result.status === 403 && attempt < 2));
     if (!retryable || attempt >= 5) return result;
     const baseMs = result.status === 429 ? 5_000 : 2_000;
     const waitMs = Math.min(60_000, baseMs * 2 ** (attempt - 1));
@@ -685,6 +688,39 @@ async function processProblem(
 }
 
 async function main(): Promise<void> {
+  // Single-instance guard: two concurrent batch runs would both reuse and
+  // generate the same drafts, double-spending gateway quota and racing each
+  // other's state. The lock is a pid file with a liveness check (the common
+  // portable pattern; flock is unavailable on Windows without a dependency).
+  const lockDirPath = join(resolve(dirname(fileURLToPath(import.meta.url)), "../../.."), ".gewu-dev", "pids");
+  const lockPath = join(lockDirPath, "batch-run.lock");
+  mkdirSync(lockDirPath, { recursive: true });
+  const existingPid = existsSync(lockPath) ? Number(await readFile(lockPath, "utf8")) : 0;
+  let lockHeldByLiveProcess = false;
+  if (existingPid > 0) {
+    try {
+      process.kill(existingPid, 0);
+      lockHeldByLiveProcess = true;
+    } catch {
+      // Stale lock from a crashed run; overwrite below.
+    }
+  }
+  if (lockHeldByLiveProcess) {
+    console.error(`batch-authoring: another run is in progress (pid ${existingPid}); wait for it to finish or remove ${lockPath} if it is stale`);
+    process.exit(2);
+  }
+  await writeFile(lockPath, String(process.pid));
+  const releaseLock = async (): Promise<void> => {
+    try {
+      await rm(lockPath, { force: true });
+    } catch {
+      // Best effort on exit paths.
+    }
+  };
+  process.on("exit", () => { void releaseLock(); });
+  process.on("SIGINT", () => { void releaseLock(); process.exit(130); });
+  process.on("SIGTERM", () => { void releaseLock(); process.exit(143); });
+
   const options = parseOptions(process.argv.slice(2));
   if (!Number.isInteger(options.concurrency) || options.concurrency < 1) fail("--concurrency must be a positive integer");
   if (!Number.isInteger(options.variants) || options.variants < 0) fail("--variants must be 0 (auto) or a positive integer");
@@ -795,7 +831,12 @@ async function main(): Promise<void> {
     skipped: reconciled.filter((result) => result.status === "skipped").length,
     results: reconciled,
   };
-  await writeFile(resolve(options.report), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+  // Atomic report write (tmp + rename): a concurrent or interrupted writer can
+  // never leave a half-written report behind.
+  const reportPath = resolve(options.report);
+  const reportTmpPath = `${reportPath}.tmp`;
+  await writeFile(reportTmpPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+  await rename(reportTmpPath, reportPath);
   console.log(`batch-authoring: done — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped. Report: ${options.report}`);
   if (context.aborted) {
     console.error("batch-authoring: aborted by user; partial results written to the report");

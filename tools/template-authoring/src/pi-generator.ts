@@ -222,7 +222,13 @@ export class PiGenerator {
           ...(this.#options.provider === RELAY_PROVIDER_ID ? { fetch: this.#relayFetch } : {}),
           signal: AbortSignal.timeout(this.#options.timeoutMs ?? 60_000),
         });
-        if (response.stopReason !== "error" || attempt === maxAttempts) break;
+        // Only transient failures (429/5xx/network) deserve another attempt;
+        // 403 security blocks, auth/quota errors, and invalid requests fail
+        // fast so a broken or exhausted upstream is not hammered — every
+        // retry spends gateway quota.
+        const transient = isTransientPiError(response.errorMessage);
+        if (response.stopReason !== "error" || attempt === maxAttempts || !transient) break;
+        await new Promise((settle) => setTimeout(settle, Math.min(8_000, 1_000 * 2 ** (attempt - 1))));
       }
       if (!response) throw new Error("Pi-ai returned no response");
       const toolCall = response.content.find((block) => block.type === "toolCall");
@@ -268,6 +274,17 @@ export class PiGenerator {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Only transient gateway failures deserve another attempt. 403 security
+ * blocks (Cloudflare), auth/quota errors, and invalid requests must fail
+ * fast: retrying them burns quota and can extend an IP block.
+ */
+export function isTransientPiError(message: string | undefined): boolean {
+  const text = (message ?? "").toLowerCase();
+  if (/403|401|404|422|<!doctype|cloudflare|blocked|invalid_request|authentication|unauthorized|quota|insufficient_quota/.test(text)) return false;
+  return /429|5\d\d|econnreset|etimedout|timeout|socket|overloaded|try again later|temporarily/.test(text);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
