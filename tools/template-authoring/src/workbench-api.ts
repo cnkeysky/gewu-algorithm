@@ -135,10 +135,17 @@ function saveState(state: State): void {
 
 function migrateLegacyState(): void {
   if (!existsSync(join(storageRoot, "state.json"))) return;
+  // One-time migration: a marker prevents re-importing the legacy snapshot
+  // every time the API starts with an empty store (which resurrected old
+  // test drafts after every deliberate wipe).
+  const migrated = database.prepare("SELECT value FROM schema_meta WHERE key = 'legacy_state_migrated'").get() as { value?: string } | undefined;
+  if (migrated) return;
   const count = Number((database.prepare("SELECT COUNT(*) AS count FROM drafts").get() as { count: number }).count);
-  if (count > 0) return;
-  const legacy = JSON.parse(readFileSync(join(storageRoot, "state.json"), "utf8")) as Partial<State>;
-  saveState({ drafts: Array.isArray(legacy.drafts) ? legacy.drafts : [], reviews: Array.isArray(legacy.reviews) ? legacy.reviews.filter((review) => review.role !== "all") : [] });
+  if (count === 0) {
+    const legacy = JSON.parse(readFileSync(join(storageRoot, "state.json"), "utf8")) as Partial<State>;
+    saveState({ drafts: Array.isArray(legacy.drafts) ? legacy.drafts : [], reviews: Array.isArray(legacy.reviews) ? legacy.reviews.filter((review) => review.role !== "all") : [] });
+  }
+  database.prepare("INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('legacy_state_migrated', '1')").run();
 }
 
 migrateLegacyState();
