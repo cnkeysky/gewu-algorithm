@@ -129,6 +129,7 @@ let report = "batch-report.json";
 let ensureApi = true;
 let timeoutMinutes = "60";
 let regenerate;
+let showResults = false;
 
 for (let i = 0; i < args.length; i += 1) {
   const arg = args[i];
@@ -155,6 +156,7 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--assistance") assistance = args[++i];
   else if (arg === "--report") report = args[++i];
   else if (arg === "--no-ensure-api") ensureApi = false;
+  else if (arg === "--results") showResults = true;
   else die(`unknown argument: ${arg} (run with 'help')`);
 }
 if (!command) command = isTTY ? "run" : "help";
@@ -402,7 +404,7 @@ async function doStatus() {
   }
   const summary = JSON.parse(readFileSync(reportPath, "utf8"));
   log(`last finished batch (${reportPath}): ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
-  if (args.includes("--results")) {
+  if (showResults) {
     for (const item of summary.results ?? []) {
       if (item.status === "failed" || item.status === "needs_review") {
         log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
