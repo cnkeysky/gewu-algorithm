@@ -10,6 +10,7 @@ import {
   openSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -370,6 +371,7 @@ async function doStatus() {
   const healthy = await fetchOk(apiUrl());
   log(`authoring API ${healthy ? "healthy" : "down"} at ${apiUrl()}`);
   if (healthy) {
+    writePortFile();
     try {
       const response = await fetch(apiUrl(), { signal: AbortSignal.timeout(5000) });
       const body = await response.json();
@@ -382,13 +384,23 @@ async function doStatus() {
       log("could not read live draft counts from the authoring API");
     }
   }
-  const reportPath = resolve(repo, report);
-  if (!existsSync(reportPath)) {
-    log(`no finished batch report at ${reportPath} yet`);
+  const reportCandidates = [resolve(repo, report), join(toolsDir, report)];
+  let reportPath;
+  let reportTime = 0;
+  for (const candidate of reportCandidates) {
+    if (!existsSync(candidate)) continue;
+    const mtime = statSync(candidate).mtimeMs;
+    if (mtime > reportTime) {
+      reportTime = mtime;
+      reportPath = candidate;
+    }
+  }
+  if (!reportPath) {
+    log(`no finished batch report found (${reportCandidates.join(" or ")})`);
     return;
   }
   const summary = JSON.parse(readFileSync(reportPath, "utf8"));
-  log(`last finished batch: ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
+  log(`last finished batch (${reportPath}): ${summary.total} problems — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped`);
   for (const item of summary.results ?? []) {
     if (item.status === "failed" || item.status === "needs_review") {
       log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
