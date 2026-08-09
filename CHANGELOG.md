@@ -157,6 +157,12 @@ allowed only with explicit migration notes (see
   `/api/providers`, the dev runner's prepare flow, and the batch runner all
   read the same registry; the dev flow asks for the key env var when Pi does
   not report it (zero hardcoded key-env mapping).
+- The dev runner's `prepare` works on a fresh checkout before `npm install`:
+  when the Pi package is not installed yet, any provider id is accepted with
+  generic metadata and the key env var is resolved by the standard
+  `PROVIDER_API_KEY` convention as a bridge (Pi's `findEnvKeys` takes over
+  once installed). Fixes the CI dev-runner smoke that failed at module load
+  because the top-level Pi import ran before dependencies existed.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

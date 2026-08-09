@@ -48,6 +48,7 @@ const PROVIDERS = JSON.parse(readFileSync(join(repo, "tools", "template-authorin
 const PI_ALL_PATH = pathToFileURL(join(repo, "tools", "template-authoring", "node_modules", "@earendil-works", "pi-ai", "dist", "providers", "all.js")).href;
 const PI_COMPAT_PATH = pathToFileURL(join(repo, "tools", "template-authoring", "node_modules", "@earendil-works", "pi-ai", "dist", "compat.js")).href;
 let PI_PROVIDERS = [];
+let piLoaded = false;
 try {
   const [all, compat] = await Promise.all([import(PI_ALL_PATH), import(PI_COMPAT_PATH)]);
   const names = new Map((all.builtinProviders?.() ?? []).map((provider) => [provider.id, provider.name]));
@@ -56,10 +57,16 @@ try {
     label: names.get(id) ?? id,
     keyEnv: compat.findEnvKeys?.(id)?.[0],
   }));
+  piLoaded = true;
 } catch {
-  // Pi not installed yet; relay entries in providers.json still work.
+  // Pi not installed yet (e.g. a fresh checkout running prepare before
+  // `npm install`): accept any provider id with generic metadata; after the
+  // install, the real Pi metadata is used for validation and model listing.
 }
-const providerConfig = (id) => PROVIDERS[id] ?? PI_PROVIDERS.find((provider) => provider.id === id) ?? null;
+const providerConfig = (id) =>
+  PROVIDERS[id]
+  ?? PI_PROVIDERS.find((provider) => provider.id === id)
+  ?? (piLoaded ? null : { id, label: id, keyEnv: undefined, kind: "builtin" });
 const providerIds = () => Object.keys(PROVIDERS).concat(PI_PROVIDERS.map((provider) => provider.id));
 
 const log = (message) => console.log(`\x1b[36m>>\x1b[0m ${message}`);
@@ -349,9 +356,14 @@ function writeConfig(config) {
 }
 
 function resolveKey(provider) {
-  const envVar = providerConfig(provider)?.keyEnv ?? "GEWU_LLM_API_KEY";
-  if (process.env[envVar]) return { key: process.env[envVar], source: `environment (${envVar})` };
-  if (process.env.GEWU_DEV_API_KEY) return { key: process.env.GEWU_DEV_API_KEY, source: "environment (GEWU_DEV_API_KEY)" };
+  const entry = providerConfig(provider);
+  if (entry?.keyEnv && process.env[entry.keyEnv]) return { key: process.env[entry.keyEnv], source: `environment (${entry.keyEnv})`, keyEnv: entry.keyEnv };
+  if (process.env.GEWU_DEV_API_KEY) return { key: process.env.GEWU_DEV_API_KEY, source: "environment (GEWU_DEV_API_KEY)", keyEnv: "GEWU_DEV_API_KEY" };
+  // Best-effort convention guess (`DEEPSEEK_API_KEY` for provider deepseek)
+  // used only while Pi is not installed yet (fresh checkout before npm
+  // install); once installed, Pi's findEnvKeys is authoritative.
+  const guess = `${provider.toUpperCase()}_API_KEY`;
+  if (process.env[guess]) return { key: process.env[guess], source: `environment (${guess})`, keyEnv: guess };
   return null;
 }
 
@@ -363,7 +375,7 @@ async function collectApiKey(config) {
   const resolved = resolveKey(config.provider);
   if (resolved) {
     log(`API key read from ${resolved.source}; it is not echoed or logged`);
-    return { key: resolved.key, keyEnv: providerConfig(config.provider)?.keyEnv ?? resolved.source.replace(/^environment \((.*)\)$/, "$1") };
+    return { key: resolved.key, keyEnv: resolved.keyEnv ?? providerConfig(config.provider)?.keyEnv };
   }
   let keyEnv = providerConfig(config.provider)?.keyEnv;
   if (!keyEnv) {

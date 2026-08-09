@@ -94,9 +94,6 @@ and environment variables:
 export DEEPSEEK_API_KEY=sk-...
 npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
 
-# ...or as a one-line shorthand scoped to that single command
-DEEPSEEK_API_KEY=sk-... npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
-
 # Windows PowerShell
 $env:DEEPSEEK_API_KEY = "sk-..."
 npm run dev:prepare -- --provider deepseek --model deepseek-v4-flash
@@ -176,7 +173,7 @@ the published units.
 ```sh
 npm run batch                      # interactive menu (starts the API if needed)
 npm run batch:run -- --problems tools/template-authoring/hot100.json \
-  --steps draft,generate,validate,accept --llm-approve relay:deepseek-v4-flash
+  --steps draft,generate,validate,accept
 ```
 
 **Default approval role**: the LLM acceptance gate is the decisive approver —
@@ -197,9 +194,12 @@ Non-interactive flags are supported (`run --problems FILE --steps ...`);
 `npm run batch:stop` stops the API that the script started. `batch:status`
 defaults to the actionable items (failed / needs-review / live non-accepted
 drafts) with compact first-line errors; add `--results` for the full per-item
-list of the last finished batch. `npm run batch:stop` stops the API that the
-script started (or any API listening on the remembered port; the API also
-records its own pid for this). The raw CLI still lives in
+list of the last finished batch. `batch:status` also reports whether a batch
+run is still going — **in progress** (pid + heartbeat), **interrupted** (the
+run died; leftover drafts are reused), or **not running** (the report below is
+the last finished result). `npm run batch:stop` stops the API that the script
+started (or any API listening on the remembered port; the API also records its
+own pid for this). The raw CLI still lives in
 `tools/template-authoring` (`npm run batch -- --problems FILE ...`).
 All GEWU services leave pid/port traces in `.gewu-dev/pids`, and both
 `dev:stop` and `batch:stop` sweep every port recorded there (not just the dev
@@ -213,17 +213,22 @@ When using a shared relay/proxy gateway, pass `--request-delay-ms` (e.g.
 `--request-delay-ms 2000`) to pause between LLM-backed calls and avoid
 tripping Cloudflare-style rate/security limits, and prefer
 `--concurrency 1` (the default; 2 at most) instead of parallel bursts — a
-shared relay like `api.nico.de5.net` blocks IPs that fire many requests at
-once. 5xx and JSON 403 responses are retried with backoff automatically;
-HTML 403 security blocks are not retried, and a failed generation is never
-blind-retried (retries happen inside the generator with feedback).
+shared relay blocks IPs that fire many requests at once. 5xx and JSON 403
+responses are retried with backoff automatically; HTML 403 security blocks are
+not retried, and a failed generation is never blind-retried (retries happen
+inside the generator with feedback).
 
 The CLI is problem-agnostic: any algorithm problem text works, not just
-LeetCode. Generation uses the provider/model configured on the authoring API
-(DeepSeek, OpenAI, Moonshot, Xiaomi, any model in their catalogs, or a custom
-OpenAI-compatible relay via `GEWU_LLM_BASE_URL`); switch by setting
-`GEWU_LLM_PROVIDER` / `GEWU_LLM_MODEL` and the matching API key, then restart
-the API (or re-run `npm run dev:prepare`).
+LeetCode. Generation uses the provider/model configured on the authoring API:
+**built-in providers come from the Pi package** (DeepSeek, OpenAI, Moonshot,
+Xiaomi, and everything Pi-ai ships — ids, labels, models, and key env
+conventions are Pi's, so vendor changes are handled by updating Pi), and
+**relay providers are our OpenAI-compatible extension** declared in
+`tools/template-authoring/providers.json` (a key-value mapping
+`id -> { label, keyEnv, baseUrlEnv }`; add a named relay there, set its env
+vars, and point `GEWU_LLM_PROVIDER` at it — no code changes). Switch by
+setting `GEWU_LLM_PROVIDER` / `GEWU_LLM_MODEL` and the matching API key, then
+restart the API (or re-run `npm run dev:prepare`).
 
 Duplicate protection is on by default: a problem whose accepted unit already
 covers the requested modes is skipped — in an interactive terminal you are
