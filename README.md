@@ -211,8 +211,12 @@ localhost port for the authoring API's `/api/health` signature and stop
 orphans even when no pid/port traces survive.
 When using a shared relay/proxy gateway, pass `--request-delay-ms` (e.g.
 `--request-delay-ms 2000`) to pause between LLM-backed calls and avoid
-tripping Cloudflare-style rate/security limits; 5xx and JSON 403 responses are
-retried with backoff automatically.
+tripping Cloudflare-style rate/security limits, and prefer
+`--concurrency 1` (the default; 2 at most) instead of parallel bursts — a
+shared relay like `api.nico.de5.net` blocks IPs that fire many requests at
+once. 5xx and JSON 403 responses are retried with backoff automatically;
+HTML 403 security blocks are not retried, and a failed generation is never
+blind-retried (retries happen inside the generator with feedback).
 
 The CLI is problem-agnostic: any algorithm problem text works, not just
 LeetCode. Generation uses the provider/model configured on the authoring API

@@ -113,6 +113,12 @@ test("problem library loads a published unit into the authoring form", async ({ 
   const drafts = [published, { ...draft("Draft in progress", "python", 1), status: "generated" }];
   await page.route("**/api/drafts", (route) => route.fulfill({ json: { drafts } }));
   await page.route("**/api/reviews", (route) => route.fulfill({ json: { reviews: [] } }));
+  // Loading a published unit starts a revision: the accepted draft is forked
+  // into a new editable draft instead of being reset.
+  await page.route("**/api/drafts/*/fork", (route) => {
+    const forked = { ...published, id: "forked-two-sum", status: "queued", createdAt: new Date().toISOString() };
+    return route.fulfill({ json: { draft: forked } });
+  });
   await page.goto("/");
   await page.getByRole("button", { name: "Authoring", exact: true }).click();
 

@@ -230,9 +230,13 @@ authoring pipeline for many problems. Defaults:
   without a shared slug or fingerprint cannot be auto-merged (semantic
   matching is out of scope). The web workbench warns before submitting a
   duplicate (same language + normalized statement or title).
-- **Rate limits**: gateway 429s retry with exponential backoff; use
-  `--concurrency 2` on shared relays and keep `--timeout-minutes` above the
-  slowest generation.
+- **Rate limits**: gateway 429s retry with exponential backoff; keep
+  `--concurrency 1` (the default; 2 at most) on shared relays and add
+  `--request-delay-ms 2000` so bursts do not trip Cloudflare-style security
+  blocks; keep `--timeout-minutes` above the slowest generation. HTML 403
+  security blocks are never retried, and a failed generation is not
+  blind-retried — retries happen inside the generator with validation
+  feedback, and a later run reuses the failed draft.
 
 The interactive runner `npm run batch` (scripts/gewu-batch.mjs) defaults to
 the same gate-only flow: steps default to `draft,generate,validate,accept`

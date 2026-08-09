@@ -902,6 +902,17 @@ function loadDraftIntoForm(draft: DraftRecord): void {
   submitDraft.innerHTML = `Update draft <span aria-hidden="true">&#8594;</span>`;
   renderWorkflow();
 }
+function forkDraftIntoForm(id: string): void {
+  if (!lockAction("fork", id)) return;
+  void fetch(`/api/drafts/${id}/fork`, { method: "POST" }).then(async (response) => {
+    const payload = await response.json() as { draft?: DraftRecord; error?: string };
+    if (!response.ok || !payload.draft) throw new Error(payload.error ?? "fork failed");
+    await syncFromApi();
+    loadDraftIntoForm(payload.draft);
+    notify("Revise unit: a new editable draft was created. Fix the content or adjust the modes, then Generate template.");
+    showView("new");
+  }).catch((error) => { notify(error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable.", true); }).finally(() => unlockAction("fork", id));
+}
 function renderProblemLibrary(): void {
   const list = document.querySelector<HTMLElement>("#problem-library-list");
   if (!list) return;
@@ -1397,16 +1408,7 @@ document.addEventListener("click", (event) => {
   const forkButton = target.closest<HTMLButtonElement>("[data-fork-id]");
   if (forkButton) {
     event.stopPropagation();
-    const id = forkButton.dataset.forkId;
-    if (!lockAction("fork", id)) return;
-    void fetch(`/api/drafts/${id}/fork`, { method: "POST" }).then(async (response) => {
-      const payload = await response.json() as { draft?: DraftRecord; error?: string };
-      if (!response.ok || !payload.draft) throw new Error(payload.error ?? "fork failed");
-      await syncFromApi();
-      loadDraftIntoForm(payload.draft);
-      notify("Revise unit: a new editable draft was created. Fix the content or adjust the modes, then Generate template.");
-      showView("new");
-    }).catch((error) => { notify(error instanceof Error ? `Fork failed: ${error.message}` : "Authoring API is unavailable.", true); }).finally(() => unlockAction("fork", id));
+    forkDraftIntoForm(forkButton.dataset.forkId!);
     return;
   }
   const deleteButton = target.closest<HTMLButtonElement>("[data-delete-id]");
@@ -1560,6 +1562,13 @@ document.querySelector<HTMLElement>("#problem-library-list")!.addEventListener("
   const draft = readDrafts().find((item) => item.id === row.dataset.libraryId);
   if (!draft) return;
   closeProblemLibrary();
+  // Published units are terminal: loading one into the form starts a
+  // revision (fork), so edits publish as a new revision instead of resetting
+  // the accepted draft.
+  if (draft.status === "accepted") {
+    forkDraftIntoForm(draft.id);
+    return;
+  }
   loadDraftIntoForm(draft);
   showView("new");
 });

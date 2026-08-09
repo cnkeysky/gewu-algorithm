@@ -96,6 +96,13 @@ allowed only with explicit migration notes (see
   repairs are informed instead of blind. Option validation throws a
   `UsageError` that the CLI entry point reports with exit code 2, making the
   parser unit-testable.
+- Loading a published unit into the authoring form now forks it into a new
+  editable revision draft (the accepted unit itself stays terminal), fixing
+  the regressed e2e spec and aligning the flow with the approval state
+  machine. A "Retry generation" from the failed state feeds the last backend
+  validation error back into the prompt (upstream/transport errors are
+  excluded), so retries are informed. READMEs now recommend
+  `--concurrency 1 --request-delay-ms` for shared relays.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

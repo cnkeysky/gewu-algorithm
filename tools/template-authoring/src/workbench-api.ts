@@ -210,6 +210,13 @@ async function generateDraft(
   let instruction = baseTask.instruction;
   if (draft.unitId) instruction += `\n\nThe manifest id MUST be exactly "${draft.unitId}" so this draft publishes as a new revision of that unit.`;
   if (revisionFeedback) instruction += `\n\nRevision feedback from the last LLM pre-review. Address every finding in the regenerated artifact, including the statement, implementation, and tests where relevant:\n${revisionFeedback}`;
+  // A retry from the failed state is informed by the last validation error
+  // (schema/contract assertions from the backend), but never by upstream or
+  // transport noise (403 blocks, timeouts), which would only confuse the
+  // model and waste another generation.
+  if (draft.status === "failed" && draft.error && !/stop reason error|HTTP \d{3}|<!doctype|econn|etimedout|timeout|fetch failed|socket/i.test(draft.error)) {
+    instruction += `\n\nThe previous generation failed validation. Address the reported problems and return a complete, valid artifact:\n${draft.error}`;
+  }
 
   const coreArtifact = await new PiGenerator(options).generate({
     ...baseTask,
