@@ -108,7 +108,7 @@ flags:
   --variants N      implementation strategy count (default auto: the model decides 1-3 meaningful strategies)
   --modes LIST      practice modes (default all five)
   --assistance LIST code recall assistance (default comments,cloze)
-  --report PATH     JSON report output (default batch-report.json)
+  --report PATH     JSON report output (default tools/template-authoring/batch-report.json)
   --no-ensure-api   fail instead of starting the authoring API when it is down
 
 The batch CLI defaults to all five practice modes: shadow typing, flow recall,
@@ -154,7 +154,7 @@ let variants = "0";
 let variantsGiven = false;
 let modes;
 let assistance;
-let report = "batch-report.json";
+let report = "tools/template-authoring/batch-report.json";
 let ensureApi = true;
 let timeoutMinutes = "60";
 let requestDelayMs = "0";

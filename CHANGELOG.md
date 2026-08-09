@@ -164,6 +164,10 @@ allowed only with explicit migration notes (see
   `prepare`/`start` fail with a clear "install Pi first" message instead of
   guessing. Fixes the CI dev-runner smoke that failed because the top-level
   Pi import ran before dependencies existed.
+- The batch runner's default report path is now
+  `tools/template-authoring/batch-report.json` (same as the raw CLI), so runs
+  no longer leave a second stale `batch-report.json` at the repository root.
+  `batch:status` keeps checking both locations for backward compatibility.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring
