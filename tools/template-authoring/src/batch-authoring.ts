@@ -252,6 +252,27 @@ export function publishedUnitKey(id: string, language: string): string {
   return coverageKey(normalizeIdentity(base) ?? base, language);
 }
 
+/** Merges ledger-backed published units into the accepted index so reruns on
+ * a fresh (empty) store still skip already-published problems. */
+export function mergePublishedUnits(
+  accepted: Map<string, AcceptedUnit>,
+  units: Array<{ id: string; language: string; modes: string[] }>,
+): void {
+  for (const unit of units) {
+    const language = String(unit.language ?? "python").trim() || "python";
+    const id = String(unit.id ?? "");
+    if (!id) continue;
+    const key = publishedUnitKey(id, language);
+    const modes = new Set(Array.isArray(unit.modes) ? unit.modes.map(String) : []);
+    const previous = accepted.get(key);
+    if (previous) {
+      for (const mode of modes) previous.modes.add(mode);
+    } else {
+      accepted.set(key, { draftId: `published:${id}`, unitId: id, modes });
+    }
+  }
+}
+
 /** A slug must be a stable lowercase identifier; anything else (spaces,
  * uppercase, invalid characters) falls back to statement-text identity. */
 function normalizeIdentity(value: string | undefined): string | undefined {
@@ -416,19 +437,7 @@ async function loadDraftIndexes(options: Options): Promise<DraftIndexes> {
   const publishedResult = await apiRequest(options, "GET", "/api/published-units");
   if (publishedResult.ok) {
     const publishedUnits = (publishedResult.body as { units?: Array<{ id: string; language: string; modes: string[] }> }).units ?? [];
-    for (const unit of publishedUnits) {
-      const language = String(unit.language ?? "python").trim() || "python";
-      const id = String(unit.id ?? "");
-      if (!id) continue;
-      const key = publishedUnitKey(id, language);
-      const modes = new Set(Array.isArray(unit.modes) ? unit.modes.map(String) : []);
-      const previous = accepted.get(key);
-      if (previous) {
-        for (const mode of modes) previous.modes.add(mode);
-      } else {
-        accepted.set(key, { draftId: `published:${id}`, unitId: id, modes });
-      }
-    }
+    mergePublishedUnits(accepted, publishedUnits);
   }
   return { accepted, acceptedByFingerprint, existing, existingByFingerprint };
 }

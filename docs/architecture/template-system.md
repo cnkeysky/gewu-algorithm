@@ -28,6 +28,23 @@ units/
         └── tests/
 ```
 
+## Distribution (current implementation)
+
+Generated units ship as a **content pack** rather than raw files in git:
+
+- `units/index.json` — the committed ledger: per unit, id (slug.language),
+  language, revision, practice modes, `sha256` checksum, and update time. It
+  drives batch dedup on fresh clones and is the audit/checksum record.
+- `gewu-units-<tag>.tar.gz` — the full unit content (manifests, code, tests,
+  and `reviews/summary.json` per unit), built with `npm run units:pack` and
+  attached to the GitHub release (`gh release upload`).
+- A fresh clone runs `npm run units:fetch` to download and extract the pack
+  into the local content root for practice; dedup works from the ledger alone.
+
+Each published unit carries `reviews/summary.json` (acceptance role/rationale
+plus the needs_revision history), so reviewers see the LLM/human feedback
+behind the content even when the local authoring store is empty.
+
 The manifest contains identity and structured semantics. Source code remains in normal language files so formatters, compilers, syntax highlighting, and diffs work naturally.
 
 Practice content follows the platform-independent contracts in

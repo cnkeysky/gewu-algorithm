@@ -37,10 +37,16 @@ Published content packs declare supported schema versions. Attempts preserve the
 6. Run dependency vulnerability and license checks.
 7. Build binaries for supported targets in clean environments.
 8. Package and install the VS Code extension artifact.
-9. Verify offline local practice.
-10. Verify credential redaction and local-data deletion.
-11. Verify upgrade from the previous supported release.
-12. Tag immutable source revisions and publish checksums.
+9. Regenerate and ship the published-unit content pack: run
+   `npm run units:pack` (writes `units/index.json` + `gewu-units-*.tar.gz`),
+   commit the ledger, and attach the tarball to the release
+   (`gh release upload <tag> <tarball>`). A fresh clone uses the committed
+   ledger for batch dedup and `npm run units:fetch` to pull the content.
+10. Verify offline local practice.
+11. Verify credential redaction and local-data deletion.
+12. Verify upgrade from the previous supported release.
+13. Tag immutable source revisions and publish checksums (the ledger's
+    `sha256` per unit is the content checksum).
 
 ## Versioning Policy
 

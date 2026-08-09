@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { coverageKey, defaultApproverSpec, draftKey, loadProblems, parseOptions, problemKey, reconcileResults, resolveLanguage, selectProblems } from "./batch-authoring.js";
+import { coverageKey, defaultApproverSpec, draftKey, loadProblems, mergePublishedUnits, parseOptions, problemKey, publishedUnitKey, reconcileResults, resolveLanguage, selectProblems } from "./batch-authoring.js";
 
 test("parseOptions applies defaults and overrides", () => {
   const defaults = parseOptions(["--problems", "hot100.json"]);
@@ -194,4 +194,44 @@ test("reconcileResults leaves results without a draftId untouched", () => {
   const results = [{ title: "A", status: "skipped" as const, reason: "already covered" }];
   const reconciled = reconcileResults(results, new Map([["d1", "accepted"]]));
   assert.deepEqual(reconciled, results);
+});
+
+test("publishedUnitKey maps a published unit id back to the problem+language key", () => {
+  assert.equal(publishedUnitKey("two-sum.python", "python"), problemKey({ title: "T", slug: "two-sum", problem: "P" }, "python"));
+  assert.equal(publishedUnitKey("array.two-sum.python", "python"), problemKey({ title: "T", slug: "array.two-sum", problem: "P" }, "python"));
+  assert.notEqual(publishedUnitKey("two-sum.python", "python"), publishedUnitKey("two-sum.java", "java"));
+  assert.equal(publishedUnitKey("legacy-id", "python"), coverageKey("legacy-id", "python"));
+});
+
+test("mergePublishedUnits marks published problems as covered without local drafts", () => {
+  const accepted = new Map<string, { draftId: string; unitId?: string; modes: Set<string> }>();
+  mergePublishedUnits(accepted as never, [
+    { id: "two-sum.python", language: "python", modes: ["shadow_typing", "code_recall"] },
+    { id: "two-sum.java", language: "java", modes: ["shadow_typing"] },
+  ]);
+  const pythonKey = problemKey({ title: "T", slug: "two-sum", problem: "P" }, "python");
+  const javaKey = problemKey({ title: "T", slug: "two-sum", problem: "P" }, "java");
+  assert.equal(accepted.get(pythonKey)?.draftId, "published:two-sum.python");
+  assert.equal(accepted.get(pythonKey)?.modes.has("code_recall"), true);
+  assert.equal(accepted.get(javaKey)?.unitId, "two-sum.java");
+  assert.ok(accepted.get(pythonKey) !== accepted.get(javaKey));
+  mergePublishedUnits(accepted as never, [{ id: "two-sum.python", language: "python", modes: ["flow_recall"] }]);
+  assert.equal(accepted.get(pythonKey)?.modes.has("flow_recall"), true);
+});
+
+test("the committed units ledger is well-formed for dedup and audit", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const ledgerPath = join(dirname(fileURLToPath(import.meta.url)), "../../../units/index.json");
+  const ledger = JSON.parse(readFileSync(ledgerPath, "utf8")) as { units?: Array<Record<string, unknown>> };
+  assert.ok(Array.isArray(ledger.units) && ledger.units.length > 0);
+  for (const unit of ledger.units) {
+    assert.equal(typeof unit.id, "string");
+    assert.match(unit.id as string, /^[a-z0-9][a-z0-9.-]*\.(python|java|javascript|typescript|go|cpp|rust)$/);
+    assert.equal(typeof unit.language, "string");
+    assert.equal(typeof unit.revision, "number");
+    assert.ok(Array.isArray(unit.modes) && (unit.modes as unknown[]).length > 0);
+    assert.match(String(unit.sha256 ?? ""), /^[0-9a-f]{16}$/);
+  }
 });
