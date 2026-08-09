@@ -148,6 +148,15 @@ allowed only with explicit migration notes (see
   `transfer_review` before the gate passes is documented in the gate prompt
   as expected (they are stamped after its pass), removing the
   chicken-and-egg misread.
+- Provider configuration is a declarative key-value mapping: built-in
+  providers (ids, labels, models, key env conventions) are derived from the
+  Pi package (`getBuiltinProviders` / `builtinProviders` / `findEnvKeys`), so
+  vendor changes are handled by updating Pi instead of hardcoded maps.
+  `providers.json` now holds only our OpenAI-compatible relay extension
+  (`id -> { label, keyEnv, baseUrlEnv }`); adding a named relay is data-only.
+  `/api/providers`, the dev runner's prepare flow, and the batch runner all
+  read the same registry; the dev flow asks for the key env var when Pi does
+  not report it (zero hardcoded key-env mapping).
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

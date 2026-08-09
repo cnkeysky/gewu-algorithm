@@ -41,21 +41,26 @@ let keyOverride = false;
 let selectedProvider;
 let selectedModel;
 
-const PROVIDER_ENV = {
-  deepseek: "DEEPSEEK_API_KEY",
-  openai: "OPENAI_API_KEY",
-  moonshotai: "MOONSHOT_API_KEY",
-  xiaomi: "XIAOMI_API_KEY",
-  relay: "GEWU_LLM_API_KEY",
-};
-
-const FALLBACK_MODELS = {
-  deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
-  openai: ["gpt-4o", "gpt-4o-mini"],
-  moonshotai: ["moonshot-v1-8k", "moonshot-v1-32k"],
-  xiaomi: ["MiMo-7B-RL"],
-  relay: ["deepseek-chat"],
-};
+// Relay providers come from providers.json (our OpenAI-compatible
+// extension); built-in providers are derived from the Pi package (ids,
+// labels, key env vars), so vendor changes are handled by updating Pi.
+const PROVIDERS = JSON.parse(readFileSync(join(repo, "tools", "template-authoring", "providers.json"), "utf8"));
+const PI_ALL_PATH = pathToFileURL(join(repo, "tools", "template-authoring", "node_modules", "@earendil-works", "pi-ai", "dist", "providers", "all.js")).href;
+const PI_COMPAT_PATH = pathToFileURL(join(repo, "tools", "template-authoring", "node_modules", "@earendil-works", "pi-ai", "dist", "compat.js")).href;
+let PI_PROVIDERS = [];
+try {
+  const [all, compat] = await Promise.all([import(PI_ALL_PATH), import(PI_COMPAT_PATH)]);
+  const names = new Map((all.builtinProviders?.() ?? []).map((provider) => [provider.id, provider.name]));
+  PI_PROVIDERS = (all.getBuiltinProviders?.() ?? []).map((id) => ({
+    id,
+    label: names.get(id) ?? id,
+    keyEnv: compat.findEnvKeys?.(id)?.[0],
+  }));
+} catch {
+  // Pi not installed yet; relay entries in providers.json still work.
+}
+const providerConfig = (id) => PROVIDERS[id] ?? PI_PROVIDERS.find((provider) => provider.id === id) ?? null;
+const providerIds = () => Object.keys(PROVIDERS).concat(PI_PROVIDERS.map((provider) => provider.id));
 
 const log = (message) => console.log(`\x1b[36m>>\x1b[0m ${message}`);
 const die = (message) => {
@@ -213,10 +218,9 @@ async function loadModels(provider) {
   try {
     const moduleUrl = pathToFileURL(join(repo, "tools", "template-authoring", "node_modules", "@earendil-works", "pi-ai", "dist", "providers", "all.js")).href;
     const piAi = await import(moduleUrl);
-    const models = piAi.builtinModels()?.getModels?.(provider)?.map((model) => model.id) ?? [];
-    return models.length ? models : FALLBACK_MODELS[provider] ?? [];
+    return piAi.builtinModels()?.getModels?.(provider)?.map((model) => model.id) ?? [];
   } catch {
-    return FALLBACK_MODELS[provider] ?? [];
+    return [];
   }
 }
 
@@ -228,12 +232,14 @@ function writeEnvVar(content, name, value) {
 }
 
 function readCurrentConfig() {
-  if (!existsSync(envFile)) return { provider: "deepseek", model: "deepseek-v4-flash", hasKey: false };
+  if (!existsSync(envFile)) return { provider: "deepseek", model: "deepseek-v4-flash", hasKey: false, baseUrl: "" };
   const content = readFileSync(envFile, "utf8");
+  const provider = /^GEWU_LLM_PROVIDER=(\S+)/m.exec(content)?.[1] ?? "deepseek";
+  const baseEnv = providerConfig(provider)?.baseUrlEnv ?? "GEWU_LLM_BASE_URL";
   return {
-    provider: /^GEWU_LLM_PROVIDER=(\S+)/m.exec(content)?.[1] ?? "deepseek",
+    provider,
     model: /^GEWU_LLM_MODEL=(\S+)/m.exec(content)?.[1] ?? "deepseek-v4-flash",
-    baseUrl: /^GEWU_LLM_BASE_URL=(\S+)/m.exec(content)?.[1] ?? "",
+    baseUrl: new RegExp(`^${baseEnv}=(\\S+)`, "m").exec(content)?.[1] ?? "",
     hasKey: /^[A-Z_]+_API_KEY=[^ \t]+/m.test(content),
   };
 }
@@ -241,7 +247,7 @@ function readCurrentConfig() {
 /** Collects the answers that do not depend on the installed toolchain, then execution runs. */
 async function collectConfig(starting) {
   const current = readCurrentConfig();
-  if (selectedProvider && !PROVIDER_ENV[selectedProvider]) die(`unsupported provider: ${selectedProvider} (use one of: ${Object.keys(PROVIDER_ENV).join(", ")})`);
+  if (selectedProvider && !providerConfig(selectedProvider)) die(`unsupported provider: ${selectedProvider} (use one of: ${providerIds().join(", ")})`);
 
   const reconfigure = keyOverride || Boolean(selectedProvider) || Boolean(selectedModel);
   let provider;
@@ -257,8 +263,8 @@ async function collectConfig(starting) {
       log(`using existing configuration: provider=${current.provider} model=${current.model} (API key present)`);
     } else {
       log("Have your LLM provider and model id ready (e.g., deepseek / deepseek-v4-flash).");
-      provider = await ask(`Provider [${Object.keys(PROVIDER_ENV).join("|")}] (default ${current.provider}): `, current.provider);
-      if (!PROVIDER_ENV[provider]) die(`unsupported provider: ${provider}`);
+      provider = await ask(`Provider [${providerIds().join("|")}] (default ${current.provider}): `, current.provider);
+      if (!providerConfig(provider)) die(`unsupported provider: ${provider}`);
       const models = await loadModels(provider);
       const question = models.length
         ? `Model (${models.map((id, index) => `${index + 1}: ${id}`).join(", ")}; default ${current.model}): `
@@ -275,8 +281,8 @@ async function collectConfig(starting) {
     log(`using existing configuration: provider=${current.provider} model=${current.model} (API key present)`);
   } else {
     log("Have your LLM provider and model id ready (e.g., deepseek / deepseek-v4-flash).");
-    provider = selectedProvider ?? (isTTY ? await ask(`Provider [${Object.keys(PROVIDER_ENV).join("|")}] (default ${current.provider}): `, current.provider) : current.provider);
-    if (!PROVIDER_ENV[provider]) die(`unsupported provider: ${provider}`);
+    provider = selectedProvider ?? (isTTY ? await ask(`Provider [${providerIds().join("|")}] (default ${current.provider}): `, current.provider) : current.provider);
+    if (!providerConfig(provider)) die(`unsupported provider: ${provider}`);
     if (selectedModel) {
       model = selectedModel;
     } else {
@@ -310,12 +316,14 @@ async function collectConfig(starting) {
       }
     }
   }
-  let baseUrl = process.env.GEWU_LLM_BASE_URL ?? current.baseUrl ?? "";
-  if (provider === "relay" && !baseUrl && isTTY) {
-    baseUrl = await ask("Relay endpoint base URL (e.g. https://api.example.com/v1): ", "");
+  const relayEntry = providerConfig(provider);
+  const relayBaseEnv = relayEntry?.baseUrlEnv ?? "GEWU_LLM_BASE_URL";
+  let baseUrl = process.env[relayBaseEnv] ?? current.baseUrl ?? "";
+  if (relayEntry?.kind === "relay" && !baseUrl && isTTY) {
+    baseUrl = await ask(`Relay endpoint base URL for ${provider} (e.g. https://api.example.com/v1): `, "");
   }
-  if (provider === "relay" && !baseUrl) {
-    die("relay provider requires GEWU_LLM_BASE_URL (set it in .env.local or pass it via the environment)");
+  if (relayEntry?.kind === "relay" && !baseUrl) {
+    die(`relay provider ${provider} requires ${relayBaseEnv} (set it in .env.local or pass it via the environment)`);
   }
   return { provider, model, baseUrl, keyMode, install, corePort: core, apiPort: api, webPort: web };
 }
@@ -325,11 +333,13 @@ function writeConfig(config) {
     copyFileSync(envExample, envFile);
     log(`Created ${envFile} from .env.example`);
   }
-  const envVar = PROVIDER_ENV[config.provider];
+  const entry = providerConfig(config.provider);
+  const envVar = config.keyEnv ?? entry?.keyEnv ?? "GEWU_LLM_API_KEY";
+  const baseEnv = entry?.baseUrlEnv ?? "GEWU_LLM_BASE_URL";
   let content = readFileSync(envFile, "utf8");
   content = writeEnvVar(content, "GEWU_LLM_PROVIDER", config.provider);
   content = writeEnvVar(content, "GEWU_LLM_MODEL", config.model);
-  if (config.baseUrl) content = writeEnvVar(content, "GEWU_LLM_BASE_URL", config.baseUrl);
+  if (config.baseUrl) content = writeEnvVar(content, baseEnv, config.baseUrl);
   if (config.key) content = writeEnvVar(content, envVar, config.key);
   writeFileSync(envFile, content, { mode: 0o600 });
   if (!isWin) chmodSync(envFile, 0o600);
@@ -339,10 +349,31 @@ function writeConfig(config) {
 }
 
 function resolveKey(provider) {
-  const envVar = PROVIDER_ENV[provider];
+  const envVar = providerConfig(provider)?.keyEnv ?? "GEWU_LLM_API_KEY";
   if (process.env[envVar]) return { key: process.env[envVar], source: `environment (${envVar})` };
   if (process.env.GEWU_DEV_API_KEY) return { key: process.env.GEWU_DEV_API_KEY, source: "environment (GEWU_DEV_API_KEY)" };
   return null;
+}
+
+/** Resolves the API key and its env var for a provider. The env var name
+ * comes from Pi (findEnvKeys) when the key is configured; otherwise the user
+ * supplies it — no hardcoded key-env mapping. */
+async function collectApiKey(config) {
+  if (config.keyMode !== "new") return { key: undefined, keyEnv: providerConfig(config.provider)?.keyEnv };
+  const resolved = resolveKey(config.provider);
+  if (resolved) {
+    log(`API key read from ${resolved.source}; it is not echoed or logged`);
+    return { key: resolved.key, keyEnv: providerConfig(config.provider)?.keyEnv ?? resolved.source.replace(/^environment \((.*)\)$/, "$1") };
+  }
+  let keyEnv = providerConfig(config.provider)?.keyEnv;
+  if (!keyEnv) {
+    if (!isTTY) die(`no API key env var known for ${config.provider}; export one and rerun`);
+    keyEnv = await ask(`API key environment variable for ${config.provider} (e.g. DEEPSEEK_API_KEY): `);
+    if (!/^[A-Z][A-Z0-9_]*$/.test(keyEnv)) die(`invalid env var name: ${keyEnv}`);
+  }
+  const key = await askHidden(`${keyEnv} (input hidden): `);
+  if (!key) die("API key cannot be empty");
+  return { key, keyEnv };
 }
 
 function killTree(pid) {
@@ -512,11 +543,8 @@ async function prepare() {
   log("[3/5] Building the Rust core");
   runSync(cargo, ["build", "-p", "gewu-cli"], { cwd: repo });
   log("[4/5] Writing LLM configuration");
-  const resolved = config.keyMode === "new" ? resolveKey(config.provider) : null;
-  const key = resolved ? resolved.key : config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
-  if (config.keyMode === "new" && !key) die("API key cannot be empty");
-  if (resolved) log(`API key read from ${resolved.source}; it is not echoed or logged`);
-  writeConfig({ ...config, key });
+  const { key, keyEnv } = await collectApiKey(config);
+  writeConfig({ ...config, key, keyEnv });
   log("[5/5] Setup complete");
 }
 
@@ -644,11 +672,8 @@ async function doStart() {
   log("[3/5] Building the Rust core");
   runSync(cargo, ["build", "-p", "gewu-cli"], { cwd: repo });
   log("[4/5] Writing LLM configuration");
-  const resolved = config.keyMode === "new" ? resolveKey(config.provider) : null;
-  const key = resolved ? resolved.key : config.keyMode === "new" ? await askHidden(`${PROVIDER_ENV[config.provider]} (input hidden): `) : undefined;
-  if (config.keyMode === "new" && !key) die("API key cannot be empty");
-  if (resolved) log(`API key read from ${resolved.source}; it is not echoed or logged`);
-  writeConfig({ ...config, key });
+  const { key, keyEnv } = await collectApiKey(config);
+  writeConfig({ ...config, key, keyEnv });
   log("[5/5] Ensuring services are running");
   const { corePort: core, apiPort: api, webPort: web } = config;
   mkdirSync(join(devDir, "data"), { recursive: true });

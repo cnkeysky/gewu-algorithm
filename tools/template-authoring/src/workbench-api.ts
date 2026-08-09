@@ -10,6 +10,7 @@ import { DatabaseSync } from "node:sqlite";
 import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
 import { assertDraftTransition, draftReuseGuard } from "./draft-lifecycle.js";
 import { applyContentTransition, assertPublishable, type ContentTransitionId } from "./manifest-lifecycle.js";
+import { providerRegistry } from "./provider-registry.js";
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
@@ -642,11 +643,18 @@ const server = createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/api/health") return send(response, 200, { status: "ok", storage: "local", build: BUILD_ID });
     if (request.method === "GET" && url.pathname === "/api/tasks") return send(response, 200, { tasks: builtinTaskRegistry.list().map((definition) => ({ taskId: definition.taskId, label: definition.label, taskVersion: definition.taskVersion })) });
     if (request.method === "GET" && url.pathname === "/api/providers") {
-      const providerEntries: Array<[string, string]> = [
-        ["deepseek", "DeepSeek"], ["openai", "OpenAI"], ["moonshotai", "Moonshot"], ["xiaomi", "Xiaomi MiMo"],
-      ];
-      if (process.env.GEWU_LLM_BASE_URL) providerEntries.push(["relay", "Relay"]);
-      const providers = providerEntries.map(([id, label]) => ({ id, label, models: modelCatalog.getModels(id).map((model) => model.id) }));
+      // Provider list comes from the declarative registry (providers.json):
+      // builtins route through Pi-ai, relay entries through our
+      // OpenAI-compatible relay support.
+      const providers = [...providerRegistry().values()].map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        kind: entry.kind,
+        configured: entry.kind === "builtin"
+          ? Boolean(entry.keyEnv && process.env[entry.keyEnv])
+          : Boolean(entry.baseUrlEnv && process.env[entry.baseUrlEnv]),
+        models: modelCatalog.getModels(entry.id).map((model) => model.id),
+      }));
       return send(response, 200, { providers });
     }
     const state = await loadState();

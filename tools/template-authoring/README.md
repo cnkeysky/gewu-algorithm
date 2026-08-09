@@ -77,6 +77,14 @@ OpenAI SDK fingerprint headers (`x-stainless-*`) and send a neutral user agent
 plus opencode-style `x-opencode-session` / `x-opencode-request` headers,
 because some gateways block SDK fingerprints and prefer that convention.
 
+Provider configuration is a declarative key-value mapping. Built-in
+providers (deepseek, openai, moonshotai, xiaomi, and everything Pi-ai ships)
+are **derived from the Pi package** — ids, labels, models, and key env
+conventions come from Pi, so vendor changes are handled by updating Pi.
+Relays are our OpenAI-compatible extension and live in `providers.json`
+(`id -> { label, keyEnv, baseUrlEnv }`); adding a named relay is data-only:
+add an entry, set its env vars, and point `GEWU_LLM_PROVIDER` at it.
+
 ### Generality and boundaries
 
 The relay provider is generic and configured entirely by environment
