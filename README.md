@@ -206,7 +206,9 @@ All GEWU services leave pid/port traces in `.gewu-dev/pids`, and both
 stack's three ports), so an API started by the batch runner is stopped by
 either command. The authoring API reports a build id on `/api/health`, and the
 batch runner restarts a healthy-but-stale API instead of silently reusing old
-code.
+code. As a final safety net, both stop commands probe every listening
+localhost port for the authoring API's `/api/health` signature and stop
+orphans even when no pid/port traces survive.
 When using a shared relay/proxy gateway, pass `--request-delay-ms` (e.g.
 `--request-delay-ms 2000`) to pause between LLM-backed calls and avoid
 tripping Cloudflare-style rate/security limits; 5xx and JSON 403 responses are

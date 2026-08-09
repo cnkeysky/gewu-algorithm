@@ -16,6 +16,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import readline from "node:readline";
+import { authoringApiPorts, listeningPorts } from "./gewu-services.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..");
@@ -404,7 +405,7 @@ function managedPorts() {
   return [...ports];
 }
 
-function stopAllSync() {
+async function stopAllSync() {
   log("Stopping GEWU dev processes");
   const targets = new Set();
   if (existsSync(pidDir)) {
@@ -419,7 +420,12 @@ function stopAllSync() {
       }
     }
   }
-  for (const port of managedPorts()) {
+  const ports = new Set(managedPorts());
+  for (const port of await authoringApiPorts()) {
+    ports.add(port);
+    log(`found GEWU authoring API on port ${port} (health probe)`);
+  }
+  for (const port of ports) {
     for (const pid of listenersOnPort(port)) {
       if (targets.has(pid)) continue;
       log(`stopping process ${pid} listening on port ${port}`);
@@ -433,9 +439,11 @@ function stopAllSync() {
 }
 
 async function stopAll() {
-  stopAllSync();
+  await stopAllSync();
   await new Promise((resolveWait) => setTimeout(resolveWait, 1500));
-  for (const port of managedPorts()) {
+  const ports = new Set(managedPorts());
+  for (const port of await authoringApiPorts()) ports.add(port);
+  for (const port of ports) {
     for (const pid of listenersOnPort(port)) {
       try {
         process.kill(pid, "SIGKILL");

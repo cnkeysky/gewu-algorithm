@@ -73,7 +73,10 @@ allowed only with explicit migration notes (see
   API too. It also no longer misreads `.port` files as process ids. The
   workbench API exposes a build id on `/api/health`, and the batch runner
   restarts a healthy-but-stale API instead of silently reusing old code;
-  `dev:status` includes the batch API row.
+  `dev:status` includes the batch API row. As a final safety net, `dev:stop`
+  and `batch:stop` probe every listening localhost port for the authoring
+  API's `/api/health` signature and stop orphans even when every pid/port
+  trace is gone (shared `scripts/gewu-services.mjs`).
 - `batch:status` no longer dumps raw provider errors (e.g. a full HTML error
   page from a relay gateway). Default output groups actionable items by
   status + first-line error and lists their titles; `--results` still prints

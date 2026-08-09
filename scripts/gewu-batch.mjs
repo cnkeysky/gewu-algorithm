@@ -17,6 +17,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import readline from "node:readline";
+import { authoringApiPorts } from "./gewu-services.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "..");
@@ -346,6 +347,23 @@ function stopApi() {
   }
 }
 
+/** Stops the remembered/recorded API plus any orphaned GEWU authoring API
+ * found by probing localhost for the /api/health signature. */
+async function stopAllAuthoringApis() {
+  stopApi();
+  for (const port of await authoringApiPorts()) {
+    if (String(port) === String(apiPort)) continue; // already swept
+    log(`found GEWU authoring API on port ${port} (health probe); stopping it`);
+    for (const pid of listenersOnPort(port)) {
+      try {
+        process.kill(Number(pid), "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    }
+  }
+}
+
 async function ensureApiRunning() {
   const candidates = [apiPort, ...Array.from({ length: 5 }, (_, index) => String(Number(apiPort) + 10 * (index + 1)))];
   for (const candidate of candidates) {
@@ -507,7 +525,7 @@ async function menu() {
   const options = [
     ["Run batch authoring", doRun],
     ["Status", doStatus],
-    ["Stop authoring API", () => stopApi()],
+    ["Stop authoring API", async () => { await stopAllAuthoringApis(); }],
   ];
   for (; ;) {
     console.log("\nGEWU batch authoring:");
@@ -533,7 +551,7 @@ if (command === "run") {
 } else if (command === "status") {
   doStatus().catch((error) => die(error instanceof Error ? error.message : String(error)));
 } else {
-  stopApi();
+  stopAllAuthoringApis().catch((error) => die(error instanceof Error ? error.message : String(error)));
 }
 process.on("SIGINT", () => { cleanupApi(); process.exit(130); });
 process.on("SIGTERM", () => { cleanupApi(); process.exit(143); });
