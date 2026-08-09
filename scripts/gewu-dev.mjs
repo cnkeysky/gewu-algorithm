@@ -49,24 +49,24 @@ const PI_ALL_PATH = pathToFileURL(join(repo, "tools", "template-authoring", "nod
 const PI_COMPAT_PATH = pathToFileURL(join(repo, "tools", "template-authoring", "node_modules", "@earendil-works", "pi-ai", "dist", "compat.js")).href;
 let PI_PROVIDERS = [];
 let piLoaded = false;
-try {
-  const [all, compat] = await Promise.all([import(PI_ALL_PATH), import(PI_COMPAT_PATH)]);
-  const names = new Map((all.builtinProviders?.() ?? []).map((provider) => [provider.id, provider.name]));
-  PI_PROVIDERS = (all.getBuiltinProviders?.() ?? []).map((id) => ({
-    id,
-    label: names.get(id) ?? id,
-    keyEnv: compat.findEnvKeys?.(id)?.[0],
-  }));
-  piLoaded = true;
-} catch {
-  // Pi not installed yet (e.g. a fresh checkout running prepare before
-  // `npm install`): accept any provider id with generic metadata; after the
-  // install, the real Pi metadata is used for validation and model listing.
+/** Loads Pi's built-in provider metadata. Called lazily AFTER dependencies
+ * are installed: on a fresh checkout the top level cannot import Pi yet. */
+async function loadPiProviders() {
+  if (piLoaded) return;
+  try {
+    const [all, compat] = await Promise.all([import(PI_ALL_PATH), import(PI_COMPAT_PATH)]);
+    const names = new Map((all.builtinProviders?.() ?? []).map((provider) => [provider.id, provider.name]));
+    PI_PROVIDERS = (all.getBuiltinProviders?.() ?? []).map((id) => ({
+      id,
+      label: names.get(id) ?? id,
+      keyEnv: compat.findEnvKeys?.(id)?.[0],
+    }));
+    piLoaded = true;
+  } catch {
+    // Pi is not installed; collectConfig reports it with a clear message.
+  }
 }
-const providerConfig = (id) =>
-  PROVIDERS[id]
-  ?? PI_PROVIDERS.find((provider) => provider.id === id)
-  ?? (piLoaded ? null : { id, label: id, keyEnv: undefined, kind: "builtin" });
+const providerConfig = (id) => PROVIDERS[id] ?? PI_PROVIDERS.find((provider) => provider.id === id) ?? null;
 const providerIds = () => Object.keys(PROVIDERS).concat(PI_PROVIDERS.map((provider) => provider.id));
 
 const log = (message) => console.log(`\x1b[36m>>\x1b[0m ${message}`);
@@ -253,6 +253,10 @@ function readCurrentConfig() {
 
 /** Collects the answers that do not depend on the installed toolchain, then execution runs. */
 async function collectConfig(starting) {
+  await loadPiProviders();
+  if (!piLoaded) {
+    die("the Pi package is not installed (built-in providers cannot be listed/validated); run `npm install` in tools/template-authoring first — the dev runner installs dependencies before collecting configuration");
+  }
   const current = readCurrentConfig();
   if (selectedProvider && !providerConfig(selectedProvider)) die(`unsupported provider: ${selectedProvider} (use one of: ${providerIds().join(", ")})`);
 
@@ -359,11 +363,6 @@ function resolveKey(provider) {
   const entry = providerConfig(provider);
   if (entry?.keyEnv && process.env[entry.keyEnv]) return { key: process.env[entry.keyEnv], source: `environment (${entry.keyEnv})`, keyEnv: entry.keyEnv };
   if (process.env.GEWU_DEV_API_KEY) return { key: process.env.GEWU_DEV_API_KEY, source: "environment (GEWU_DEV_API_KEY)", keyEnv: "GEWU_DEV_API_KEY" };
-  // Best-effort convention guess (`DEEPSEEK_API_KEY` for provider deepseek)
-  // used only while Pi is not installed yet (fresh checkout before npm
-  // install); once installed, Pi's findEnvKeys is authoritative.
-  const guess = `${provider.toUpperCase()}_API_KEY`;
-  if (process.env[guess]) return { key: process.env[guess], source: `environment (${guess})`, keyEnv: guess };
   return null;
 }
 
@@ -544,16 +543,17 @@ function startOne(name, list, options) {
 
 async function prepare() {
   checkPrerequisites();
-  const config = await collectConfig(false);
-  log("[2/5] Installing npm dependencies");
+  log("[1/5] Installing npm dependencies");
   await npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
   await npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
   if (installE2e) {
     log("Installing Playwright chromium (for e2e)");
     runSync(npx(), ["playwright", "install", "chromium"], { cwd: join(repo, "tools", "template-authoring", "workbench"), shell: isWin });
   }
-  log("[3/5] Building the Rust core");
+  log("[2/5] Building the Rust core");
   runSync(cargo, ["build", "-p", "gewu-cli"], { cwd: repo });
+  log("[3/5] Collecting LLM configuration");
+  const config = await collectConfig(false);
   log("[4/5] Writing LLM configuration");
   const { key, keyEnv } = await collectApiKey(config);
   writeConfig({ ...config, key, keyEnv });
@@ -675,14 +675,15 @@ process.on("SIGTERM", () => {
 
 async function doStart() {
   log("GEWU dev setup plan:");
-  log("  collect: prerequisites/deps/LLM/ports -> then run: deps -> core -> config -> services");
+  log("  deps -> core -> collect/configure LLM -> services");
   checkPrerequisites();
-  const config = await collectConfig(true);
-  log("[2/5] Installing npm dependencies");
+  log("[1/5] Installing npm dependencies");
   await npmInstall(join(repo, "tools", "template-authoring"), forceInstall);
   await npmInstall(join(repo, "tools", "template-authoring", "workbench"), forceInstall);
-  log("[3/5] Building the Rust core");
+  log("[2/5] Building the Rust core");
   runSync(cargo, ["build", "-p", "gewu-cli"], { cwd: repo });
+  log("[3/5] Collecting LLM configuration");
+  const config = await collectConfig(true);
   log("[4/5] Writing LLM configuration");
   const { key, keyEnv } = await collectApiKey(config);
   writeConfig({ ...config, key, keyEnv });
