@@ -884,6 +884,10 @@ function displayRole(role: string): string {
   return role.replaceAll("_", " ");
 }
 function loadDraftIntoForm(draft: DraftRecord): void {
+  if (draft.status === "accepted") {
+    notify("Accepted drafts are published and terminal. Use “Revise unit” to fix content or add modes.", true);
+    return;
+  }
   (document.querySelector<HTMLTextAreaElement>("#problem")!).value = draft.problem;
   (document.querySelector<HTMLInputElement>("#languages")!).value = draft.language;
   (document.querySelector<HTMLSelectElement>("#provider")!).value = draft.provider;
@@ -1579,6 +1583,10 @@ form.addEventListener("submit", async (event) => {
   }
   const problem = document.querySelector<HTMLTextAreaElement>("#problem")!.value.trim();
   const existingDraft = editingDraftId ? readDrafts().find((draft) => draft.id === editingDraftId) : undefined;
+  if (existingDraft?.status === "accepted") {
+    notify("Accepted drafts are published and terminal. Use “Revise unit” to fix content or add modes.", true);
+    return;
+  }
   const record: DraftRecord = {
     id: editingDraftId ?? crypto.randomUUID(),
     title: problem.split(/\s+/).slice(0, 3).join(" ").replace(/[^a-zA-Z0-9 -]/g, "") || "Untitled algorithm",

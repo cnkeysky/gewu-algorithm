@@ -89,6 +89,9 @@ flags:
   --concurrency N   parallel problems (default 1)
   --repair-rounds N regenerate from review feedback after needs_revision (default 1)
   --timeout-minutes N per-request timeout for LLM-backed API calls (default 60)
+  --request-delay-ms N pause between LLM-backed calls to respect gateway rate
+                    limits (default 0; relays behind Cloudflare-style security
+                    benefit from e.g. 2000)
   --regenerate LIST force regeneration for the given ids/slugs/titles
   --auto-accept     publish drafts still needing revision after repair rounds
   --llm-approve SPEC run the LLM final approval gate before publishing
@@ -153,6 +156,7 @@ let assistance;
 let report = "batch-report.json";
 let ensureApi = true;
 let timeoutMinutes = "60";
+let requestDelayMs = "0";
 let regenerate;
 let showResults = false;
 
@@ -165,6 +169,7 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--concurrency") concurrency = args[++i];
   else if (arg === "--repair-rounds") repairRounds = args[++i];
   else if (arg === "--timeout-minutes") timeoutMinutes = args[++i];
+  else if (arg === "--request-delay-ms") requestDelayMs = args[++i];
   else if (arg === "--regenerate") regenerate = args[++i];
   else if (arg === "--auto-accept") autoAccept = true;
   else if (arg === "--llm-approve") llmApprove = args[++i] ?? "deepseek:deepseek-v4-flash";
@@ -285,15 +290,25 @@ function listenersOnPort(port) {
       .map((line) => line.trim().split(/\s+/).pop())
       .filter((pid) => pid && pid !== "0");
   }
+  const bySs = spawnSync("ss", ["-ltnp"], { encoding: "utf8" });
+  for (const line of (bySs.stdout ?? "").split("\n")) {
+    if (!line.includes(`:${port}`)) continue;
+    const match = line.match(/pid=(\d+)/);
+    if (match) return [match[1]];
+  }
   const lsof = spawnSync("lsof", ["-ti", `tcp:${port}`], { encoding: "utf8" });
   return lsof.stdout.trim().split("\n").filter(Boolean);
 }
 
 function stopApi() {
-  const pid = pidOf(apiName);
-  if (pid > 0 && alive(pid)) {
-    stopPid(pid);
-    log(`stopped authoring API (pid ${pid})`);
+  // The API records its own pid on startup (api-<port>.pid), so stop works
+  // for APIs started outside this runner too; fall back to the runner pid.
+  const candidates = [pidOf(apiName), Number(readFileSync(join(pidDir, `api-${apiPort}.pid`), "utf8") || 0)];
+  for (const pid of candidates) {
+    if (pid > 0 && alive(pid)) {
+      stopPid(pid);
+      log(`stopped authoring API (pid ${pid})`);
+    }
   }
   const remaining = listenersOnPort(apiPort);
   for (const listener of remaining) {
@@ -305,6 +320,7 @@ function stopApi() {
   }
   try {
     rmSync(join(pidDir, `${apiName}.pid`), { force: true });
+    rmSync(join(pidDir, `api-${apiPort}.pid`), { force: true });
     rmSync(portFile, { force: true });
   } catch {
     // No pid file.
@@ -370,9 +386,11 @@ async function doRun() {
 
   const extraArgs = [
     "--problems", problemsPath,
+    "--api", `http://127.0.0.1:${apiPort}`,
     "--concurrency", concurrency,
     "--repair-rounds", repairRounds,
     "--timeout-minutes", timeoutMinutes,
+    "--request-delay-ms", requestDelayMs,
     "--report", resolve(repo, report),
   ];
   extraArgs.push("--steps", steps);

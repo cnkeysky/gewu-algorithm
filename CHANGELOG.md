@@ -47,6 +47,26 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- The authoring API now enforces the draft state machine on reuse/reset
+  (`PATCH /api/drafts/:id`): an accepted draft is terminal and can only be
+  revised through `/fork`, and a caller may pass `expectedStatus` so a stale or
+  concurrent client (e.g. an old batch process with an outdated index) is
+  refused with 409 instead of resetting a newer draft to `queued` and dropping
+  its artifact and reviews — the root cause of accepted drafts silently
+  reverting to queued. The batch runner passes the observed status on reuse,
+  treats a draft accepted mid-run as already covered, and reconciles the
+  finished report against the live store so it can never contradict the API.
+  The runner also forwards `--api` to the raw CLI, fixing custom-port runs.
+- `batch:stop` is more reliable: the API writes its own pid trace
+  (`.gewu-dev/pids/api-<port>.pid`) on startup so it can be stopped even when
+  it was not started by the runner, and the stop sweep uses `ss` before
+  falling back to `lsof` (matching the dev runner).
+- Batch authoring can pace itself for shared gateways: `--request-delay-ms N`
+  (or `GEWU_BATCH_REQUEST_DELAY_MS`) pauses between LLM-backed calls, and the
+  HTTP client retries JSON 403s and transient 5xx with exponential backoff
+  (HTML 403 security blocks are returned immediately so they are not
+  hammered). This avoids tripping Cloudflare-style rate/security limits on
+  relay endpoints like `api.nico.de5.net`.
 - `batch:status` no longer dumps raw provider errors (e.g. a full HTML error
   page from a relay gateway). Default output groups actionable items by
   status + first-line error and lists their titles; `--results` still prints

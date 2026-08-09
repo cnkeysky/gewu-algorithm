@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -7,6 +7,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
+import { draftReuseGuard } from "./draft-lifecycle.js";
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
@@ -588,7 +589,14 @@ const server = createServer(async (request, response) => {
     if (request.method === "PATCH" && updateMatch) {
       const draft = state.drafts.find((item) => item.id === updateMatch[1]);
       if (!draft) return send(response, 404, { error: "draft not found" });
-      const updated = draftFrom({ ...draft, ...(await body(request) as Record<string, unknown>) });
+      const payload = await body(request);
+      const expectedStatus = isRecord(payload) && typeof payload.expectedStatus === "string" ? payload.expectedStatus : undefined;
+      // Reuse/reset is a state-machine transition: refuse to clobber an
+      // accepted draft, and refuse stale clients whose observed status no
+      // longer matches (optimistic concurrency).
+      const reuseGuardError = draftReuseGuard(draft, expectedStatus);
+      if (reuseGuardError) return send(response, 409, { error: reuseGuardError, currentStatus: draft.status, expectedStatus });
+      const updated = draftFrom({ ...draft, ...(isRecord(payload) ? payload : {}) });
       updated.id = draft.id;
       updated.createdAt = draft.createdAt;
       updated.unitId = draft.unitId;
@@ -897,4 +905,14 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => console.log(`GEWU authoring API listening on http://127.0.0.1:${PORT}`));
+// Leave a pid trace for the dev scripts (gewu-batch.mjs / gewu-dev.mjs):
+// regardless of how this API was started, `batch:stop` can kill it by port
+// even when the process tree is hidden or the npm wrapper already exited.
+try {
+  const pidDir = join(resolve(here, "../../.."), ".gewu-dev", "pids");
+  mkdirSync(pidDir, { recursive: true });
+  writeFileSync(join(pidDir, `api-${PORT}.pid`), String(process.pid));
+} catch {
+  // Best effort: the dev scripts also fall back to ss/lsof by port.
+}
 void validatePublishedContent().catch((error) => console.error(`published content validation failed: ${error instanceof Error ? error.message : String(error)}`));

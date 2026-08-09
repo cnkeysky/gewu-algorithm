@@ -55,6 +55,12 @@ mirrors it. Every endpoint rejects invalid transitions:
   superior to the LLM tier;
 - `rollback` (regenerate) only from `generated`, `llm_reviewed`,
   `needs_revision`, or `failed`.
+- `PATCH` (reuse/reset to `queued`) only for non-accepted drafts: `accepted`
+  is terminal, so resetting it is refused with 409 — a unit can only be
+  revised through `/fork`. Callers may pass `expectedStatus` (the status they
+  observed) and a mismatch is also refused with 409, so a stale or concurrent
+  client (e.g. an old batch process with an outdated index) can never clobber
+  a draft that changed underneath it.
 
 ## Transitions
 
@@ -105,8 +111,10 @@ a new revision:
   the same unit id; fix the content (or extend modes), run generate →
   validate → pre-review, then accept. The new revision is published and the
   previous one stays in the unit history.
-- **Edit an accepted draft directly** (click the row, change the form, save):
-  the same unit id is preserved, so submitting publishes a new revision.
+- **Edit an accepted draft directly** is intentionally blocked: the form
+  refuses to load an accepted draft and the API rejects any reset of it. The
+  only path is **Revise unit** (fork), which preserves the unit id and creates
+  a new editable draft whose accept publishes the next revision.
 - The **audit trail** records every review and acceptance verdict, the
   approver role (`human_acceptance` / `llm_acceptance`), and the acceptance
   rationale, so who approved what is always traceable.

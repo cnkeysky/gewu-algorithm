@@ -99,6 +99,8 @@ type Options = {
   modes: string[];
   assistance: string[];
   timeoutMinutes: number;
+  /** Pause between LLM-backed API calls to stay under gateway rate limits. */
+  requestDelayMs: number;
   report: string;
 };
 
@@ -117,7 +119,7 @@ export function defaultApproverSpec(
 
 function fail(message: string): never {
   console.error(`batch-authoring: ${message}`);
-  console.error("usage: node dist/batch-authoring.js --problems <file.json|tsv> [--api url] [--steps draft,generate,validate,review,accept] [--concurrency n] [--force] [--yes] [--select id1,id2] [--repair-rounds n] [--auto-accept] [--language python] [--variants 1] [--modes ...] [--assistance ...] [--report path]");
+  console.error("usage: node dist/batch-authoring.js --problems <file.json|tsv> [--api url] [--steps draft,generate,validate,review,accept] [--concurrency n] [--force] [--yes] [--select id1,id2] [--repair-rounds n] [--auto-accept] [--language python] [--variants 1] [--modes ...] [--assistance ...] [--request-delay-ms n] [--report path]");
   process.exit(2);
 }
 
@@ -145,6 +147,8 @@ export function parseOptions(args: string[]): Options {
   const assistance = optionValue(args, "--assistance")?.split(",").map((item) => item.trim()) ?? [...ALL_ASSISTANCE];
   const timeoutMinutes = Number(optionValue(args, "--timeout-minutes") ?? process.env.GEWU_BATCH_TIMEOUT_MINUTES ?? "60");
   if (!Number.isInteger(timeoutMinutes) || timeoutMinutes < 1) fail("--timeout-minutes must be a positive integer");
+  const requestDelayMs = Number(optionValue(args, "--request-delay-ms") ?? process.env.GEWU_BATCH_REQUEST_DELAY_MS ?? "0");
+  if (!Number.isInteger(requestDelayMs) || requestDelayMs < 0) fail("--request-delay-ms must be a non-negative integer");
   const selectValue = optionValue(args, "--select");
   const regenerateValue = optionValue(args, "--regenerate");
   return {
@@ -169,6 +173,7 @@ export function parseOptions(args: string[]): Options {
     modes,
     assistance,
     timeoutMinutes,
+    requestDelayMs,
     report: optionValue(args, "--report") ?? "batch-report.json",
   };
 }
@@ -263,15 +268,20 @@ export function resolveLanguage(
 
 type ApiResult = { ok: true; status: number; body: unknown } | { ok: false; status: number; body: unknown };
 
+/** LLM-backed authoring endpoints (the ones that hit the upstream gateway). */
+const LLM_BACKED_PATH = /\/generate$|\/acceptance$|\/accept$|\/reviews$/;
+
 async function apiRequest(options: Options, method: string, path: string, payload?: unknown): Promise<ApiResult> {
   // node:http has no internal header/body timeouts (undici's fetch drops
   // connections that take more than ~5 minutes to respond, which LLM-backed
   // authoring requests routinely exceed). The AbortSignal below is the only
   // bound, driven by --timeout-minutes.
   const url = new URL(`${options.api}${path}`);
-  // Gateway rate limits (429) are retried with exponential backoff: shared
-  // relays throttle concurrent LLM-backed requests, and a hard failure would
-  // waste the whole generation.
+  // Pace LLM-backed calls (--request-delay-ms): shared relays trip Cloudflare
+  // style rate/security limits when requests burst, so space them out.
+  if (options.requestDelayMs > 0 && LLM_BACKED_PATH.test(path)) {
+    await new Promise((settle) => setTimeout(settle, options.requestDelayMs));
+  }
   for (let attempt = 1; ; attempt += 1) {
     const result = await new Promise<ApiResult>((resolveRequest, rejectRequest) => {
       const req = httpRequest(url, {
@@ -292,8 +302,16 @@ async function apiRequest(options: Options, method: string, path: string, payloa
       if (payload !== undefined) req.write(JSON.stringify(payload));
       req.end();
     });
-    if (result.status !== 429 || attempt >= 6) return result;
-    const waitMs = Math.min(60_000, 5_000 * 2 ** (attempt - 1));
+    // Gateway rate limits (429) and transient 5xx are retried with
+    // exponential backoff; a JSON 403 (quota/access style) gets one short
+    // retry. HTML 403 responses are security blocks (e.g. Cloudflare) and are
+    // returned immediately — retrying them only extends the block.
+    const body = result.body;
+    const htmlBlock = result.status === 403 && typeof body === "string" && body.trim().startsWith("<");
+    const retryable = !htmlBlock && (result.status === 429 || (result.status >= 500 && result.status < 600) || (result.status === 403 && attempt < 2));
+    if (!retryable || attempt >= 5) return result;
+    const baseMs = result.status === 429 ? 5_000 : 2_000;
+    const waitMs = Math.min(60_000, baseMs * 2 ** (attempt - 1));
     await new Promise((settle) => setTimeout(settle, waitMs));
   }
 }
@@ -389,6 +407,31 @@ type ItemResult = {
   repairRoundsUsed?: number;
 };
 
+/**
+ * Reconciles the run's bookkeeping with the store's final state so the
+ * report never contradicts the authoring API: a draft that was accepted here
+ * but no longer is (concurrent/stale clobbering) is reported as failed, and a
+ * draft accepted in the store during the run is reported as accepted.
+ */
+export function reconcileResults(results: ItemResult[], statusById: Map<string, string>): ItemResult[] {
+  return results.map((result) => {
+    if (!result.draftId) return result;
+    const storeStatus = statusById.get(result.draftId);
+    if (!storeStatus) return result;
+    if (result.status === "accepted" && storeStatus !== "accepted") {
+      return {
+        ...result,
+        status: "failed",
+        error: `state divergence: the run accepted this draft but the store now has ${storeStatus}; re-run to regenerate it`,
+      };
+    }
+    if (result.status !== "accepted" && storeStatus === "accepted") {
+      return { ...result, status: "accepted", error: undefined, reason: "accepted in the store during or after this run" };
+    }
+    return result;
+  });
+}
+
 async function runReviews(options: Options, draftId: string): Promise<{ verdicts: Record<string, string>; allPassed: boolean }> {
   // Fire all roles concurrently: the workbench API requires the draft to be in
   // "validated" state per request, and a single failing role flips it to
@@ -409,6 +452,14 @@ async function runReviews(options: Options, draftId: string): Promise<{ verdicts
   }
   if (firstError) throw new Error(firstError);
   return { verdicts, allPassed: Object.values(verdicts).every((verdict) => verdict === "pass") };
+}
+
+/** Re-fetches one draft's current status from the store. */
+async function recheckDraftStatus(options: Options, draftId: string): Promise<string | undefined> {
+  const result = await apiRequest(options, "GET", "/api/drafts");
+  if (!result.ok) return undefined;
+  const drafts = (result.body as { drafts?: Array<{ id: string; status: string }> }).drafts ?? [];
+  return drafts.find((draft) => draft.id === draftId)?.status;
 }
 
 async function processProblem(
@@ -481,6 +532,9 @@ async function processProblem(
       // creating a duplicate entry on every re-run.
       const existing = indexes.existing.get(key) ?? indexes.existingByFingerprint.get(fingerprintKey);
       if (existing) {
+        // Optimistic concurrency: the index is a snapshot, so a draft may have
+        // changed (or been accepted) since it was loaded. The server refuses
+        // the reuse when the observed status no longer matches.
         const patch = await apiRequest(options, "PATCH", `/api/drafts/${existing.id}`, {
           title: problem.title,
           problem: problem.problem,
@@ -491,8 +545,15 @@ async function processProblem(
           variants: options.variants,
           modes: options.modes,
           assistance: options.modes.includes("code_recall") ? options.assistance : [],
+          expectedStatus: existing.status,
         });
-        if (!patch.ok) return { ...base, status: "failed", error: `reuse update: ${draftError(patch)}` };
+        if (!patch.ok) {
+          const currentStatus = await recheckDraftStatus(options, existing.id);
+          if (currentStatus === "accepted") {
+            return { ...base, status: "skipped", reason: `already covered by accepted unit (draft ${existing.id.slice(0, 8)} was accepted during this run)` };
+          }
+          return { ...base, status: "failed", error: `reuse update: ${draftError(patch)}` };
+        }
         draftId = existing.id;
         base.draftSource = `reused ${existing.id.slice(0, 8)} (was ${existing.status})`;
       } else {
@@ -708,14 +769,31 @@ async function main(): Promise<void> {
   });
   await Promise.all(workers);
 
+  // The report must reflect the store, not just this process's bookkeeping:
+  // a concurrent or stale client can change states mid-run, so verify each
+  // processed draft's final status before writing the report.
+  let statusById = new Map<string, string>();
+  try {
+    const draftsResult = await apiRequest(options, "GET", "/api/drafts");
+    if (draftsResult.ok) {
+      statusById = new Map((draftsResult.body as { drafts?: Array<{ id: string; status: string }> }).drafts?.map((draft) => [draft.id, String(draft.status ?? "")]) ?? []);
+    }
+  } catch {
+    // Reconciliation is best-effort; the report falls back to CLI bookkeeping.
+  }
+  const reconciled = reconcileResults(results, statusById);
+  const diverged = reconciled.filter((result, index) => result.status !== results[index].status);
+  if (diverged.length > 0) {
+    console.log(`batch-authoring: reconciled ${diverged.length} result(s) against the store (report now matches live draft states)`);
+  }
   const summary = {
     generatedAt: new Date().toISOString(),
     total: problems.length,
-    accepted: results.filter((result) => result.status === "accepted").length,
-    needsReview: results.filter((result) => result.status === "needs_review").length,
-    failed: results.filter((result) => result.status === "failed").length,
-    skipped: results.filter((result) => result.status === "skipped").length,
-    results,
+    accepted: reconciled.filter((result) => result.status === "accepted").length,
+    needsReview: reconciled.filter((result) => result.status === "needs_review").length,
+    failed: reconciled.filter((result) => result.status === "failed").length,
+    skipped: reconciled.filter((result) => result.status === "skipped").length,
+    results: reconciled,
   };
   await writeFile(resolve(options.report), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
   console.log(`batch-authoring: done — ${summary.accepted} accepted, ${summary.needsReview} need review, ${summary.failed} failed, ${summary.skipped} skipped. Report: ${options.report}`);

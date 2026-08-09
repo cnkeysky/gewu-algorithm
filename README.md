@@ -197,8 +197,14 @@ Non-interactive flags are supported (`run --problems FILE --steps ...`);
 `npm run batch:stop` stops the API that the script started. `batch:status`
 defaults to the actionable items (failed / needs-review / live non-accepted
 drafts) with compact first-line errors; add `--results` for the full per-item
-list of the last finished batch. The raw CLI still lives in
+list of the last finished batch. `npm run batch:stop` stops the API that the
+script started (or any API listening on the remembered port; the API also
+records its own pid for this). The raw CLI still lives in
 `tools/template-authoring` (`npm run batch -- --problems FILE ...`).
+When using a shared relay/proxy gateway, pass `--request-delay-ms` (e.g.
+`--request-delay-ms 2000`) to pause between LLM-backed calls and avoid
+tripping Cloudflare-style rate/security limits; 5xx and JSON 403 responses are
+retried with backoff automatically.
 
 The CLI is problem-agnostic: any algorithm problem text works, not just
 LeetCode. Generation uses the provider/model configured on the authoring API

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { coverageKey, defaultApproverSpec, draftKey, loadProblems, parseOptions, problemKey, resolveLanguage, selectProblems } from "./batch-authoring.js";
+import { coverageKey, defaultApproverSpec, draftKey, loadProblems, parseOptions, problemKey, reconcileResults, resolveLanguage, selectProblems } from "./batch-authoring.js";
 
 test("parseOptions applies defaults and overrides", () => {
   const defaults = parseOptions(["--problems", "hot100.json"]);
@@ -23,11 +23,13 @@ test("parseOptions applies defaults and overrides", () => {
   assert.deepEqual(defaults.creatorModels, []);
   assert.deepEqual(defaults.modes, ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"]);
   assert.deepEqual(defaults.assistance, ["comments", "cloze"]);
+  assert.equal(defaults.requestDelayMs, 0);
 
   const custom = parseOptions([
     "--problems", "hot100.json", "--api", "http://127.0.0.1:9999/",
     "--steps", "generate,review", "--concurrency", "4", "--resume",
     "--force", "--yes", "--select", "two-sum,3sum", "--repair-rounds", "2", "--auto-accept", "--language", "java",
+    "--request-delay-ms", "2000",
     "--variants", "2", "--llm-approve", "openai:gpt-4.1", "--creator-models", "deepseek:deepseek-v4-flash,openai:gpt-4.1", "--modes", "shadow_typing,code_recall", "--assistance", "comments",
   ]);
   assert.equal(custom.api, "http://127.0.0.1:9999");
@@ -46,6 +48,7 @@ test("parseOptions applies defaults and overrides", () => {
   assert.equal(custom.variants, 2);
   assert.deepEqual(custom.modes, ["shadow_typing", "code_recall"]);
   assert.deepEqual(custom.assistance, ["comments"]);
+  assert.equal(custom.requestDelayMs, 2000);
 });
 
 test("loadProblems parses JSON arrays and TSV", async () => {
@@ -162,4 +165,26 @@ test("language is part of identity: python and java stay separate units", () => 
     problemKey({ title: "T1", slug: "two-sum", problem: "P1" }, "python"),
     problemKey({ title: "T2", slug: "two-sum", problem: "P2" }, "python"),
   );
+});
+
+test("reconcileResults downgrades accepted results that the store no longer has", () => {
+  const results = [
+    { title: "A", status: "accepted" as const, draftId: "d1" },
+    { title: "B", status: "accepted" as const, draftId: "d2" },
+    { title: "C", status: "failed" as const, draftId: "d3", error: "upstream 403" },
+    { title: "D", status: "skipped" as const },
+  ];
+  const reconciled = reconcileResults(results, new Map([["d1", "queued"], ["d2", "accepted"], ["d3", "accepted"]]));
+  assert.equal(reconciled[0].status, "failed");
+  assert.match(reconciled[0].error ?? "", /state divergence/);
+  assert.equal(reconciled[1].status, "accepted");
+  assert.equal(reconciled[2].status, "accepted");
+  assert.equal(reconciled[2].reason, "accepted in the store during or after this run");
+  assert.equal(reconciled[3].status, "skipped");
+});
+
+test("reconcileResults leaves results without a draftId untouched", () => {
+  const results = [{ title: "A", status: "skipped" as const, reason: "already covered" }];
+  const reconciled = reconcileResults(results, new Map([["d1", "accepted"]]));
+  assert.deepEqual(reconciled, results);
 });
