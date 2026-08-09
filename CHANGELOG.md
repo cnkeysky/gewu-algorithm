@@ -47,6 +47,10 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Document the decisive LLM acceptance gate in the approval flow: a pass
+  publishes with the **LLM approved** label from `validated` /
+  `llm_reviewed` / `needs_revision`, the pre-review roles are advisory for
+  that path, and human approval remains the superior upgrade tier.
 - The LLM acceptance gate is decisive: a passing `llm_acceptance` review
   publishes the unit with the **LLM approved** label without any human step,
   even when advisory pre-review roles found issues; the acceptance endpoint

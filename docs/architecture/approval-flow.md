@@ -39,9 +39,16 @@ mirrors it. Every endpoint rejects invalid transitions:
   error (the backend is the source of truth; the UI only mirrors it);
 - `reviews` only from `validated` (or `needs_revision` while completing the
   remaining roles for the same artifact);
-- `accept` only from `llm_reviewed`, `needs_revision` with an explicit
-  `override` plus rationale, `validated` with a human revision, or the human
-  upgrade of an already-`accepted` unit;
+- `acceptance` (LLM acceptance gate) from any artifact whose status is
+  `validated` / `llm_reviewed` / `needs_revision`; a **pass** is decisive —
+  the draft publishes with the **LLM approved** label and no human step, and
+  the audit trail records `llm_acceptance` with the gate's rationale. The
+  pre-review roles are advisory for this path; the gate reads the artifact and
+  any findings itself;
+- `accept` without the gate only from `llm_reviewed`, `needs_revision` with an
+  explicit `override` plus rationale, or `validated` with a human revision;
+  the human upgrade of an already-`accepted` unit is always allowed and is
+  superior to the LLM tier;
 - `rollback` (regenerate) only from `generated`, `llm_reviewed`,
   `needs_revision`, or `failed`.
 
@@ -59,6 +66,7 @@ queued ──generate──▶ generated ──validate──▶ validated ─�
    └──── regenerate ── revision_requested
 
 llm_reviewed / needs_revision ──accept──▶ accepted (published)
+validated / llm_reviewed / needs_revision ──LLM acceptance gate (pass)──▶ accepted (LLM approved)
 accepted ──human upgrade──▶ Human approved   (human > llm; rationale recorded)
 accepted ──fork (Extend unit)──▶ new draft ──fix──▶ accept ──▶ new revision (r2)
 
@@ -74,7 +82,10 @@ failed ──delete──▶ (removed)
 1. **LLM approved** — the lowest approval tier. It means either the pre-review
    content gate passed (`llm_reviewed`) or an automated acceptance gate
    published the unit (`llm_acceptance` recorded in the audit trail). An
-   LLM-approved published unit is not final.
+   LLM-approved published unit is not final. The acceptance gate requires a
+   Rust-validated artifact, reads the artifact and any advisory pre-review
+   findings itself, and its pass is decisive for publication — the pre-review
+   roles are not a prerequisite for this path.
 2. **Human approved** — the final tier. A human can upgrade an
    LLM-approved published unit by recording an explicit `human_acceptance`
    review with a rationale; the unit stays published and its label changes
