@@ -694,8 +694,11 @@ const server = createServer(async (request, response) => {
       // The LLM acceptance gate is decisive: a passing llm_acceptance review
       // for the current artifact publishes with the LLM label without any
       // human step, even when advisory pre-review roles found issues.
+      // Any artifact-changing operation clears reviews, so a passing
+      // llm_acceptance review always corresponds to the current artifact even
+      // when no pre-review ran and the acceptance review has no artifact hash.
       const llmAcceptancePass = acceptanceRole === "llm_acceptance"
-        && state.reviews.some((review) => review.draftId === draft.id && review.role === "llm_acceptance" && review.verdict === "pass" && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
+        && state.reviews.some((review) => review.draftId === draft.id && review.role === "llm_acceptance" && review.verdict === "pass");
       if (!llmAcceptancePass) {
         const humanEdited = state.reviews.some((review) => review.draftId === draft.id && review.role === "human_revision" && review.verdict === "pass");
         if (!["llm_reviewed", "needs_revision"].includes(draft.status) && !(draft.status === "validated" && humanEdited)) {
@@ -707,7 +710,8 @@ const server = createServer(async (request, response) => {
           return send(response, 409, { error: "a passing pre-review for the current artifact is required before human acceptance; send {override:true, rationale} only after explicit human review" });
         }
       }
-      const existingAcceptance = state.reviews.some((review) => review.draftId === draft.id && review.role === acceptanceRole && review.artifactHash && review.artifactHash === latestArtifactHash(state.reviews, draft.id));
+      const existingAcceptance = state.reviews.some((review) => review.draftId === draft.id && review.role === acceptanceRole
+        && (acceptanceRole === "llm_acceptance" ? review.verdict === "pass" : Boolean(review.artifactHash) && review.artifactHash === latestArtifactHash(state.reviews, draft.id)));
       // Record the acceptance review on every approval path (normal or
       // override) so the audit trail always shows who approved and why, and
       // the draft never falls back to the neutral "Approved" label.
