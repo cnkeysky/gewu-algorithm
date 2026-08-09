@@ -58,3 +58,22 @@ export function sourcePathFor(language: string): string {
 export function testPathFor(language: string): string {
   return `tests/${language}_test.${languageExtension(language)}`;
 }
+
+export interface ReviewSummaryEntry {
+  role: string;
+  verdict: string;
+  rationale?: string;
+  at?: string;
+}
+
+/** Distills an audit summary for a published unit so the content pack keeps
+ * the LLM/human review feedback: the final acceptance (llm_acceptance /
+ * human_acceptance pass) and the needs_revision/reject history that led to
+ * it. A fresh clone can then review why the unit was approved. */
+export function buildReviewSummary(reviews: ReviewSummaryEntry[]): { acceptance?: ReviewSummaryEntry; history: ReviewSummaryEntry[] } {
+  const acceptance = [...reviews]
+    .reverse()
+    .find((review) => (review.role === "llm_acceptance" || review.role === "human_acceptance") && review.verdict === "pass");
+  const history = reviews.filter((review) => review.verdict === "needs_revision" || review.verdict === "reject");
+  return { acceptance, history };
+}

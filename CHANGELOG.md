@@ -168,6 +168,16 @@ allowed only with explicit migration notes (see
   `tools/template-authoring/batch-report.json` (same as the raw CLI), so runs
   no longer leave a second stale `batch-report.json` at the repository root.
   `batch:status` keeps checking both locations for backward compatibility.
+- Published units ship as a **content pack**: the repository commits a compact
+  ledger `units/index.json` (id, language, revision, modes, sha256) used for
+  batch dedup and audit, while the full content is packaged into a release
+  artifact (`npm run units:pack` -> tar.gz -> `gh release upload`; a fresh
+  clone runs `npm run units:fetch`). Each published unit carries
+  `reviews/summary.json` with the acceptance rationale and needs_revision
+  history, so the LLM/human review feedback survives the sync. The web Units
+  page merges `/api/published-units` (ledger-backed) with local accepted
+  drafts, and batch reruns skip problems already covered by a published unit
+  even on an empty store.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

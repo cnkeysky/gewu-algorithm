@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -14,7 +14,7 @@ import { providerRegistry } from "./provider-registry.js";
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
-import { normalizeSupersedes, qualifyUnitId, sourcePathFor, testPathFor } from "./publish.js";
+import { buildReviewSummary, normalizeSupersedes, qualifyUnitId, sourcePathFor, testPathFor } from "./publish.js";
 import { casUpsertDraft, releaseClaim, tryAcquireClaim, upsertDraft, upsertReview } from "./persist.js";
 import {
   STAGE_SPECS,
@@ -474,7 +474,7 @@ async function readArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Promis
   return { draft, files, reviews: reports };
 }
 
-async function publishArtifact(draft: DraftRecord): Promise<string> {
+async function publishArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Promise<string> {
   if (!publishedRoot) throw new Error("publishing is not configured; set GEWU_PUBLISHED_ROOT");
   const source = artifactAbsolutePath(draft);
   const manifest = JSON.parse(await readFile(join(source, "unit.json"), "utf8")) as Record<string, unknown>;
@@ -510,6 +510,18 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
   await rm(destination, { recursive: true, force: true });
   await cp(source, destination, { recursive: true, filter: (path) => !path.includes(`${resolve(source, "reviews")}`) });
   await writeFile(join(destination, "unit.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  // The content pack carries the audit summary (acceptance rationale + the
+  // needs_revision history), so reviewers on a fresh clone see the LLM/human
+  // feedback behind each published unit.
+  const summary = buildReviewSummary(reviews.map((review) => ({
+    role: review.role,
+    verdict: review.verdict,
+    rationale: review.rationale,
+    at: review.createdAt,
+  })));
+  const publishedReviewsDir = join(destination, "reviews");
+  await mkdir(publishedReviewsDir, { recursive: true });
+  await writeFile(join(publishedReviewsDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
   try {
     await validateArtifactWithRust(destination, false);
   } catch (error) {
@@ -656,6 +668,67 @@ const server = createServer(async (request, response) => {
         models: modelCatalog.getModels(entry.id).map((model) => model.id),
       }));
       return send(response, 200, { providers });
+    }
+    if (request.method === "GET" && url.pathname === "/api/published-units") {
+      // Published units are the batch dedup source on fresh clones: the local
+      // store may be empty, so the committed ledger (units/index.json) is the
+      // authoritative "what is published" record — dedup works even before
+      // the content pack is fetched. Fall back to scanning the content root
+      // when the ledger is missing (legacy setups).
+      const units: Array<{ id: string; title: string; language: string; revision: number; modes: string[]; updatedAt: string }> = [];
+      const ledgerPath = join(resolve(here, "../../.."), "units", "index.json");
+      if (existsSync(ledgerPath)) {
+        try {
+          const ledger = JSON.parse(await readFile(ledgerPath, "utf8")) as { units?: Array<Record<string, unknown>> };
+          if (Array.isArray(ledger.units)) {
+            for (const entry of ledger.units) {
+              if (!isRecord(entry) || typeof entry.id !== "string") continue;
+              units.push({
+                id: entry.id,
+                title: typeof entry.title === "string" ? entry.title : entry.id,
+                language: typeof entry.language === "string" && entry.language ? entry.language : "python",
+                revision: Number(entry.revision ?? 1),
+                modes: Array.isArray(entry.modes) ? entry.modes.map(String) : [],
+                updatedAt: typeof entry.updatedAt === "string" ? entry.updatedAt : "",
+              });
+            }
+            return send(response, 200, { units });
+          }
+        } catch {
+          // Fall through to scanning the content root.
+        }
+      }
+      if (existsSync(publishedRoot)) {
+        for (const entry of await readdir(publishedRoot, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const unitDir = join(publishedRoot, entry.name);
+          let latestRevision = 0;
+          let latestDir = "";
+          for (const revision of await readdir(unitDir, { withFileTypes: true })) {
+            const match = /^r(\d+)$/.exec(revision.name);
+            if (revision.isDirectory() && match && Number(match[1]) > latestRevision) {
+              latestRevision = Number(match[1]);
+              latestDir = revision.name;
+            }
+          }
+          if (!latestDir) continue;
+          try {
+            const manifest = JSON.parse(await readFile(join(unitDir, latestDir, "unit.json"), "utf8")) as Record<string, unknown>;
+            const practice = isRecord(manifest.practice) ? manifest.practice : {};
+            units.push({
+              id: typeof manifest.id === "string" ? manifest.id : entry.name,
+              title: typeof manifest.title === "string" ? manifest.title : entry.name,
+              language: typeof manifest.language === "string" && manifest.language ? manifest.language : "python",
+              revision: latestRevision,
+              modes: Object.keys(practice),
+              updatedAt: statSync(join(unitDir, latestDir)).mtime.toISOString(),
+            });
+          } catch {
+            // An unreadable unit must not block the list; skip it.
+          }
+        }
+      }
+      return send(response, 200, { units });
     }
     const state = await loadState();
     if (request.method === "GET" && url.pathname === "/api/drafts") return send(response, 200, { drafts: state.drafts });
@@ -873,7 +946,7 @@ const server = createServer(async (request, response) => {
       // review is the human's); stamping before publish is fail-hard, and
       // publish itself refuses an unstamped manifest.
       stampManifestWith(draft, "acceptance_gate_pass");
-      const publishedPath = await publishArtifact(draft);
+      const publishedPath = await publishArtifact(draft, state.reviews);
       draft.status = "accepted";
       draft.publishedPath = publishedPath;
       const idMatch = /\/published\/([^/]+)\/r\d+$/.exec(publishedPath);

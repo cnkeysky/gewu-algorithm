@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeSupersedes, qualifyUnitId } from "./publish.js";
+import { buildReviewSummary, normalizeSupersedes, qualifyUnitId } from "./publish.js";
 
 test("a first revision can never supersede itself", () => {
   const supersedes = normalizeSupersedes([{ revision: 1, reason: "fix" }], 1);
@@ -46,4 +46,23 @@ test("qualifyUnitId falls back for invalid base or language", () => {
   assert.equal(qualifyUnitId(undefined, "python"), "unit.python");
   assert.equal(qualifyUnitId("NOT A SLUG", "python"), "unit.python");
   assert.equal(qualifyUnitId("array.two-sum", "Py Thon"), "array.two-sum.python");
+});
+
+test("buildReviewSummary picks the final acceptance and the revision history", () => {
+  const reviews = [
+    { role: "algorithm_correctness", verdict: "needs_revision", rationale: "wrong bound", at: "t1" },
+    { role: "llm_acceptance", verdict: "needs_revision", rationale: "placeholder source", at: "t2" },
+    { role: "llm_acceptance", verdict: "pass", rationale: "fixed and complete", at: "t3" },
+  ];
+  const summary = buildReviewSummary(reviews);
+  assert.deepEqual(summary.acceptance, { role: "llm_acceptance", verdict: "pass", rationale: "fixed and complete", at: "t3" });
+  assert.equal(summary.history.length, 2);
+  assert.deepEqual(summary.history[0], { role: "algorithm_correctness", verdict: "needs_revision", rationale: "wrong bound", at: "t1" });
+  assert.deepEqual(summary.history[1], { role: "llm_acceptance", verdict: "needs_revision", rationale: "placeholder source", at: "t2" });
+});
+
+test("buildReviewSummary tolerates reviews without an acceptance yet", () => {
+  const summary = buildReviewSummary([{ role: "algorithm_correctness", verdict: "needs_revision", rationale: "x" }]);
+  assert.equal(summary.acceptance, undefined);
+  assert.equal(summary.history.length, 1);
 });

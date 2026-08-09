@@ -244,6 +244,14 @@ export function draftKey(draft: { slug?: string; problem: string }, language: st
   return coverageKey(normalizeIdentity(draft.slug) ?? textIdentity(draft.problem), language);
 }
 
+/** Dedup identity for a published unit: the unit id is `<slug>.<language>`
+ * (ADR 0019), so stripping the language suffix yields the same key the batch
+ * uses for a problem with that slug + language. */
+export function publishedUnitKey(id: string, language: string): string {
+  const base = id.endsWith(`.${language}`) ? id.slice(0, id.length - language.length - 1) : id;
+  return coverageKey(normalizeIdentity(base) ?? base, language);
+}
+
 /** A slug must be a stable lowercase identifier; anything else (spaces,
  * uppercase, invalid characters) falls back to statement-text identity. */
 function normalizeIdentity(value: string | undefined): string | undefined {
@@ -401,6 +409,27 @@ async function loadDraftIndexes(options: Options): Promise<DraftIndexes> {
       if (!existingByFingerprint.has(fingerprintKey)) existingByFingerprint.set(fingerprintKey, { id: draft.id, status: String(draft.status ?? "") });
     }
   }
+  // Published units are a dedup source on fresh clones: the local store may
+  // be empty, but the committed ledger (units/index.json) knows which
+  // problems are already covered. Merging them into the accepted index means
+  // reruns skip them instead of regenerating duplicates.
+  const publishedResult = await apiRequest(options, "GET", "/api/published-units");
+  if (publishedResult.ok) {
+    const publishedUnits = (publishedResult.body as { units?: Array<{ id: string; language: string; modes: string[] }> }).units ?? [];
+    for (const unit of publishedUnits) {
+      const language = String(unit.language ?? "python").trim() || "python";
+      const id = String(unit.id ?? "");
+      if (!id) continue;
+      const key = publishedUnitKey(id, language);
+      const modes = new Set(Array.isArray(unit.modes) ? unit.modes.map(String) : []);
+      const previous = accepted.get(key);
+      if (previous) {
+        for (const mode of modes) previous.modes.add(mode);
+      } else {
+        accepted.set(key, { draftId: `published:${id}`, unitId: id, modes });
+      }
+    }
+  }
   return { accepted, acceptedByFingerprint, existing, existingByFingerprint };
 }
 
@@ -518,7 +547,8 @@ async function processProblem(
     if (!options.steps.has("draft")) fail("draft step must be enabled to resolve a draft id");
 
     let draftId: string;
-    if (accepted !== undefined && (options.force || duplicatePolicy === "force" || !covered)) {
+    const publishedSource = accepted !== undefined && String(accepted.draftId).startsWith("published:");
+    if (accepted !== undefined && !publishedSource && (options.force || duplicatePolicy === "force" || !covered)) {
       // Regenerate or extend the existing unit as a new revision.
       const fork = await apiRequest(options, "POST", `/api/drafts/${accepted.draftId}/fork`);
       if (!fork.ok) return { ...base, status: "failed", error: `fork: ${draftError(fork)}` };

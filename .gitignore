@@ -74,5 +74,9 @@ Thumbs.db
 .gewu-dev/
 batch-report.json
 
+# Published units ship as a release artifact; only units/index.json (the
+# ledger) is committed.
+tools/template-authoring/gewu-units-*.tar.gz
+
 # Keep application lockfiles committed:
 # Cargo.lock, package-lock.json, pnpm-lock.yaml, and yarn.lock.

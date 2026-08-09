@@ -329,10 +329,18 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
   language. Generate a non-Python Hot 100 catalog with
   `cd tools/template-authoring && npm run fetch:hot100 -- --language java --out hot100-java.json`.
 
-Published units land in `tools/template-authoring/drafts/.workbench/published`
-and become available to a Core started with that content root. The approval
-state machine, the human-over-LLM hierarchy, and the published-unit
-correction model are documented in
+Published units land in the local content root
+(`tools/template-authoring/drafts/.workbench/published` by default) and ship
+as a **content pack**: run `npm run units:pack` to regenerate the committed
+ledger `units/index.json` (id, language, revision, modes, sha256 — the batch
+dedup and audit record) plus a `gewu-units-*.tar.gz`, then
+`gh release upload <tag> <tarball>`. A fresh clone runs `npm run units:fetch`
+to download and extract the pack for practice; dedup already works from the
+committed ledger, so reruns skip published problems without regenerating
+duplicates. Each published unit carries `reviews/summary.json` (the acceptance
+rationale and needs_revision history), so reviewers see the LLM/human
+feedback behind it. The approval state machine, the human-over-LLM hierarchy,
+and the published-unit correction model are documented in
 [`docs/architecture/approval-flow.md`](docs/architecture/approval-flow.md).
 
 Problem statements are Markdown and images are **URL references by default**

@@ -259,6 +259,9 @@ let practiceLanguage = "";
 let practiceUnitSearch = "";
 let draftSearch = "";
 let problemLibraryQuery = "";
+/** Published units from the committed ledger (/api/published-units), merged
+ * with local accepted drafts so a fresh clone still shows the synced units. */
+let externalPublished: DraftRecord[] = [];
 let unitsSearch = "";
 let unitsLanguage = "all";
 let historySearch = "";
@@ -845,6 +848,33 @@ async function syncProviders(): Promise<void> {
     // Static catalog fallback keeps the form usable without the API.
   }
 }
+async function syncPublishedUnits(): Promise<void> {
+  try {
+    const response = await fetch("/api/published-units");
+    if (!response.ok) return;
+    const payload = await response.json() as { units?: Array<{ id: string; title: string; language: string; revision: number; modes: string[]; updatedAt: string }> };
+    if (!Array.isArray(payload.units)) return;
+    const knownModes: PracticeMode[] = ["shadow_typing", "flow_recall", "code_recall", "reasoning_recall", "transfer_practice"];
+    externalPublished = payload.units.map((unit) => ({
+      id: `published:${unit.id}`,
+      unitId: unit.id,
+      title: unit.title || unit.id,
+      problem: "",
+      provider: "published",
+      model: `r${unit.revision}`,
+      language: unit.language,
+      variants: 0,
+      modes: unit.modes.filter((mode): mode is PracticeMode => knownModes.includes(mode as PracticeMode)),
+      assistance: [],
+      status: "accepted",
+      createdAt: unit.updatedAt || new Date().toISOString(),
+    }));
+    renderUnits();
+    renderProblemLibrary();
+  } catch {
+    // API offline: local accepted drafts still drive the Units page.
+  }
+}
 function formatDate(value: string): string { return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)); }
 function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(date); }
 function progressPercent(accepted: number, target: number): number { return target > 0 ? Math.min(100, Math.round((accepted / target) * 100)) : 0; }
@@ -959,7 +989,7 @@ function practicePublishedUnit(draft: DraftRecord): void {
  * problem library. */
 function publishedUnits(): DraftRecord[] {
   const seen = new Map<string, DraftRecord>();
-  for (const draft of readDrafts()) {
+  for (const draft of [...externalPublished, ...readDrafts()]) {
     if (draft.status !== "accepted" || !draft.unitId) continue;
     const existing = seen.get(draft.unitId);
     if (!existing || new Date(draft.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
@@ -1841,11 +1871,12 @@ renderDrafts();
 renderHistory();
 renderUnits();
 void syncFromApi();
+void syncPublishedUnits();
 void syncProviders();
 // Re-sync from the authoring API whenever the tab regains focus, so stale
 // browser-local snapshots never linger after the backend store is cleared or
 // another client writes drafts.
-window.addEventListener("focus", () => { void syncFromApi(); });
+window.addEventListener("focus", () => { void syncFromApi(); void syncPublishedUnits(); });
 
 document.querySelectorAll<HTMLElement>("[data-text-layout]").forEach(observeTextElement);
 
