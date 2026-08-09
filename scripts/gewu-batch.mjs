@@ -45,11 +45,16 @@ commands:
 flags:
   --problems FILE   problems file (JSON array or TSV) — required for 'run'
   --api-port N      authoring API port (default 4174, env GEWU_WORKBENCH_PORT)
-  --steps LIST      draft,generate,validate,review,accept (default all)
+  --steps LIST      default draft,generate,validate,accept (the LLM gate is the
+                    sole reviewer); add 'review' for the three pre-review roles
   --concurrency N   parallel problems (default 1)
   --repair-rounds N regenerate from review feedback after needs_revision (default 1)
+  --timeout-minutes N per-request timeout for LLM-backed API calls (default 60)
+  --regenerate LIST force regeneration for the given ids/slugs/titles
   --auto-accept     publish drafts still needing revision after repair rounds
-  --llm-approve SPEC run the LLM final approval gate before publishing (provider:model, default deepseek:deepseek-v4-flash)
+  --llm-approve SPEC run the LLM final approval gate before publishing
+                    (provider:model; derived from .env.local or
+                    GEWU_LLM_PROVIDER/GEWU_LLM_MODEL, else deepseek:deepseek-v4-flash)
   --creator-models LIST rotate creator models across problems (provider:model,provider:model)
   --force           regenerate problems even when an accepted unit covers them
   --yes             skip duplicate prompts (default when the CLI is not a TTY)
@@ -95,6 +100,8 @@ let modes;
 let assistance;
 let report = "batch-report.json";
 let ensureApi = true;
+let timeoutMinutes = "60";
+let regenerate;
 
 for (let i = 0; i < args.length; i += 1) {
   const arg = args[i];
@@ -104,6 +111,8 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--steps") steps = args[++i];
   else if (arg === "--concurrency") concurrency = args[++i];
   else if (arg === "--repair-rounds") repairRounds = args[++i];
+  else if (arg === "--timeout-minutes") timeoutMinutes = args[++i];
+  else if (arg === "--regenerate") regenerate = args[++i];
   else if (arg === "--auto-accept") autoAccept = true;
   else if (arg === "--llm-approve") llmApprove = args[++i] ?? "deepseek:deepseek-v4-flash";
   else if (arg === "--creator-models") creatorModels = args[++i];
@@ -122,6 +131,26 @@ for (let i = 0; i < args.length; i += 1) {
   else die(`unknown argument: ${arg} (run with 'help')`);
 }
 if (!command) command = isTTY ? "run" : "help";
+
+/** Non-secret provider selection from tools/template-authoring/.env.local,
+ * so the relay approver works without exporting environment variables. */
+function localEnv() {
+  const envFile = join(toolsDir, ".env.local");
+  if (!existsSync(envFile)) return {};
+  const entries = {};
+  for (const line of readFileSync(envFile, "utf8").split("\n")) {
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line.trim());
+    if (match && !(match[1] in entries)) entries[match[1]] = match[2];
+  }
+  return entries;
+}
+const envFile = localEnv();
+if (!llmApprove) {
+  const approverProvider = process.env.GEWU_LLM_PROVIDER ?? envFile.GEWU_LLM_PROVIDER;
+  const approverModel = process.env.GEWU_LLM_MODEL ?? envFile.GEWU_LLM_MODEL;
+  if (approverProvider && approverModel) llmApprove = `${approverProvider}:${approverModel}`;
+}
+if (!steps) steps = "draft,generate,validate,accept";
 if (command === "help") {
   usage();
   process.exit(0);
@@ -137,12 +166,6 @@ function ask(question, fallback = "") {
       resolveWait(answer.trim() || fallback);
     });
   });
-}
-
-async function confirmYes(question, fallback = "n") {
-  if (!isTTY) return fallback === "y";
-  const answer = (await ask(`${question} [Y/n] `, fallback === "y" ? "y" : "n")).toLowerCase();
-  return answer === "y" || answer === "";
 }
 
 async function fetchOk(url) {
@@ -270,9 +293,7 @@ async function doRun() {
   const problemsPath = resolve(repo, file);
   if (!existsSync(problemsPath)) die(`problems file not found: ${problemsPath}`);
 
-  let accept = autoAccept;
-  if (!autoAccept && isTTY) accept = await confirmYes("Accept drafts still needing revision after repair rounds (records an explicit audit rationale)?");
-  if (!steps && isTTY) steps = await ask("Steps (comma list; empty = all)");
+  if (isTTY) steps = (await ask(`Steps (comma list) [${steps}]`, steps)) || steps;
   if (concurrency === "1" && isTTY) concurrency = (await ask("Concurrency [1]", "1")) || "1";
   if (repairRounds === "1" && isTTY) repairRounds = (await ask("Repair rounds [1]", "1")) || "1";
 
@@ -280,15 +301,17 @@ async function doRun() {
     "--problems", problemsPath,
     "--concurrency", concurrency,
     "--repair-rounds", repairRounds,
+    "--timeout-minutes", timeoutMinutes,
     "--report", resolve(repo, report),
   ];
-  if (steps) extraArgs.push("--steps", steps);
-  if (accept) extraArgs.push("--auto-accept");
+  extraArgs.push("--steps", steps);
+  if (autoAccept) extraArgs.push("--auto-accept");
   if (llmApprove) extraArgs.push("--llm-approve", llmApprove);
   if (creatorModels) extraArgs.push("--creator-models", creatorModels);
   if (force) extraArgs.push("--force");
   if (yes) extraArgs.push("--yes");
   if (select) extraArgs.push("--select", select);
+  if (regenerate) extraArgs.push("--regenerate", regenerate);
   if (provider) extraArgs.push("--provider", provider);
   if (model) extraArgs.push("--model", model);
   if (languageGiven) extraArgs.push("--language", language);

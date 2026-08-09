@@ -4,8 +4,11 @@ This package is the optional provider-backed authoring adapter for Stage 7.
 It uses `@earendil-works/pi-ai` for provider selection, authentication,
 streaming, and model compatibility. It does not own practice transitions or
 publish content. Drafts follow an explicit gate: `queued` -> `generated` ->
-`validated` -> `llm_reviewed` -> `accepted`; only the final human approval can
-promote a template.
+`validated`, then publication through either the content gate (three
+pre-review roles pass -> `llm_reviewed`) or the decisive LLM acceptance gate
+(`llm_acceptance`). Accepted units are labeled **Human approved** or **LLM
+approved**; human approval is the superior tier and can upgrade any
+LLM-approved unit.
 
 The package intentionally imports Pi-ai only here. Rust Core and VS Code do not
 depend on npm provider packages.
@@ -154,8 +157,11 @@ storage when the API is unavailable. Generation and validation both invoke the
 Rust template validator, so malformed artifacts never become reviewable. The
 `POST /api/drafts/:id/reviews` endpoint runs the LLM pre-review and stores its
 report and artifact hash. The UI exposes the generated manifest, source files,
-and findings, while `POST /api/drafts/:id/accept` requires a passing review and
-an explicit human action. `POST /api/drafts/:id/rollback` clears the current
+and findings, while `POST /api/drafts/:id/accept` publishes from `llm_reviewed`,
+from `needs_revision` with an explicit human override plus rationale, from a
+validated artifact with a human revision, or — decisively — from any validated
+artifact when the `llm_acceptance` gate passed (no human step; the audit trail
+records `llm_acceptance`). `POST /api/drafts/:id/rollback` clears the current
 artifact, keeps prior reports immutable, and returns the draft to
 `revision_requested` so it can be generated again.
 
@@ -183,6 +189,42 @@ The edited artifact can then be approved directly (a `human_revision` review is
 recorded) or sent through the LLM pre-review again.
 Each approval also rebuilds `pack.json` with the Rust pack tool. Start Core
 against the same directory to practice the accepted units:
+
+## Batch template authoring
+
+`node dist/batch-authoring.js --problems <file.json|tsv>` runs the whole
+authoring pipeline for many problems. Defaults:
+
+- **Modes**: all five practice modes (`shadow_typing`, `flow_recall`,
+  `code_recall` with its four layouts, `reasoning_recall`, `transfer_practice`);
+  pass `--modes` to narrow them.
+- **Steps**: `draft,generate,validate,review,accept`; the three pre-review
+  roles run before the acceptance gate. To make the LLM gate the sole
+  reviewer — the recommended default for automated runs — pass
+  `--steps draft,generate,validate,accept --llm-approve <provider:model>`.
+- **LLM approval**: enabled by default when the accept step is on — a gate
+  pass publishes with the **LLM approved** label. The approver defaults to the
+  environment's `GEWU_LLM_PROVIDER`/`GEWU_LLM_MODEL` (else
+  `deepseek:deepseek-v4-flash`); with a relay, export those or pass
+  `--llm-approve relay:<model>` explicitly. `--auto-accept` opts into an
+  operator-tier override instead.
+- **Deduplication**: identity is `slug`/id + language (falling back to the
+  statement text), so re-runs reuse the same draft instead of accumulating
+  duplicates; `--regenerate <ids>` forces specific problems as new revisions.
+- **Rate limits**: gateway 429s retry with exponential backoff; use
+  `--concurrency 2` on shared relays and keep `--timeout-minutes` above the
+  slowest generation.
+
+The interactive runner `npm run batch` (scripts/gewu-batch.mjs) defaults to
+the same gate-only flow: steps default to `draft,generate,validate,accept`
+(the LLM acceptance gate is the sole reviewer), the approver is derived from
+`.env.local`/`GEWU_LLM_PROVIDER`/`GEWU_LLM_MODEL` (falling back to
+`deepseek:deepseek-v4-flash`), and `--auto-accept` stays an explicit operator
+override rather than an interactive default. Example with the relay:
+
+```sh
+GEWU_LLM_PROVIDER=relay GEWU_LLM_MODEL=deepseek-v4-flash npm run batch
+```
 
 ```sh
 GEWU_PUBLISHED_ROOT="$PWD/tools/template-authoring/drafts/.workbench/published" \

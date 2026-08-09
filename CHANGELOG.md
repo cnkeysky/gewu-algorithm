@@ -47,6 +47,14 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- The interactive `npm run batch` runner defaults to the gate-only flow:
+  steps `draft,generate,validate,accept` (the LLM acceptance gate is the sole
+  reviewer), the approver is derived from `.env.local` or
+  `GEWU_LLM_PROVIDER`/`GEWU_LLM_MODEL`, the misleading auto-accept prompt was
+  removed (`--auto-accept` stays an explicit operator override), and
+  `--timeout-minutes` / `--regenerate` are supported. The authoring README
+  documents the recommended automated command
+  (`--steps draft,generate,validate,accept --llm-approve <provider:model>`).
 - The batch default LLM approver honors `GEWU_LLM_PROVIDER`/`GEWU_LLM_MODEL`
   (then `--provider`/`--model`, then the built-in default), so relay setups
   approve through the relay without an explicit `--llm-approve`. The authoring
