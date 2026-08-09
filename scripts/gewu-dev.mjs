@@ -385,20 +385,41 @@ function listenersOnPort(port) {
   return pids;
 }
 
+/** Every GEWU-owned port: the dev stack's configured ports plus any port the
+ * batch runner or an API instance recorded in the shared pids directory
+ * (`*.port` files and `api-<port>.pid` names), so a stop sweeps services it
+ * did not start itself. */
+function managedPorts() {
+  const ports = new Set([corePort, apiPort, webPort]);
+  if (existsSync(pidDir)) {
+    for (const name of readdirSync(pidDir)) {
+      if (name.endsWith(".port")) {
+        const port = Number(readFileSync(join(pidDir, name), "utf8").trim());
+        if (Number.isInteger(port) && port > 0) ports.add(String(port));
+      }
+      const apiPid = /^api-(\d+)\.pid$/.exec(name);
+      if (apiPid) ports.add(apiPid[1]);
+    }
+  }
+  return [...ports];
+}
+
 function stopAllSync() {
   log("Stopping GEWU dev processes");
   const targets = new Set();
   if (existsSync(pidDir)) {
     for (const name of readdirSync(pidDir)) {
+      // Only `.pid` files hold pids; `.port` files hold ports and must not be
+      // interpreted as process ids (that killed an unrelated pid before).
+      if (!name.endsWith(".pid")) continue;
       const pid = Number(readFileSync(join(pidDir, name), "utf8"));
       if (Number.isInteger(pid) && pid > 0) {
         targets.add(pid);
         killTree(pid);
       }
-      rmSync(join(pidDir, name), { force: true });
     }
   }
-  for (const port of [corePort, apiPort, webPort]) {
+  for (const port of managedPorts()) {
     for (const pid of listenersOnPort(port)) {
       if (targets.has(pid)) continue;
       log(`stopping process ${pid} listening on port ${port}`);
@@ -406,12 +427,15 @@ function stopAllSync() {
       killTree(pid);
     }
   }
+  if (existsSync(pidDir)) {
+    for (const name of readdirSync(pidDir)) rmSync(join(pidDir, name), { force: true });
+  }
 }
 
 async function stopAll() {
   stopAllSync();
   await new Promise((resolveWait) => setTimeout(resolveWait, 1500));
-  for (const port of [corePort, apiPort, webPort]) {
+  for (const port of managedPorts()) {
     for (const pid of listenersOnPort(port)) {
       try {
         process.kill(pid, "SIGKILL");
@@ -519,14 +543,50 @@ async function statusServices() {
       healthy: await fetchOk(urls[name]),
     };
   }
+  // Batch authoring APIs: the runner records batch-api.port, and any API
+  // instance records api-<port>.pid on startup — discover them all so status
+  // shows (and stop sweeps) services this script did not start.
+  const batchPorts = new Set();
+  try {
+    const port = readFileSync(join(pidDir, "batch-api.port"), "utf8").trim();
+    if (port) batchPorts.add(port);
+  } catch {
+    // No batch API port has been recorded yet.
+  }
+  if (existsSync(pidDir)) {
+    for (const name of readdirSync(pidDir)) {
+      const match = /^api-(\d+)\.pid$/.exec(name);
+      if (match) batchPorts.add(match[1]);
+    }
+  }
+  let batchIndex = 0;
+  for (const port of [...batchPorts].sort((a, b) => Number(a) - Number(b))) {
+    batchIndex += 1;
+    const name = batchIndex === 1 ? "batchApi" : `batchApi${batchIndex}`;
+    let pid = 0;
+    try {
+      pid = Number(readFileSync(join(pidDir, `api-${port}.pid`), "utf8"));
+    } catch {
+      pid = pidOf("batch-api");
+    }
+    states[name] = {
+      name,
+      url: `http://127.0.0.1:${port}/api/drafts`,
+      pid,
+      alive: pid > 0 && alive(pid),
+      healthy: await fetchOk(`http://127.0.0.1:${port}/api/drafts`),
+    };
+  }
   return states;
 }
 
 function printStatus(states) {
-  for (const name of ["core", "api", "web"]) {
+  const order = ["core", "api", "web", ...Object.keys(states).filter((name) => name.startsWith("batchApi")).sort()];
+  for (const name of order) {
     const state = states[name];
+    if (!state) continue;
     const managed = state.pid > 0 ? (state.alive ? `pid ${state.pid}` : "stale pid") : state.healthy ? "external process" : "not started";
-    log(`${name.padEnd(4)} ${state.healthy ? "healthy" : "down"}   ${managed}   ${state.url}`);
+    log(`${name.padEnd(8)} ${state.healthy ? "healthy" : "down"}   ${managed}   ${state.url}`);
   }
 }
 

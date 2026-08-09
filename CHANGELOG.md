@@ -67,6 +67,13 @@ allowed only with explicit migration notes (see
   (HTML 403 security blocks are returned immediately so they are not
   hammered). This avoids tripping Cloudflare-style rate/security limits on
   relay endpoints like `api.nico.de5.net`.
+- Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
+  the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
+  names), not just the three dev-stack ports, so it stops a batch authoring
+  API too. It also no longer misreads `.port` files as process ids. The
+  workbench API exposes a build id on `/api/health`, and the batch runner
+  restarts a healthy-but-stale API instead of silently reusing old code;
+  `dev:status` includes the batch API row.
 - `batch:status` no longer dumps raw provider errors (e.g. a full HTML error
   page from a relay gateway). Default output groups actionable items by
   status + first-line error and lists their titles; `--results` still prints

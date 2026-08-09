@@ -15,6 +15,7 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import readline from "node:readline";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -236,6 +237,24 @@ async function fetchOk(url) {
   }
 }
 
+/** Expected build id: hash of the compiled workbench API bundle. */
+function apiBuild() {
+  const bundle = join(toolsDir, "dist", "workbench-api.js");
+  if (!existsSync(bundle)) return undefined;
+  return createHash("sha256").update(readFileSync(bundle)).digest("hex").slice(0, 12);
+}
+
+async function fetchHealth(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    if (!response.ok) return { ok: false, build: undefined };
+    const body = await response.json().catch(() => ({}));
+    return { ok: true, build: typeof body?.build === "string" ? body.build : undefined };
+  } catch {
+    return { ok: false, build: undefined };
+  }
+}
+
 function alive(pid) {
   try {
     process.kill(pid, 0);
@@ -331,10 +350,19 @@ async function ensureApiRunning() {
   const candidates = [apiPort, ...Array.from({ length: 5 }, (_, index) => String(Number(apiPort) + 10 * (index + 1)))];
   for (const candidate of candidates) {
     apiPort = candidate;
-    if (await fetchOk(apiUrl())) {
-      log(`authoring API already healthy at ${apiUrl()}`);
-      writePortFile();
-      return;
+    const health = await fetchHealth(`http://127.0.0.1:${apiPort}/api/health`);
+    if (health.ok) {
+      const expected = apiBuild();
+      if (expected && health.build && health.build !== expected) {
+        // A healthy but stale API (old code) must not be silently reused:
+        // restart it so the state-machine guards and build match this tree.
+        log(`authoring API on port ${apiPort} runs an older build (${health.build} vs ${expected}); restarting it`);
+        stopApi();
+      } else {
+        log(`authoring API already healthy at ${apiUrl()}${health.build ? ` (build ${health.build})` : ""}`);
+        writePortFile();
+        return;
+      }
     }
     if (!ensureApi) die(`authoring API is not running at ${apiUrl()} (--no-ensure-api)`);
     log(`authoring API is down at ${apiUrl()}; starting it`);
@@ -415,8 +443,9 @@ async function doRun() {
 
 async function doStatus() {
   let liveDrafts = [];
-  const healthy = await fetchOk(apiUrl());
-  log(`authoring API ${healthy ? "healthy" : "down"} at ${apiUrl()}`);
+  const health = await fetchHealth(`http://127.0.0.1:${apiPort}/api/health`);
+  const healthy = health.ok;
+  log(`authoring API ${healthy ? `healthy (build ${health.build ?? "unknown"})` : "down"} at ${apiUrl()}`);
   if (healthy) {
     writePortFile();
     try {

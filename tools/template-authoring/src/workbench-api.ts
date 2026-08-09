@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { cp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -27,6 +28,9 @@ import {
 
 const PORT = Number(process.env.GEWU_WORKBENCH_PORT ?? 4174);
 const here = dirname(fileURLToPath(import.meta.url));
+/** Short build id of the executing API bundle: lets dev scripts detect a
+ * stale API process and restart it instead of silently reusing old code. */
+const BUILD_ID = createHash("sha256").update(readFileSync(fileURLToPath(import.meta.url))).digest("hex").slice(0, 12);
 const storageRoot = resolve(here, "../drafts/.workbench");
 const databasePath = join(storageRoot, "authoring.sqlite");
 mkdirSync(storageRoot, { recursive: true });
@@ -565,7 +569,7 @@ const server = createServer(async (request, response) => {
   if (request.method === "OPTIONS") return send(response, 204, {});
   const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
   try {
-    if (request.method === "GET" && url.pathname === "/api/health") return send(response, 200, { status: "ok", storage: "local" });
+    if (request.method === "GET" && url.pathname === "/api/health") return send(response, 200, { status: "ok", storage: "local", build: BUILD_ID });
     if (request.method === "GET" && url.pathname === "/api/tasks") return send(response, 200, { tasks: builtinTaskRegistry.list().map((definition) => ({ taskId: definition.taskId, label: definition.label, taskVersion: definition.taskVersion })) });
     if (request.method === "GET" && url.pathname === "/api/providers") {
       const providerEntries: Array<[string, string]> = [
