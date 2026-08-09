@@ -93,8 +93,9 @@ flags:
   --web-port N    Vite web port (default 5173, env GEWU_WEB_PORT)
   --force-install reinstall npm dependencies even if node_modules exists
   --e2e           also install Playwright chromium (for the e2e suite)
-  --key           re-prompt for DEEPSEEK_API_KEY even if already set
-  --provider ID   provider id (deepseek|openai|moonshotai|xiaomi)
+  --key           re-prompt for the provider API key even if already set
+  --provider ID   provider id (any Pi builtin, or a relay declared in
+                  tools/template-authoring/providers.json)
   --model ID      model id you prepared (catalog is listed when available)
 
 Have your provider and model id ready before the interactive run. The API key

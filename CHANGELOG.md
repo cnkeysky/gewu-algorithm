@@ -78,7 +78,7 @@ allowed only with explicit migration notes (see
   HTTP client retries JSON 403s and transient 5xx with exponential backoff
   (HTML 403 security blocks are returned immediately so they are not
   hammered). This avoids tripping Cloudflare-style rate/security limits on
-  relay endpoints like `api.nico.de5.net`. The generator itself now only
+  relay endpoints. The generator itself now only
   retries transient gateway errors (429/5xx/network) — 403 security blocks,
   auth/quota errors and invalid requests fail fast so a broken or exhausted
   upstream is not hammered — and 5xx retries at the batch level are limited

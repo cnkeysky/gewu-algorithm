@@ -14,11 +14,12 @@ Other Pi-ai providers remain supported by the provider-neutral boundary, but
 they are not marked as integration-tested until credentials and a dedicated
 test run are available.
 
-A custom OpenAI-compatible relay (`GEWU_LLM_PROVIDER=relay` +
-`GEWU_LLM_BASE_URL`) is configuration, not a new integration target: it reuses
-the same adapter smoke, generation, and review layers. A relay is qualified
-only by running those layers against it with real credentials; a working
-built-in provider smoke test is not evidence the relay works.
+A custom OpenAI-compatible relay (declared in `providers.json`; the default
+entry is `GEWU_LLM_PROVIDER=relay` + `GEWU_LLM_BASE_URL`) is configuration,
+not a new integration target: it reuses the same adapter smoke, generation,
+and review layers. A relay is qualified only by running those layers against
+it with real credentials; a working built-in provider smoke test is not
+evidence the relay works.
 
 ## Test Layers
 
