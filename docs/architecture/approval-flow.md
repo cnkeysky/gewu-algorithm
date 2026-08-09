@@ -44,7 +44,11 @@ mirrors it. Every endpoint rejects invalid transitions:
   the draft publishes with the **LLM approved** label and no human step, and
   the audit trail records `llm_acceptance` with the gate's rationale. The
   pre-review roles are advisory for this path; the gate reads the artifact and
-  any findings itself;
+  any findings itself. A **needs_revision** verdict moves the draft to
+  `needs_revision` (from `validated` / `llm_reviewed`), so the UI offers
+  revision before another attempt. The web workbench exposes the gate as the
+  **LLM approve** action on those states; the batch exposes it via
+  `--llm-approve`;
 - `accept` without the gate only from `llm_reviewed`, `needs_revision` with an
   explicit `override` plus rationale, or `validated` with a human revision;
   the human upgrade of an already-`accepted` unit is always allowed and is

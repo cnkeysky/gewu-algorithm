@@ -997,6 +997,7 @@ function renderDrafts(): void {
     const canValidate = draft.status === "generated";
     const canReview = draft.status === "validated";
     const canAccept = draft.status === "llm_reviewed" || draft.status === "needs_revision" || (draft.status === "validated" && readReviews().some((review) => review.draftId === draft.id && review.role === "human_revision"));
+    const canLlmApprove = ["validated", "llm_reviewed", "needs_revision"].includes(draft.status);
     // Regenerate is a repair action: redo a fresh generation, fix an approved
     // unit, or recover from a failed pre-review. At the validated stage the
     // only next step is LLM pre-review, so the button is not shown there.
@@ -1009,6 +1010,7 @@ function renderDrafts(): void {
       canGenerate ? `<button class="inline-action primary-action" type="button" data-generate-id="${draft.id}">${draft.status === "revision_requested" ? "Regenerate" : draft.status === "failed" ? "Retry generation" : "Generate template"}</button>` : "",
       canValidate ? `<button class="inline-action primary-action" type="button" data-validate-id="${draft.id}">Validate contract</button>` : "",
       canReview ? `<button class="inline-action primary-action" type="button" data-review-id="${draft.id}" title="Run the three role reviews (algorithm correctness, learning design, provenance). All pass marks the draft LLM approved.">LLM pre-review</button>` : "",
+      canLlmApprove ? `<button class="inline-action approval-action" type="button" data-llm-approve-id="${draft.id}" title="Run the decisive LLM acceptance gate; a pass publishes with the LLM approved label.">LLM approve</button>` : "",
       canAccept ? `<button class="inline-action approval-action${draft.status === "needs_revision" ? " override-action" : ""}" type="button" data-accept-id="${draft.id}">${draft.status === "needs_revision" ? "Approve anyway" : "Human approve"}</button>` : "",
       draft.status === "accepted"
         && readReviews().some((review) => review.draftId === draft.id && review.role === "llm_acceptance")
@@ -1301,6 +1303,42 @@ document.addEventListener("click", (event) => {
     })();
     return;
   }
+  const llmApproveButton = target.closest<HTMLButtonElement>("[data-llm-approve-id]");
+  if (llmApproveButton) {
+    event.stopPropagation();
+    const id = llmApproveButton.dataset.llmApproveId;
+    if (!lockAction("llm-approve", id)) return;
+    const originalLabel = llmApproveButton.textContent ?? "LLM approve";
+    llmApproveButton.disabled = true;
+    llmApproveButton.textContent = "Running LLM approval…";
+    void (async () => {
+      try {
+        const acceptanceResponse = await fetch(`/api/drafts/${id}/acceptance`, { method: "POST" });
+        const acceptancePayload = await acceptanceResponse.json() as { verdict?: string; rationale?: string; error?: string };
+        if (!acceptanceResponse.ok) throw new Error(acceptancePayload.error ?? "LLM approval gate failed");
+        if (acceptancePayload.verdict !== "pass") {
+          throw new Error(`LLM approval needs revision: ${acceptancePayload.rationale ?? "the gate returned needs_revision"}`);
+        }
+        const acceptResponse = await fetch(`/api/drafts/${id}/accept`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ acceptanceRole: "llm_acceptance", rationale: `LLM approve: ${acceptancePayload.rationale ?? ""}` }),
+        });
+        const acceptPayload = await acceptResponse.json() as { error?: string };
+        if (!acceptResponse.ok) throw new Error(acceptPayload.error ?? "LLM approval publish failed");
+        await syncFromApi();
+        notify("LLM approval passed; the unit is published as LLM approved.");
+        renderDraftsView();
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "LLM approval failed", true);
+      } finally {
+        unlockAction("llm-approve", id);
+        llmApproveButton.disabled = false;
+        llmApproveButton.textContent = originalLabel;
+      }
+    })();
+    return;
+  }
   const upgradeButton = target.closest<HTMLButtonElement>("[data-upgrade-id]");
   if (upgradeButton) {
     event.stopPropagation();
@@ -1548,6 +1586,16 @@ form.addEventListener("submit", async (event) => {
     status: "queued",
     createdAt: new Date().toISOString(),
   };
+  if (!editingDraftId) {
+    const normalize = (value: string): string => value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+    const duplicate = readDrafts().find((draft) =>
+      draft.language === record.language
+      && (normalize(draft.problem) === normalize(problem) || draft.title === record.title),
+    );
+    if (duplicate && !(await openConfirm("Duplicate draft?", `A draft "${duplicate.title}" already exists for ${record.language} with the same problem. Create it anyway?`, "Create anyway"))) {
+      return;
+    }
+  }
   let persisted = false;
   try {
     const response = await fetch(editingDraftId ? `/api/drafts/${editingDraftId}` : "/api/drafts", { method: editingDraftId ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(record) });

@@ -161,8 +161,11 @@ and findings, while `POST /api/drafts/:id/accept` publishes from `llm_reviewed`,
 from `needs_revision` with an explicit human override plus rationale, from a
 validated artifact with a human revision, or — decisively — from any validated
 artifact when the `llm_acceptance` gate passed (no human step; the audit trail
-records `llm_acceptance`). `POST /api/drafts/:id/rollback` clears the current
-artifact, keeps prior reports immutable, and returns the draft to
+records `llm_acceptance`). The web workbench exposes the gate as an **LLM
+approve** action on `validated` / `llm_reviewed` / `needs_revision` drafts; a
+gate verdict of `needs_revision` moves the draft to that state so revision is
+offered before the next attempt. `POST /api/drafts/:id/rollback` clears the
+current artifact, keeps prior reports immutable, and returns the draft to
 `revision_requested` so it can be generated again.
 
 Paginated lists (Drafts, Interrupted, Spaced review, Recent attempts) show an
@@ -213,6 +216,11 @@ authoring pipeline for many problems. Defaults:
   duplicates; unit ids are language-qualified (`<slug>.<language>`), so Python
   and Java templates publish as separate units; `--regenerate <ids>` forces
   specific problems as new revisions.
+  Limitations: web-created drafts have no slug and match only by statement
+  fingerprint, and two catalogs using different slugs for the same problem are
+  not merged — keep one canonical slug per problem. The web workbench warns
+  before submitting a duplicate (same language + normalized statement or
+  title).
 - **Rate limits**: gateway 429s retry with exponential backoff; use
   `--concurrency 2` on shared relays and keep `--timeout-minutes` above the
   slowest generation.

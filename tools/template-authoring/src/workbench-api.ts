@@ -646,6 +646,12 @@ const server = createServer(async (request, response) => {
         : undefined;
       const { review, rationale } = await runModelAcceptance(draft, state.reviews, overrides);
       state.reviews = [review, ...state.reviews];
+      // The acceptance gate is the decisive LLM reviewer: a needs_revision
+      // verdict moves the draft to that state so the UI offers revision,
+      // while a pass leaves the draft ready for the llm_acceptance publish.
+      if (review.verdict === "needs_revision" && draft.status !== "needs_revision") {
+        draft.status = "needs_revision";
+      }
       await saveState(state);
       return send(response, 200, { verdict: review.verdict, rationale, review });
     }

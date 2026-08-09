@@ -47,6 +47,12 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- The web workbench gains a decisive **LLM approve** action on `validated` /
+  `llm_reviewed` / `needs_revision` drafts (runs the acceptance gate; a pass
+  publishes with the **LLM approved** label, a `needs_revision` verdict moves
+  the draft to that state). New-draft submission warns about an existing
+  duplicate (same language + normalized statement or title) before creating
+  another.
 - Unit identity is language-qualified (ADR 0019): batch runs derive
   deterministic `manifest.id` = `<slug>.<language>`, web drafts get an
   idempotent language suffix, the generation instruction and server enforce
