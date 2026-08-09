@@ -29,9 +29,22 @@ import {
 
 const PORT = Number(process.env.GEWU_WORKBENCH_PORT ?? 4174);
 const here = dirname(fileURLToPath(import.meta.url));
-/** Short build id of the executing API bundle: lets dev scripts detect a
- * stale API process and restart it instead of silently reusing old code. */
-const BUILD_ID = createHash("sha256").update(readFileSync(fileURLToPath(import.meta.url))).digest("hex").slice(0, 12);
+/** Short build id of the executing API bundle: hashes every runtime module
+ * (not just workbench-api.js), so any source change (pi-generator, lifecycle,
+ * staging, …) makes dev scripts detect a stale API process and restart it
+ * instead of silently reusing old in-memory code. */
+const BUILD_ID = createHash("sha256")
+  .update(
+    [
+      "workbench-api.js", "pi-generator.js", "generate-template.js", "review-template.js",
+      "staged-generation.js", "persist.js", "draft-lifecycle.js", "manifest-lifecycle.js",
+      "publish.js", "task-registry.js", "rule-dedup.js",
+    ]
+      .map((file) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), file)).toString("base64"))
+      .join("|"),
+  )
+  .digest("hex")
+  .slice(0, 12);
 const storageRoot = resolve(here, "../drafts/.workbench");
 const databasePath = join(storageRoot, "authoring.sqlite");
 mkdirSync(storageRoot, { recursive: true });

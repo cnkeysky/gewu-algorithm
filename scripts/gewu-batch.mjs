@@ -237,11 +237,22 @@ async function fetchOk(url) {
   }
 }
 
-/** Expected build id: hash of the compiled workbench API bundle. */
+/** Expected build id: hash of every runtime module of the compiled API
+ * bundle, matching workbench-api's BUILD_ID so any source change is detected
+ * and a stale API process is restarted instead of reused. */
 function apiBuild() {
-  const bundle = join(toolsDir, "dist", "workbench-api.js");
-  if (!existsSync(bundle)) return undefined;
-  return createHash("sha256").update(readFileSync(bundle)).digest("hex").slice(0, 12);
+  const files = [
+    "workbench-api.js", "pi-generator.js", "generate-template.js", "review-template.js",
+    "staged-generation.js", "persist.js", "draft-lifecycle.js", "manifest-lifecycle.js",
+    "publish.js", "task-registry.js", "rule-dedup.js",
+  ];
+  const parts = [];
+  for (const file of files) {
+    const path = join(toolsDir, "dist", file);
+    if (!existsSync(path)) return undefined;
+    parts.push(readFileSync(path).toString("base64"));
+  }
+  return createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 12);
 }
 
 async function fetchHealth(url) {
