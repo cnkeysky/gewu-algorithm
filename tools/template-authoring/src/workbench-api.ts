@@ -396,12 +396,29 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
     }
   }
   manifest.revision = nextRevision;
+  // A manifest's supersedes entries reference prior revisions of the same
+  // unit. When this is the first published revision (or the model claimed a
+  // revision that is not earlier), drop the invalid entries so the published
+  // artifact can never supersede itself or a revision that does not exist.
+  if (Array.isArray(manifest.supersedes)) {
+    const valid = manifest.supersedes.filter(
+      (entry) => isRecord(entry) && Number.isInteger(entry.revision) && Number(entry.revision) > 0 && Number(entry.revision) < nextRevision,
+    );
+    if (valid.length === 0) delete manifest.supersedes;
+    else manifest.supersedes = valid;
+  }
   const destination = resolve(unitRoot, `r${nextRevision}`);
   if (!destination.startsWith(`${publishedRoot}/`)) throw new Error("published artifact path escaped configured root");
   await mkdir(publishedRoot, { recursive: true });
   await rm(destination, { recursive: true, force: true });
   await cp(source, destination, { recursive: true, filter: (path) => !path.includes(`${resolve(source, "reviews")}`) });
   await writeFile(join(destination, "unit.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  try {
+    await validateArtifactWithRust(destination, false);
+  } catch (error) {
+    await rm(destination, { recursive: true, force: true });
+    throw error;
+  }
   for (const entry of await readdir(unitRoot, { withFileTypes: true })) {
     if (entry.isDirectory() && entry.name !== `r${nextRevision}` && /^r\d+$/.test(entry.name)) {
       await rm(join(unitRoot, entry.name), { recursive: true, force: true });

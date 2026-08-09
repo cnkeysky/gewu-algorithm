@@ -47,6 +47,10 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Publishing normalizes `supersedes` to reference only earlier revisions and
+  validates the final published artifact with the Rust validator, so an
+  invalid unit (e.g., revision 1 superseding itself) can never break the
+  Core's unit list again.
 - Generation instruction requires paraphrasing third-party problem pages
   (keep constraints, examples, formulas, and image references; never copy
   verbatim), removing the redistribution-license blocker from review.
