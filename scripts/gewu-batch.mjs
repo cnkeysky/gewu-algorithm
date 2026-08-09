@@ -35,6 +35,30 @@ const die = (message) => {
   console.error(`\x1b[31merror:\x1b[0m ${message}`);
   process.exit(1);
 };
+/** First line of an error, with any embedded HTML fragment removed. */
+function shortError(value, limit = 96) {
+  if (!value) return "";
+  let line = String(value).split("\n")[0].trim();
+  const htmlAt = line.search(/<!doctype/i);
+  if (htmlAt >= 0) line = line.slice(0, htmlAt).trim();
+  return line.length > limit ? `${line.slice(0, limit).trimEnd()}\u2026` : line;
+}
+/** Prints actionable items grouped by status + (short) error, with titles. */
+function logActionableItems(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const detail = shortError(item.error ?? item.reason);
+    const key = `${item.status}${detail ? `\u0000${detail}` : ""}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item.title ?? "");
+  }
+  for (const [key, titles] of groups) {
+    const [status, detail] = key.split("\u0000");
+    log(`  ${status} ${titles.length}${detail ? ` — ${detail}` : ""}`);
+    const shown = titles.slice(0, 8);
+    log(`    ${shown.join(", ")}${titles.length > shown.length ? ` \u2026 (+${titles.length - shown.length} more)` : ""}`);
+  }
+}
 let startedApi = false;
 function cleanupApi() {
   if (!startedApi) return;
@@ -410,29 +434,22 @@ async function doStatus() {
   const newestDraftAt = liveDrafts.reduce((latest, draft) => (draft.createdAt && draft.createdAt > latest ? draft.createdAt : latest), "");
   const reportIsCurrent = !newestDraftAt || (typeof summary.generatedAt === "string" && summary.generatedAt >= newestDraftAt);
   if (reportIsCurrent) {
-    for (const item of summary.results ?? []) {
-      if (item.status === "failed" || item.status === "needs_review") {
-        log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
-      }
-    }
+    log("actionable items from the last finished batch:");
+    logActionableItems((summary.results ?? []).filter((item) => item.status === "failed" || item.status === "needs_review"));
     if (showResults) {
       log("full results of the last finished batch:");
       for (const item of summary.results ?? []) {
-        log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : item.reason ? ` — ${item.reason}` : ""}`);
+        log(`  ${item.status}  ${item.title}${shortError(item.error ?? item.reason) ? ` — ${shortError(item.error ?? item.reason)}` : ""}`);
       }
     }
   } else {
     log(`a newer run is in progress (newest draft ${newestDraftAt} is newer than the last report ${summary.generatedAt}) — live non-accepted drafts:`);
-    for (const draft of liveDrafts) {
-      if (draft.status !== "accepted") {
-        log(`  ${draft.status}  ${draft.title ?? ""}${draft.error ? ` — ${draft.error}` : ""}`);
-      }
-    }
+    logActionableItems(liveDrafts.filter((draft) => draft.status !== "accepted"));
     if (showResults) {
       log("previous (last finished) batch items:");
       for (const item of summary.results ?? []) {
         if (item.status === "failed" || item.status === "needs_review") {
-          log(`  ${item.status}  ${item.title}${item.error ? ` — ${item.error}` : ""}`);
+          log(`  ${item.status}  ${item.title}${shortError(item.error ?? item.reason) ? ` — ${shortError(item.error ?? item.reason)}` : ""}`);
         }
       }
     }

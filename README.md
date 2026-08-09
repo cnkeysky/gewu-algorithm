@@ -194,8 +194,11 @@ concurrency, repair rounds), runs the batch, and reports. `--auto-accept` is an
 explicit operator override and is not part of the interactive default.
 Non-interactive flags are supported (`run --problems FILE --steps ...`);
 `npm run batch:status` shows API health and the last report, and
-`npm run batch:stop` stops the API that the script started. The raw CLI still
-lives in `tools/template-authoring` (`npm run batch -- --problems FILE ...`).
+`npm run batch:stop` stops the API that the script started. `batch:status`
+defaults to the actionable items (failed / needs-review / live non-accepted
+drafts) with compact first-line errors; add `--results` for the full per-item
+list of the last finished batch. The raw CLI still lives in
+`tools/template-authoring` (`npm run batch -- --problems FILE ...`).
 
 The CLI is problem-agnostic: any algorithm problem text works, not just
 LeetCode. Generation uses the provider/model configured on the authoring API

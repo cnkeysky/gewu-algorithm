@@ -849,6 +849,13 @@ function formatDate(value: string): string { return new Intl.DateTimeFormat(unde
 function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(date); }
 function progressPercent(accepted: number, target: number): number { return target > 0 ? Math.min(100, Math.round((accepted / target) * 100)) : 0; }
 function escapeHtml(value: string): string { return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character); }
+function shortError(value: string | undefined, limit = 120): string {
+  if (!value) return "";
+  const firstLine = value.split("\n")[0].trim();
+  const htmlAt = firstLine.search(/<!doctype/i);
+  const line = htmlAt >= 0 ? firstLine.slice(0, htmlAt).trim() : firstLine;
+  return line.length > limit ? `${line.slice(0, limit).trimEnd()}…` : line;
+}
 function langChip(language?: string): string { return language ? `<span class="lang-chip">${escapeHtml(language)}</span>` : ""; }
 function practiceOptionLabel(unitId: string | undefined, mode: PracticeMode | undefined, practiceId?: string, implementation?: string): string {
   const options = practiceUnits.find((unit) => unit.id === unitId)?.practice_options ?? [];
@@ -1022,7 +1029,8 @@ function renderDrafts(): void {
     ].filter(Boolean).join("");
     const chip = (label: string, step: number) => `<b class="pipeline-${step < stage ? "done" : step === stage ? "current" : "pending"}">${label}</b>`;
     const separator = `<span class="pipeline-sep" aria-hidden="true">&#8250;</span>`;
-    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small>${draft.error ? `<small class="draft-error" title="${escapeHtml(draft.error)}">${escapeHtml(draft.error)}</small>` : ""}<small class="draft-pipeline" aria-label="Draft workflow">${chip("01 Generate", 1)}${separator}${chip("02 Validate", 2)}${separator}${chip("03 Review", 3)}${separator}${chip("04 Approve", 4)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${acceptanceLabel(draft)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
+    const draftError = shortError(draft.error);
+    return `<div class="draft-row" data-draft-id="${draft.id}" role="button" tabindex="0" aria-label="Edit ${draft.title}"><span class="draft-icon">${draft.title.slice(0, 2).toUpperCase()}</span><span class="draft-summary"><strong>${draft.title}</strong><small>${draft.language} · ${draft.modes.length} practice projection${draft.modes.length === 1 ? "" : "s"}</small>${draftError ? `<small class="draft-error" title="${escapeHtml(draftError)}">${escapeHtml(draftError)}</small>` : ""}<small class="draft-pipeline" aria-label="Draft workflow">${chip("01 Generate", 1)}${separator}${chip("02 Validate", 2)}${separator}${chip("03 Review", 3)}${separator}${chip("04 Approve", 4)}</small></span><span class="draft-actions"><span class="draft-date">${formatDate(draft.createdAt)} <b class="draft-status status-${draft.status}">${acceptanceLabel(draft)}</b></span><span class="draft-buttons">${actions}</span></span></div>`;
   }).join("")}</div>${paginationHtml("drafts", draftPage, totalPages, drafts.length, DRAFT_PAGE_SIZE)}` : `<div class="empty-state"><strong>${empty[0]}</strong><span>${empty[1]}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
   renderWorkflow();
 }
@@ -1231,7 +1239,7 @@ document.addEventListener("click", (event) => {
     if (!lockAction("generate", id)) return;
     void fetch(`/api/drafts/${id}/generate`, { method: "POST" }).then(async (response) => {
       const payload = await response.json() as { error?: string; status?: string };
-      notify(response.ok ? "Template generated. Run Validate contract next." : `Generation failed: ${payload.error ?? "unknown error"}`, !response.ok);
+      notify(response.ok ? "Template generated. Run Validate contract next." : `Generation failed: ${shortError(payload.error) || "unknown error"}`, !response.ok);
       if (response.ok) { await syncFromApi(); renderDraftsView(); }
     }).catch((error) => { notify(error instanceof Error ? `LLM pre-review failed: ${error.message}` : "Authoring API is unavailable.", true); }).finally(() => unlockAction("generate", id));
     return;

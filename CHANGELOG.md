@@ -47,6 +47,11 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- `batch:status` no longer dumps raw provider errors (e.g. a full HTML error
+  page from a relay gateway). Default output groups actionable items by
+  status + first-line error and lists their titles; `--results` still prints
+  the full per-item list. The web workbench shows the same truncated error
+  summary in draft rows and generation toasts instead of the raw payload.
 - Fix a concurrency race in the authoring store: `saveState` now upserts
   drafts and reviews per row instead of deleting the whole table and
   re-inserting an in-memory snapshot. Under parallel batch requests, a stale
