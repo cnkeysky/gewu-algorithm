@@ -190,7 +190,7 @@ async function revisionFeedbackFor(draft: DraftRecord, reviews: ReviewRecord[]):
  * the decisive acceptance gate passes. The model output schema pins these to
  * "pending"; without stamping, every artifact would claim unvalidated state
  * forever and a strict acceptance gate would reject it. */
-function stampArtifactValidation(draft: DraftRecord, fields: Record<string, string>): void {
+function stampArtifactValidation(draft: DraftRecord, fields: Record<string, string>, status?: string): void {
   if (!draft.artifactPath) return;
   const unitPath = join(artifactAbsolutePath(draft), "unit.json");
   try {
@@ -199,6 +199,7 @@ function stampArtifactValidation(draft: DraftRecord, fields: Record<string, stri
     for (const [key, value] of Object.entries(fields)) validation[key] = value;
     validation.last_validated_at = new Date().toISOString();
     manifest.validation = validation;
+    if (status) manifest.status = status;
     writeFileSync(unitPath, `${JSON.stringify(manifest, null, 2)}\n`);
   } catch {
     // Stamping is best-effort; the validation status still gates approval.
@@ -470,6 +471,9 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
     }
   }
   manifest.revision = nextRevision;
+  // A published unit is validated: the manifest no longer claims a draft
+  // lifecycle (the acceptance gate / human accept already passed).
+  manifest.status = "validated";
   // A manifest's supersedes entries reference prior revisions of the same
   // unit. When this is the first published revision (or the model claimed a
   // revision that is not earlier), drop the invalid entries so the published
@@ -491,6 +495,9 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
     await rm(destination, { recursive: true, force: true });
     throw error;
   }
+  // The published root serves the latest revision only: earlier revisions
+  // live on in the authoring store as accepted drafts (their artifacts are
+  // retained), and forking one republishes it as a new revision.
   for (const entry of await readdir(unitRoot, { withFileTypes: true })) {
     if (entry.isDirectory() && entry.name !== `r${nextRevision}` && /^r\d+$/.test(entry.name)) {
       await rm(join(unitRoot, entry.name), { recursive: true, force: true });
@@ -753,8 +760,8 @@ const server = createServer(async (request, response) => {
         if (review.verdict === "pass") {
           // The acceptance gate is the decisive content/transfer review in
           // the automated flow; stamp the manifest so published units do not
-          // claim pending validation.
-          stampArtifactValidation(draft, { content_review: "passed", transfer_review: "passed" });
+          // claim pending validation or a draft lifecycle.
+          stampArtifactValidation(draft, { content_review: "passed", transfer_review: "passed" }, "validated");
         }
         state.reviews = [review, ...state.reviews];
         // The acceptance gate is the decisive LLM reviewer: a needs_revision

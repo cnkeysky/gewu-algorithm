@@ -114,9 +114,15 @@ allowed only with explicit migration notes (see
   `schema`/`code` pass when the deterministic Rust validation passes, and
   `content_review`/`transfer_review` pass when the LLM acceptance gate
   passes — artifacts no longer claim `pending` forever, which a strict gate
-  misread as an unvalidated template. `batch:status` shows report paths
-  relative to the project root and renders actionable items as one compact
-  line per group (status · count · titles — error).
+  misread as an unvalidated template. Published artifacts also advance the
+  content lifecycle to `validated` (previously every published unit still
+  claimed `draft`). `batch:status` shows report paths relative to the project
+  root and renders actionable items as one compact line per group (status ·
+  count · titles — error).
+- The approval-flow doc is corrected to match the implementation: the
+  published content root serves only the latest revision of each unit;
+  earlier revisions live on as accepted drafts in the authoring store (their
+  artifacts are retained) and can be restored by forking that draft.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

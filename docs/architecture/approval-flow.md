@@ -128,7 +128,10 @@ a new revision:
 Post-approval problems are unavoidable — even a human-approved unit can later
 turn out to have a wrong edge case or complexity claim. The revision model is
 the answer: published units are immutable in place, corrections always land
-as a new revision (fork → fix → re-approve), and because every revision is
-kept, a bad fix can be corrected again or the previous revision restored by
-forking it. Practice consumes the latest published revision, so a known-bad
-revision should be replaced promptly.
+as a new revision (fork → fix → re-approve). The published content root serves
+**only the latest revision** of each unit (the core keeps the newest per unit
+id); earlier revisions are not lost — every accepted draft in the authoring
+store is one revision with its artifact retained, so a previous revision can
+be restored by forking that draft and republishing it as a new revision.
+Practice consumes the latest published revision, so a known-bad revision
+should be replaced promptly.
