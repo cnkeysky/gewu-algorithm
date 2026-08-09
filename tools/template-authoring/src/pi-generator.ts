@@ -102,8 +102,9 @@ export function optionsFromEnvironment(
  * Builds the Pi-ai model catalog. When `GEWU_LLM_BASE_URL` is set, registers
  * a custom relay provider (id `relay`) that routes every request to that
  * endpoint, so relay/proxy services can be used without code changes. The
- * relay credential comes from `GEWU_LLM_API_KEY` (with `DEEPSEEK_API_KEY`
- * accepted as a fallback for existing local setups).
+ * relay credential comes from `GEWU_LLM_API_KEY` — never from a provider
+ * key, so a real DeepSeek/OpenAI key can never be sent to an arbitrary
+ * relay endpoint.
  */
 export function modelCatalogFromEnvironment(
   environment: Record<string, string | undefined> = process.env,
@@ -138,7 +139,7 @@ export function modelCatalogFromEnvironment(
       id: RELAY_PROVIDER_ID,
       name: "Relay (custom OpenAI-compatible endpoint)",
       baseUrl,
-      auth: { apiKey: envApiKeyAuth("Relay API key", ["GEWU_LLM_API_KEY", "DEEPSEEK_API_KEY"]) },
+      auth: { apiKey: envApiKeyAuth("Relay API key", ["GEWU_LLM_API_KEY"]) },
       models: [relayModel],
       api: openAICompletionsApi(),
     }),

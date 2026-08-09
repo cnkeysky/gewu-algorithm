@@ -66,10 +66,12 @@ npm run smoke
 The OpenAI-compatible SDK appends `/chat/completions` to the base URL, so
 `https://api.example.com/v1` targets `.../v1/chat/completions`. The same
 variables go into the ignored `.env.local` for repeatable local runs; the
-relay key is accepted through `GEWU_LLM_API_KEY` (or `DEEPSEEK_API_KEY` for
-existing setups). The relay defaults to `GEWU_LLM_TOOL_CHOICE=auto`, because
-reasoning-mode upstreams reject a forced tool call; other providers keep the
-forced behavior unless `GEWU_LLM_TOOL_CHOICE=auto` is set explicitly. Other
+relay key is accepted only through `GEWU_LLM_API_KEY` — provider keys like
+`DEEPSEEK_API_KEY` are never sent to a relay endpoint, so a real provider
+key cannot leak to an arbitrary gateway. The relay defaults to
+`GEWU_LLM_TOOL_CHOICE=auto`; OpenAI-compatible relays that accept a forced
+tool call should set `GEWU_LLM_TOOL_CHOICE=forced` so the model always
+returns structured output instead of finishing with plain text. Other
 providers are unaffected when the base URL is unset. Relay requests strip the
 OpenAI SDK fingerprint headers (`x-stainless-*`) and send a neutral user agent
 plus opencode-style `x-opencode-session` / `x-opencode-request` headers,
@@ -83,7 +85,8 @@ variables; no endpoint URL is hardcoded. It works with any OpenAI-compatible
 
 - **Protocol**: OpenAI-compatible chat completions only (Anthropic Messages
   gateways are not supported by the generic relay);
-- **Auth**: Bearer token via `GEWU_LLM_API_KEY` (or `DEEPSEEK_API_KEY`);
+- **Auth**: Bearer token via `GEWU_LLM_API_KEY` (relay-only; provider keys are
+  never used for the relay);
 - **Models**: one model id per run, set via `GEWU_LLM_MODEL`; the relay's
   model list is not auto-discovered;
 - **Compatibility defaults**: DeepSeek-style (`max_tokens`, no `store`/`strict`,
@@ -121,7 +124,8 @@ to a timestamped ignored `drafts/generated-*/` directory and always remains
 npm run generate-template:local -- "Given an array of integers, return the indices of the two numbers that add up to a target."
 ```
 
-The command requires the ignored `.env.local` file to contain `DEEPSEEK_API_KEY`.
+The command requires the ignored `.env.local` file to contain the configured
+provider's key (e.g. `DEEPSEEK_API_KEY`, or `GEWU_LLM_API_KEY` for the relay).
 It writes `unit.json`, `code/python.py`, and non-secret `generation.json`, then
 performs response-shape checks, deterministic source-template derivation,
 Python syntax, and the real Rust `gewu-template` manifest loader. It first

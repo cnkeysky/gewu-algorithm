@@ -206,7 +206,11 @@ async function generateDraft(
     implementation_variants: draft.variants,
   } satisfies GenerationProfile;
   const baseTask = definition.buildTask(draft.problem, profile);
-  const revisionFeedback = draft.status === "revision_requested" ? await revisionFeedbackFor(draft, reviews) : "";
+  // Revision feedback (pre-review findings and the acceptance gate's
+  // needs_revision rationale) is applied on every regeneration, including a
+  // reused draft after a failed attempt, so repairs are informed instead of
+  // blind. revisionFeedbackFor returns "" when there is nothing relevant.
+  const revisionFeedback = await revisionFeedbackFor(draft, reviews);
   let instruction = baseTask.instruction;
   if (draft.unitId) instruction += `\n\nThe manifest id MUST be exactly "${draft.unitId}" so this draft publishes as a new revision of that unit.`;
   if (revisionFeedback) instruction += `\n\nRevision feedback from the last LLM pre-review. Address every finding in the regenerated artifact, including the statement, implementation, and tests where relevant:\n${revisionFeedback}`;
@@ -643,9 +647,13 @@ const server = createServer(async (request, response) => {
           expectedStatus,
         });
       }
-      database.prepare("DELETE FROM reviews WHERE draft_id = ?").run(draft.id);
+      // Keep needs_revision/reject reviews on reuse: they are the feedback
+      // the next generation needs. Pass/pending reviews are stale once the
+      // artifact is replaced and are dropped so a stale pass can never gate
+      // acceptance.
+      database.prepare("DELETE FROM reviews WHERE draft_id = ? AND verdict NOT IN ('needs_revision', 'reject')").run(draft.id);
       state.drafts = state.drafts.map((item) => item.id === draft.id ? updated : item);
-      state.reviews = state.reviews.filter((review) => review.draftId !== draft.id);
+      state.reviews = state.reviews.filter((review) => review.draftId !== draft.id || review.verdict === "needs_revision" || review.verdict === "reject");
       return send(response, 200, { draft: updated });
     }
     const generationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/generate$/);

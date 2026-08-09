@@ -35,9 +35,8 @@ allowed only with explicit migration notes (see
   from the failed state.
 - LLM requests can be routed through a custom OpenAI-compatible relay/proxy:
   set `GEWU_LLM_PROVIDER=relay`, `GEWU_LLM_MODEL`, `GEWU_LLM_BASE_URL`, and
-  `GEWU_LLM_API_KEY` (or reuse `DEEPSEEK_API_KEY`); the dev script and the
-  authoring workbench provider list expose the relay when the base URL is
-  configured.
+  `GEWU_LLM_API_KEY`; the dev script and the authoring workbench provider list
+  expose the relay when the base URL is configured.
 - Share the project-independent global agent rules as a reusable template in
   `docs/development/global-agent-rules.md`, so collaborators can copy the same
   baseline into their global config or other repositories.
@@ -103,6 +102,14 @@ allowed only with explicit migration notes (see
   validation error back into the prompt (upstream/transport errors are
   excluded), so retries are informed. READMEs now recommend
   `--concurrency 1 --request-delay-ms` for shared relays.
+- The relay credential is `GEWU_LLM_API_KEY` only: `DEEPSEEK_API_KEY` (or any
+  other provider key) is never sent to a relay endpoint, so a real provider
+  key cannot leak to an arbitrary gateway. `GEWU_LLM_TOOL_CHOICE=forced` is
+  now supported by OpenAI-compatible relays (e.g. Codex gateways) so the
+  model always returns structured output instead of finishing with plain
+  text; reuse of a failed/needs-revision draft keeps its
+  needs_revision/reject reviews so the next generation is informed by the
+  previous gate rationale.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring
