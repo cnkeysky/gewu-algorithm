@@ -44,8 +44,7 @@ fn main() {
             }
         }
         "list-units" => {
-            match Core::open_roots(content_roots, data_root)
-                .map(|core| core.with_published_roots(published_roots.clone()))
+            match open_core(content_roots, published_roots, data_root)
                 .and_then(|core| core.list_units())
             {
                 Ok(units) => print_json(&units),
@@ -53,8 +52,7 @@ fn main() {
             }
         }
         "recent-attempts" => {
-            match Core::open_roots(content_roots, data_root)
-                .map(|core| core.with_published_roots(published_roots.clone()))
+            match open_core(content_roots, published_roots, data_root)
                 .and_then(|core| core.recent_attempts(20))
             {
                 Ok(attempts) => print_json(&attempts),
@@ -63,8 +61,7 @@ fn main() {
         }
         // Projects deterministic review recommendations without starting an editor.
         "review" => {
-            match Core::open_roots(content_roots, data_root)
-                .map(|core| core.with_published_roots(published_roots.clone()))
+            match open_core(content_roots, published_roots, data_root)
                 .and_then(|core| core.review_recommendations(100))
             {
                 Ok(recommendations) => print_json(&recommendations),
@@ -72,8 +69,7 @@ fn main() {
             }
         }
         "delete-history" => {
-            match Core::open_roots(content_roots, data_root)
-                .map(|core| core.with_published_roots(published_roots))
+            match open_core(content_roots, published_roots, data_root)
                 .and_then(|core| core.delete_history())
             {
                 Ok(deleted_attempts) => print_json(&DeleteHistoryResult { deleted_attempts }),
@@ -84,14 +80,25 @@ fn main() {
     }
 }
 
+fn open_core(
+    content_roots: Vec<PathBuf>,
+    published_roots: Vec<PathBuf>,
+    data_root: PathBuf,
+) -> Result<Core, gewu_core::CoreError> {
+    let core = Core::open_roots(content_roots, data_root)?.with_published_roots(published_roots);
+    // Fail fast at startup: stale published content must surface here, not on
+    // the first practice request.
+    core.ensure_published_units_valid()?;
+    Ok(core)
+}
+
 fn run_stdio(
     content_roots: Vec<PathBuf>,
     published_roots: Vec<PathBuf>,
     data_root: PathBuf,
 ) -> Result<(), String> {
-    let mut core = Core::open_roots(content_roots, data_root)
-        .map(|core| core.with_published_roots(published_roots))
-        .map_err(|error| error.to_string())?;
+    let mut core =
+        open_core(content_roots, published_roots, data_root).map_err(|error| error.to_string())?;
     let stdin = io::stdin();
     let mut handshaken = false;
     for line in stdin.lock().lines() {

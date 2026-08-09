@@ -135,6 +135,12 @@ allowed only with explicit migration notes (see
   published root through. A one-time idempotent migration
   (`tools/template-authoring/scripts/stamp-published.mjs`) backfills the
   pre-fix published units (they were gate-approved) to `validated`.
+- The published-root check runs eagerly when the core starts (`serve`/`stdio`
+  fail immediately with the offending unit's path and the recovery command),
+  not on the first practice request. The migration is exposed as
+  `npm run stamp:published`, and the error message points to it; manual
+  `gewu serve` commands in the docs pass `--published-root` for the published
+  root.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

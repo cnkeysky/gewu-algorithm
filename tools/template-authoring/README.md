@@ -255,8 +255,14 @@ GEWU_LLM_PROVIDER=relay GEWU_LLM_MODEL=deepseek-v4-flash npm run batch
 
 ```sh
 GEWU_PUBLISHED_ROOT="$PWD/tools/template-authoring/drafts/.workbench/published" \
-cargo run -p gewu-cli -- serve --content-root "$GEWU_PUBLISHED_ROOT" --data-root .gewu-data
+cargo run -p gewu-cli -- serve --content-root "$GEWU_PUBLISHED_ROOT" \
+  --published-root "$GEWU_PUBLISHED_ROOT" --data-root .gewu-data
 ```
+
+The core refuses to serve a published root that contains a non-`validated`
+unit (fail-fast with the unit path). Pre-fix published units can be
+backfilled once with `npm run stamp:published` (idempotent); new publishes are
+stamped by the pipeline.
 
 The pack can be checked independently with
 `cargo run -p gewu-template --bin pack -- verify <content-root> <content-root>/pack.json`.

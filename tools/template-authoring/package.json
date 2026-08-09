@@ -13,6 +13,7 @@
     "review-template": "npm run build && node dist/review-template.js",
     "review-template:local": "npm run build && node --env-file=.env.local dist/review-template.js",
     "fetch:hot100": "node scripts/fetch-hot100.mjs",
+    "stamp:published": "node scripts/stamp-published.mjs",
     "batch": "npm run build && node dist/batch-authoring.js",
     "rule-dedup": "npm run build && node dist/rule-dedup.js",
     "workbench:api": "npm run build && node dist/workbench-api.js",

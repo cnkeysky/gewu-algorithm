@@ -121,6 +121,30 @@ impl Core {
         self
     }
 
+    /// Fail-fast at startup: eagerly verifies that every unit under a
+    /// published root is content-validated, so a stale or mis-stamped
+    /// published unit surfaces when the core starts instead of on the first
+    /// practice request.
+    pub fn ensure_published_units_valid(&self) -> Result<(), CoreError> {
+        if self.published_roots.is_empty() {
+            return Ok(());
+        }
+        let mut paths = Vec::new();
+        for root in &self.published_roots {
+            collect_unit_paths(root, &mut paths)?;
+        }
+        for path in paths {
+            let unit = load_algorithm_unit(&path).map_err(CoreError::Template)?;
+            if unit.status != ContentStatus::Validated {
+                return Err(CoreError::UnvalidatedPublishedUnit {
+                    path,
+                    status: format!("{:?}", unit.status),
+                });
+            }
+        }
+        Ok(())
+    }
+
     pub fn list_units(&self) -> Result<Vec<UnitSummary>, CoreError> {
         let mut units = self.load_units()?;
         units.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
@@ -1988,7 +2012,7 @@ pub enum CoreError {
     #[error("unit `{0}` was not found in local content")]
     UnknownUnit(String),
     #[error(
-        "published unit at {path} is not content-validated (status {status}); republish it through the authoring workbench"
+        "published unit at {path} is not content-validated (status {status}); run `npm run stamp:published` or republish it through the authoring workbench"
     )]
     UnvalidatedPublishedUnit { path: PathBuf, status: String },
     #[error("session `{0}` was not found")]

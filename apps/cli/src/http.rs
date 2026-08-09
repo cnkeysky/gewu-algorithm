@@ -20,6 +20,10 @@ pub fn run(
     let mut core = Core::open_roots(content_roots, data_root)
         .map(|core| core.with_published_roots(published_roots))
         .map_err(|error| error.to_string())?;
+    // Fail fast at startup: stale published content must surface here, not on
+    // the first practice request.
+    core.ensure_published_units_valid()
+        .map_err(|error| error.to_string())?;
     let mut handshaken = false;
     for stream in listener.incoming() {
         let mut stream = match stream {
