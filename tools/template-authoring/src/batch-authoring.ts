@@ -325,9 +325,13 @@ async function askDuplicate(problem: BatchProblem, accepted: AcceptedUnit): Prom
 
 type DraftIndexes = {
   accepted: Map<string, AcceptedUnit>;
+  /** Accepted units matched by statement fingerprint (cross-catalog slug
+   * variants and slug-less web drafts resolve to the same problem). */
+  acceptedByFingerprint: Map<string, AcceptedUnit>;
   /** Newest non-accepted draft per problem+language, reused on re-runs so
    * failed/interrupted attempts are retried instead of accumulating. */
   existing: Map<string, { id: string; status: string }>;
+  existingByFingerprint: Map<string, { id: string; status: string }>;
 };
 
 async function loadDraftIndexes(options: Options): Promise<DraftIndexes> {
@@ -335,22 +339,30 @@ async function loadDraftIndexes(options: Options): Promise<DraftIndexes> {
   if (!result.ok) throw new Error(`cannot list drafts: ${draftError(result)}`);
   const drafts = (result.body as { drafts?: Array<{ id: string; problem: string; status: string; language?: string; modes?: string[]; unitId?: string }> }).drafts ?? [];
   const accepted = new Map<string, AcceptedUnit>();
+  const acceptedByFingerprint = new Map<string, AcceptedUnit>();
   const existing = new Map<string, { id: string; status: string }>();
+  const existingByFingerprint = new Map<string, { id: string; status: string }>();
   for (const draft of drafts) {
     const problem = String(draft.problem ?? "").trim();
     if (!problem) continue;
     const language = String(draft.language ?? "python").trim() || "python";
     const key = draftKey(draft, language);
+    const fingerprintKey = coverageKey(textIdentity(problem), language);
     if (draft.status === "accepted") {
       const modes = new Set(draft.modes ?? []);
+      const unit = { draftId: draft.id, unitId: draft.unitId, modes };
       const previous = accepted.get(key);
-      if (previous) for (const mode of previous.modes) modes.add(mode);
-      accepted.set(key, { draftId: draft.id, unitId: draft.unitId, modes });
-    } else if (!existing.has(key)) {
-      existing.set(key, { id: draft.id, status: String(draft.status ?? "") });
+      if (previous) for (const mode of previous.modes) unit.modes.add(mode);
+      accepted.set(key, unit);
+      const fpPrevious = acceptedByFingerprint.get(fingerprintKey);
+      if (fpPrevious) for (const mode of fpPrevious.modes) unit.modes.add(mode);
+      acceptedByFingerprint.set(fingerprintKey, unit);
+    } else {
+      if (!existing.has(key)) existing.set(key, { id: draft.id, status: String(draft.status ?? "") });
+      if (!existingByFingerprint.has(fingerprintKey)) existingByFingerprint.set(fingerprintKey, { id: draft.id, status: String(draft.status ?? "") });
     }
   }
-  return { accepted, existing };
+  return { accepted, acceptedByFingerprint, existing, existingByFingerprint };
 }
 
 type ItemResult = {
@@ -399,7 +411,8 @@ async function processProblem(
   try {
     const language = resolveLanguage(options, problem);
     const key = problemKey(problem, language);
-    const accepted = indexes.accepted.get(key);
+    const fingerprintKey = coverageKey(textIdentity(problem.problem), language);
+    const accepted = indexes.accepted.get(key) ?? indexes.acceptedByFingerprint.get(fingerprintKey);
     const covered = accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     if (accepted && covered && !options.force && !matchesRequested(problem, options.regenerate)) {
       if (duplicatePolicy === "ask") {
@@ -451,39 +464,41 @@ async function processProblem(
       });
       if (!patch.ok) return { ...base, status: "failed", error: `fork update: ${draftError(patch)}` };
       base.draftSource = accepted.unitId ? `revision of ${accepted.unitId}` : `revision of ${accepted.draftId}`;
-    } else if (indexes.existing.has(key)) {
+    } else {
       // Reuse the newest non-accepted draft for this problem+language: reset it
       // to queued with the current run's configuration and retry, instead of
       // creating a duplicate entry on every re-run.
-      const existing = indexes.existing.get(key)!;
-      const patch = await apiRequest(options, "PATCH", `/api/drafts/${existing.id}`, {
-        title: problem.title,
-        problem: problem.problem,
-        slug: problem.slug,
-        provider: options.provider ?? "deepseek",
-        model: options.model ?? "deepseek-v4-flash",
-        language,
-        variants: options.variants,
-        modes: options.modes,
-        assistance: options.modes.includes("code_recall") ? options.assistance : [],
-      });
-      if (!patch.ok) return { ...base, status: "failed", error: `reuse update: ${draftError(patch)}` };
-      draftId = existing.id;
-      base.draftSource = `reused ${existing.id.slice(0, 8)} (was ${existing.status})`;
-    } else {
-      const draftResult = await apiRequest(options, "POST", "/api/drafts", {
-        title: problem.title,
-        problem: problem.problem,
-        slug: problem.slug,
-        provider: options.provider ?? "deepseek",
-        model: options.model ?? "deepseek-v4-flash",
-        language,
-        variants: options.variants,
-        modes: options.modes,
-        assistance: options.modes.includes("code_recall") ? options.assistance : [],
-      });
-      if (!draftResult.ok) return { ...base, status: "failed", error: `draft: ${draftError(draftResult)}` };
-      draftId = String((draftResult.body as { draft?: { id?: string } }).draft?.id ?? "");
+      const existing = indexes.existing.get(key) ?? indexes.existingByFingerprint.get(fingerprintKey);
+      if (existing) {
+        const patch = await apiRequest(options, "PATCH", `/api/drafts/${existing.id}`, {
+          title: problem.title,
+          problem: problem.problem,
+          slug: problem.slug,
+          provider: options.provider ?? "deepseek",
+          model: options.model ?? "deepseek-v4-flash",
+          language,
+          variants: options.variants,
+          modes: options.modes,
+          assistance: options.modes.includes("code_recall") ? options.assistance : [],
+        });
+        if (!patch.ok) return { ...base, status: "failed", error: `reuse update: ${draftError(patch)}` };
+        draftId = existing.id;
+        base.draftSource = `reused ${existing.id.slice(0, 8)} (was ${existing.status})`;
+      } else {
+        const draftResult = await apiRequest(options, "POST", "/api/drafts", {
+          title: problem.title,
+          problem: problem.problem,
+          slug: problem.slug,
+          provider: options.provider ?? "deepseek",
+          model: options.model ?? "deepseek-v4-flash",
+          language,
+          variants: options.variants,
+          modes: options.modes,
+          assistance: options.modes.includes("code_recall") ? options.assistance : [],
+        });
+        if (!draftResult.ok) return { ...base, status: "failed", error: `draft: ${draftError(draftResult)}` };
+        draftId = String((draftResult.body as { draft?: { id?: string } }).draft?.id ?? "");
+      }
     }
     base.draftId = draftId;
 
@@ -645,7 +660,8 @@ async function main(): Promise<void> {
   } else {
     const covered = problems.filter((problem) => {
       const language = resolveLanguage(options, problem);
-      const accepted = indexes.accepted.get(problemKey(problem, language));
+      const accepted = indexes.accepted.get(problemKey(problem, language))
+        ?? indexes.acceptedByFingerprint.get(coverageKey(textIdentity(problem.problem), language));
       return accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     });
     if (covered.length > 0) {

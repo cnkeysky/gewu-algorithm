@@ -47,6 +47,10 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- Dedup identity is unified around slug **and** statement fingerprint: a
+  problem matches an existing draft when its slug or its normalized-statement
+  fingerprint hits, so cross-catalog slug variants and slug-less web drafts
+  resolve to the same problem instead of creating duplicates.
 - The web workbench gains a decisive **LLM approve** action on `validated` /
   `llm_reviewed` / `needs_revision` drafts (runs the acceptance gate; a pass
   publishes with the **LLM approved** label, a `needs_revision` verdict moves

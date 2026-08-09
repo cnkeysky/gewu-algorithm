@@ -149,3 +149,17 @@ test("text identity is a normalized fingerprint, robust to formatting changes", 
   const different = problemKey({ title: "T", problem: "Given an array [1, 2], target 10" }, "python");
   assert.notEqual(a, different);
 });
+
+test("language is part of identity: python and java stay separate units", () => {
+  const python = problemKey({ title: "T", slug: "two-sum", problem: "P" }, "python");
+  const java = problemKey({ title: "T", slug: "two-sum", problem: "P" }, "java");
+  assert.notEqual(python, java);
+  const fpPython = problemKey({ title: "T", problem: "Given an array, return indices." }, "python");
+  const fpJava = problemKey({ title: "T", problem: "Given an array, return indices." }, "java");
+  assert.notEqual(fpPython, fpJava);
+  // Same slug + language identifies the same unit even with reworded text.
+  assert.equal(
+    problemKey({ title: "T1", slug: "two-sum", problem: "P1" }, "python"),
+    problemKey({ title: "T2", slug: "two-sum", problem: "P2" }, "python"),
+  );
+});

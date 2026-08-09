@@ -211,16 +211,17 @@ authoring pipeline for many problems. Defaults:
   `deepseek:deepseek-v4-flash`); with a relay, export those or pass
   `--llm-approve relay:<model>` explicitly. `--auto-accept` opts into an
   operator-tier override instead.
-- **Deduplication**: identity is `slug`/id + language (falling back to the
-  statement text), so re-runs reuse the same draft instead of accumulating
-  duplicates; unit ids are language-qualified (`<slug>.<language>`), so Python
-  and Java templates publish as separate units; `--regenerate <ids>` forces
-  specific problems as new revisions.
-  Limitations: web-created drafts have no slug and match only by statement
-  fingerprint, and two catalogs using different slugs for the same problem are
-  not merged — keep one canonical slug per problem. The web workbench warns
-  before submitting a duplicate (same language + normalized statement or
-  title).
+- **Deduplication**: identity is `slug`/id + language, unified with a
+  **statement fingerprint** (NFKC + lowercase + collapsed whitespace,
+  SHA-256) — a problem matches an existing draft when its slug **or** its
+  fingerprint hits, so cross-catalog slug variants and slug-less web drafts
+  resolve to the same problem. Unit ids are language-qualified
+  (`<slug>.<language>`), so Python and Java templates publish as separate
+  units; `--regenerate <ids>` forces specific problems as new revisions.
+  Residual limitation: two genuinely different wordings of the same problem
+  without a shared slug or fingerprint cannot be auto-merged (semantic
+  matching is out of scope). The web workbench warns before submitting a
+  duplicate (same language + normalized statement or title).
 - **Rate limits**: gateway 429s retry with exponential backoff; use
   `--concurrency 2` on shared relays and keep `--timeout-minutes` above the
   slowest generation.

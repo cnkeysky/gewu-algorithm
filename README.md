@@ -214,10 +214,12 @@ specific problems as new revisions. `--yes` skips the prompts (the default
 when the CLI is not a TTY, e.g. CI). `--select 1,15,two-sum` runs only the
 given LeetCode ids / slugs / titles instead of rescanning the whole catalog.
 Entries without a problem statement are skipped with a warning. Duplicate
-identity is the problem's `slug`/id + language (falling back to the statement
-text): a template in one language is never treated as a duplicate of an
-accepted template in another language, so Python and Java templates for the
-same problem coexist as separate units (unit ids are language-qualified,
+identity is the problem's `slug`/id + language, unified with a statement
+fingerprint (a problem matches an existing draft by slug **or** normalized
+statement, so cross-catalog slug variants and slug-less web drafts resolve to
+the same problem): a template in one language is never treated as a duplicate
+of an accepted template in another language, so Python and Java templates for
+the same problem coexist as separate units (unit ids are language-qualified,
 `<slug>.<language>` — see
 [ADR 0019](docs/decisions/0019-language-qualified-unit-identity.md)).
 Requested-mode coverage then decides the action — fully covered is skipped,
