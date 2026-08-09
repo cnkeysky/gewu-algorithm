@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { casUpsertDraft, upsertDraft, upsertReview } from "./persist.js";
+import { casUpsertDraft, releaseClaim, tryAcquireClaim, upsertDraft, upsertReview } from "./persist.js";
 
 function openDb() {
   const dir = mkdtempSync(join(tmpdir(), "gewu-persist-"));
@@ -19,6 +19,11 @@ function openDb() {
     CREATE TABLE reviews (
       id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, role TEXT NOT NULL, verdict TEXT NOT NULL,
       artifact_hash TEXT, report_path TEXT, rationale TEXT, created_at TEXT NOT NULL
+    );
+    CREATE TABLE claims (
+      draft_id TEXT NOT NULL, operation TEXT NOT NULL, role TEXT NOT NULL DEFAULT '',
+      claimed_at TEXT NOT NULL, expires_at TEXT NOT NULL,
+      PRIMARY KEY (draft_id, operation, role)
     );
   `);
   return { db, dir };
@@ -94,6 +99,44 @@ test("casUpsertDraft applies only when the row still has the expected status", (
     // state machine guard's job (draftReuseGuard), which refuses before CAS.
     assert.equal(casUpsertDraft(db, { ...draft("a", "accepted") }, "queued"), true);
     assert.equal(db.prepare("SELECT status FROM drafts WHERE id='a'").get()!.status, "accepted");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("claims serialize LLM work across processes and let review roles run concurrently", () => {
+  const { db, dir } = openDb();
+  try {
+    // A second connection simulates a second API process sharing the store.
+    const dbOther = new DatabaseSync(join(dir, "test.sqlite"));
+    try {
+      assert.equal(tryAcquireClaim(db, { draftId: "d1", operation: "generate" }), true);
+      // The same operation on the same draft is refused across connections.
+      assert.equal(tryAcquireClaim(dbOther, { draftId: "d1", operation: "generate" }), false);
+      // A different operation on the same draft is independent.
+      assert.equal(tryAcquireClaim(dbOther, { draftId: "d1", operation: "acceptance" }), true);
+      // The three review roles on the same draft run concurrently.
+      assert.equal(tryAcquireClaim(dbOther, { draftId: "d1", operation: "review", role: "algorithm_correctness" }), true);
+      assert.equal(tryAcquireClaim(dbOther, { draftId: "d1", operation: "review", role: "learning_design" }), true);
+      assert.equal(tryAcquireClaim(dbOther, { draftId: "d1", operation: "review", role: "algorithm_correctness" }), false);
+    } finally {
+      releaseClaim(db, "d1", "generate");
+      dbOther.close();
+    }
+    assert.equal(tryAcquireClaim(db, { draftId: "d1", operation: "generate" }), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("expired claims are reclaimed for a crashed worker", () => {
+  const { db, dir } = openDb();
+  try {
+    const now = Date.parse("2026-08-09T00:00:00.000Z");
+    assert.equal(tryAcquireClaim(db, { draftId: "d1", operation: "generate", leaseMs: 1_000 }, now), true);
+    assert.equal(tryAcquireClaim(db, { draftId: "d1", operation: "generate", leaseMs: 1_000 }, now + 500), false);
+    // Lease expired: the next worker can take over.
+    assert.equal(tryAcquireClaim(db, { draftId: "d1", operation: "generate", leaseMs: 1_000 }, now + 2_000), true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

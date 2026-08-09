@@ -8,12 +8,12 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
-import { assertDraftTransition, createInFlightGuard, draftReuseGuard } from "./draft-lifecycle.js";
+import { assertDraftTransition, draftReuseGuard } from "./draft-lifecycle.js";
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
 import { normalizeSupersedes, qualifyUnitId } from "./publish.js";
-import { casUpsertDraft, upsertDraft, upsertReview } from "./persist.js";
+import { casUpsertDraft, releaseClaim, tryAcquireClaim, upsertDraft, upsertReview } from "./persist.js";
 import {
   STAGE_SPECS,
   assertExplicitVariantCount,
@@ -31,9 +31,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 /** Short build id of the executing API bundle: lets dev scripts detect a
  * stale API process and restart it instead of silently reusing old code. */
 const BUILD_ID = createHash("sha256").update(readFileSync(fileURLToPath(import.meta.url))).digest("hex").slice(0, 12);
-/** Serializes LLM-backed work per draft (+ role for reviews) so concurrent
- * clients can never double-generate, double-accept, or double-review. */
-const inFlight = createInFlightGuard();
 const storageRoot = resolve(here, "../drafts/.workbench");
 const databasePath = join(storageRoot, "authoring.sqlite");
 mkdirSync(storageRoot, { recursive: true });
@@ -50,6 +47,11 @@ database.exec(`
   CREATE TABLE IF NOT EXISTS reviews (
     id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, role TEXT NOT NULL, verdict TEXT NOT NULL,
     artifact_hash TEXT, report_path TEXT, rationale TEXT, created_at TEXT NOT NULL, FOREIGN KEY (draft_id) REFERENCES drafts(id)
+  );
+  CREATE TABLE IF NOT EXISTS claims (
+    draft_id TEXT NOT NULL, operation TEXT NOT NULL, role TEXT NOT NULL DEFAULT '',
+    claimed_at TEXT NOT NULL, expires_at TEXT NOT NULL,
+    PRIMARY KEY (draft_id, operation, role)
   );
 `);
 try { database.exec("ALTER TABLE drafts ADD COLUMN published_path TEXT"); } catch { /* Existing database already has the column. */ }
@@ -637,8 +639,9 @@ const server = createServer(async (request, response) => {
       if (!draft) return send(response, 404, { error: "draft not found" });
       const generateError = assertDraftTransition(draft.status, "generate");
       if (generateError) return send(response, 409, { error: generateError });
-      const generateLock = `${draft.id}:generate`;
-      if (!inFlight.tryAcquire(generateLock)) return send(response, 409, { error: "draft generation is already in progress" });
+      if (!tryAcquireClaim(database, { draftId: draft.id, operation: "generate" })) {
+        return send(response, 409, { error: "draft generation is already in progress" });
+      }
       const generationPayload = await body(request).catch(() => ({}));
       const generationOverrides = isRecord(generationPayload) && (typeof generationPayload.provider === "string" || typeof generationPayload.model === "string")
         ? { provider: typeof generationPayload.provider === "string" ? generationPayload.provider : undefined, model: typeof generationPayload.model === "string" ? generationPayload.model : undefined }
@@ -660,7 +663,7 @@ const server = createServer(async (request, response) => {
         await saveState(state);
         return send(response, 422, { status: "failed", error: draft.error, draft });
       } finally {
-        inFlight.release(generateLock);
+        releaseClaim(database, draft.id, "generate");
       }
     }
     const validationMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/validate$/);
@@ -695,8 +698,9 @@ const server = createServer(async (request, response) => {
       if (!draft.artifactPath || acceptanceError) {
         return send(response, 409, { error: "model acceptance requires a validated artifact (generate + validate first)" });
       }
-      const acceptanceLock = `${draft.id}:acceptance`;
-      if (!inFlight.tryAcquire(acceptanceLock)) return send(response, 409, { error: "LLM acceptance is already in progress for this draft" });
+      if (!tryAcquireClaim(database, { draftId: draft.id, operation: "acceptance" })) {
+        return send(response, 409, { error: "LLM acceptance is already in progress for this draft" });
+      }
       try {
         const payload = await body(request).catch(() => ({}));
         const overrides = isRecord(payload) && (typeof payload.provider === "string" || typeof payload.model === "string")
@@ -713,7 +717,7 @@ const server = createServer(async (request, response) => {
         await saveState(state);
         return send(response, 200, { verdict: review.verdict, rationale, review });
       } finally {
-        inFlight.release(acceptanceLock);
+        releaseClaim(database, draft.id, "acceptance");
       }
     }
     const acceptMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/accept$/);
@@ -832,8 +836,9 @@ const server = createServer(async (request, response) => {
       // Per-role lock: the three roles run concurrently on the same draft
       // (batch fires them in parallel), so the key includes the role — only a
       // duplicate of the same role on the same draft is refused.
-      const reviewLock = `${draft.id}:review:${payload.role}`;
-      if (!inFlight.tryAcquire(reviewLock)) return send(response, 409, { error: `review role ${payload.role} is already in progress for this draft` });
+      if (!tryAcquireClaim(database, { draftId: draft.id, operation: "review", role: payload.role })) {
+        return send(response, 409, { error: `review role ${payload.role} is already in progress for this draft` });
+      }
       try {
         const repoRoot = resolve(here, "../..", "..");
         const artifactAbsolutePath = resolve(repoRoot, draft.artifactPath);
@@ -850,7 +855,7 @@ const server = createServer(async (request, response) => {
         await saveState(state);
         return send(response, 201, { review });
       } finally {
-        inFlight.release(reviewLock);
+        releaseClaim(database, draft.id, "review", payload.role);
       }
     }
     const artifactMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/artifact$/);

@@ -38,6 +38,40 @@ export interface PersistedReview {
   createdAt: string;
 }
 
+/** A lease on one LLM-backed operation (generate / acceptance / review
+ * role). The primary key is (draft_id, operation, role), so acquiring is an
+ * atomic compare-and-set across processes: only one worker can hold the same
+ * claim at a time, and a crashed worker's claim is reclaimed after expiry. */
+export interface DraftClaim {
+  draftId: string;
+  operation: string;
+  role?: string;
+  leaseMs?: number;
+}
+
+const DEFAULT_CLAIM_LEASE_MS = 150 * 60_000;
+
+export function tryAcquireClaim(database: DatabaseSync, claim: DraftClaim, now = Date.now()): boolean {
+  const role = claim.role ?? "";
+  const leaseMs = claim.leaseMs ?? Number(process.env.GEWU_CLAIM_LEASE_MS ?? DEFAULT_CLAIM_LEASE_MS);
+  const nowIso = new Date(now).toISOString();
+  // Reap an expired lease for this exact key first (crashed worker), then
+  // insert — the UNIQUE primary key is the CAS that refuses a second holder.
+  database.prepare("DELETE FROM claims WHERE draft_id = ? AND operation = ? AND role = ? AND expires_at <= ?")
+    .run(claim.draftId, claim.operation, role, nowIso);
+  try {
+    database.prepare("INSERT INTO claims (draft_id, operation, role, claimed_at, expires_at) VALUES (?, ?, ?, ?, ?)")
+      .run(claim.draftId, claim.operation, role, nowIso, new Date(now + leaseMs).toISOString());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function releaseClaim(database: DatabaseSync, draftId: string, operation: string, role = ""): void {
+  database.prepare("DELETE FROM claims WHERE draft_id = ? AND operation = ? AND role = ?").run(draftId, operation, role);
+}
+
 export function upsertDraft(database: DatabaseSync, draft: PersistedDraft): void {
   database.prepare(`INSERT INTO drafts (id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET task_id=excluded.task_id, slug=excluded.slug, title=excluded.title, problem=excluded.problem, provider=excluded.provider, model=excluded.model, language=excluded.language, variants=excluded.variants, modes_json=excluded.modes_json, assistance_json=excluded.assistance_json, status=excluded.status, created_at=excluded.created_at, unit_id=excluded.unit_id, artifact_path=excluded.artifact_path, published_path=excluded.published_path, error=excluded.error`)

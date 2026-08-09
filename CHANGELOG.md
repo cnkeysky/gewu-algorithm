@@ -62,10 +62,13 @@ allowed only with explicit migration notes (see
   `assertDraftTransition` instead of ad-hoc status lists, and the reuse/reset
   transition is a compare-and-set (`casUpsertDraft`) at the storage layer so
   concurrent writers can never silently overwrite each other. LLM-backed
-  endpoints take a per-draft (+ per-role for the three concurrent pre-review
-  roles) in-flight lock so the same operation cannot double-spend gateway
-  quota, and the batch CLI refuses to start while another run holds its lock.
-  The batch report is written atomically (tmp + rename).
+  endpoints take a **lease** on a `claims` table (unique key draft+operation+
+  review role, with expiry), the industry-standard way to serialize work
+  across processes: only one worker can hold the same operation, crashed
+  workers' leases are reclaimed after expiry, and the three pre-review roles
+  still run concurrently because their keys differ by role. The batch CLI
+  refuses to start while another run holds its lock, and the batch report is
+  written atomically (tmp + rename).
 - `batch:stop` is more reliable: the API writes its own pid trace
   (`.gewu-dev/pids/api-<port>.pid`) on startup so it can be stopped even when
   it was not started by the runner, and the stop sweep uses `ss` before

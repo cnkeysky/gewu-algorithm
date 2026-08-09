@@ -61,6 +61,12 @@ mirrors it. Every endpoint rejects invalid transitions:
   observed) and a mismatch is also refused with 409, so a stale or concurrent
   client (e.g. an old batch process with an outdated index) can never clobber
   a draft that changed underneath it.
+- LLM-backed operations (`generate`, `acceptance`, `reviews`) are serialized
+  with leases on a `claims` table (unique key = draft + operation + review
+  role, with an expiry): only one worker can run the same operation on the
+  same draft, so concurrent runs cannot double-spend the model quota, and a
+  crashed worker's lease is reclaimed after it expires. The three pre-review
+  roles remain concurrent because their claim keys differ by role.
 
 ## Transitions
 

@@ -65,23 +65,3 @@ export function draftReuseGuard(draft: { id: string; status: string }, expectedS
   }
   return undefined;
 }
-
-/**
- * Per-key in-flight guard for LLM-backed endpoints. Two concurrent clients
- * (e.g. a batch run and a web action, or two batch runs) could otherwise both
- * pass the status check and generate/accept/review the same draft — spending
- * gateway quota twice. The guard makes the second caller get a 409 instead.
- */
-export function createInFlightGuard() {
-  const busy = new Set<string>();
-  return {
-    tryAcquire(key: string): boolean {
-      if (busy.has(key)) return false;
-      busy.add(key);
-      return true;
-    },
-    release(key: string): void {
-      busy.delete(key);
-    },
-  };
-}
