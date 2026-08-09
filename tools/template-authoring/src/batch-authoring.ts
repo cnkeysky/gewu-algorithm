@@ -90,6 +90,19 @@ type Options = {
   report: string;
 };
 
+/** Resolves the default LLM approver for the acceptance gate: the environment's
+ * provider/model wins, then --provider/--model, then the built-in default. */
+export function defaultApproverSpec(
+  options: Pick<Options, "provider" | "model">,
+  environment: Record<string, string | undefined> = process.env,
+): string {
+  const envProvider = environment.GEWU_LLM_PROVIDER;
+  const envModel = environment.GEWU_LLM_MODEL;
+  if (envProvider && envModel) return `${envProvider}:${envModel}`;
+  if (options.provider && options.model) return `${options.provider}:${options.model}`;
+  return "deepseek:deepseek-v4-flash";
+}
+
 function fail(message: string): never {
   console.error(`batch-authoring: ${message}`);
   console.error("usage: node dist/batch-authoring.js --problems <file.json|tsv> [--api url] [--steps draft,generate,validate,review,accept] [--concurrency n] [--force] [--yes] [--select id1,id2] [--repair-rounds n] [--auto-accept] [--language python] [--variants 1] [--modes ...] [--assistance ...] [--report path]");
@@ -589,7 +602,7 @@ async function main(): Promise<void> {
   if (options.steps.has("accept") && !options.autoAccept && !options.llmApprove) {
     // The fully-automated batch pipeline approves through the LLM acceptance
     // gate by default; --auto-accept remains the operator (human-tier) override.
-    options.llmApprove = options.provider && options.model ? `${options.provider}:${options.model}` : "deepseek:deepseek-v4-flash";
+    options.llmApprove = defaultApproverSpec(options);
     console.log(`batch-authoring: LLM approval gate enabled by default (approver ${options.llmApprove}); pass --auto-accept for operator approval`);
   }
   console.log(`batch-authoring: ${problems.length} problems, steps=[${[...options.steps].join(",")}], concurrency=${options.concurrency}${options.force ? ", force" : ", dedupe-covered"}${options.select.length > 0 ? `, select=[${options.select.join(",")}]` : ""}`);

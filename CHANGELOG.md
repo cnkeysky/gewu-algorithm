@@ -47,6 +47,12 @@ allowed only with explicit migration notes (see
 
 ### Changed
 
+- The batch default LLM approver honors `GEWU_LLM_PROVIDER`/`GEWU_LLM_MODEL`
+  (then `--provider`/`--model`, then the built-in default), so relay setups
+  approve through the relay without an explicit `--llm-approve`. The authoring
+  README documents the batch defaults (all modes, LLM gate enabled by default,
+  gate-only steps, dedup/regenerate, and concurrency guidance) and corrects
+  the stale “only human approval promotes” wording.
 - Document the decisive LLM acceptance gate in the approval flow: a pass
   publishes with the **LLM approved** label from `validated` /
   `llm_reviewed` / `needs_revision`, the pre-review roles are advisory for

@@ -55,7 +55,8 @@ Provide local code or explicitly selected source text
   -> compile or test code when possible
   -> inspect provenance, relationships, boundaries, and counterexamples
   -> save locally as draft
-  -> human review is required before publication
+  -> LLM acceptance gate decides publication (LLM approved); human approval
+     is the superior upgrade tier, not a prerequisite
 ```
 
 This flow is post-MVP.
