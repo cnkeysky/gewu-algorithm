@@ -1,5 +1,5 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createHash } from "node:crypto";
 import { dirname, join, relative, resolve } from "node:path";
@@ -699,6 +699,8 @@ async function main(): Promise<void> {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
   const lockDirPath = join(repoRoot, ".gewu-dev", "pids");
   const lockPath = join(lockDirPath, "batch-run.lock");
+  const runStatePath = join(lockDirPath, "batch-run.json");
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   mkdirSync(lockDirPath, { recursive: true });
   const existingPid = existsSync(lockPath) ? Number(await readFile(lockPath, "utf8")) : 0;
   let lockHeldByLiveProcess = false;
@@ -717,7 +719,9 @@ async function main(): Promise<void> {
   await writeFile(lockPath, String(process.pid));
   const releaseLock = (): void => {
     try {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       rmSync(lockPath, { force: true });
+      rmSync(runStatePath, { force: true });
     } catch {
       // Best effort on exit paths.
     }
@@ -734,6 +738,31 @@ async function main(): Promise<void> {
   const empty = loaded.length - withStatements.length;
   const problems = selectProblems(withStatements, options.select);
   const deselected = withStatements.length - problems.length;
+  // Record run state so `batch:status` can tell a live run from an
+  // interrupted one (the lock file alone only proves the pid was written).
+  const runState = {
+    pid: process.pid,
+    startedAt: new Date().toISOString(),
+    problems: problems.length,
+    steps: [...options.steps],
+    report: options.report,
+    lastHeartbeat: new Date().toISOString(),
+  };
+  try {
+    await writeFile(runStatePath, `${JSON.stringify(runState, null, 2)}\n`, "utf8");
+    // Heartbeat: batch:status infers liveness from a fresh lastHeartbeat, so
+    // it works even across pid namespaces and survives a reused pid.
+    heartbeatTimer = setInterval(() => {
+      try {
+        writeFileSync(runStatePath, `${JSON.stringify({ ...runState, lastHeartbeat: new Date().toISOString() }, null, 2)}\n`);
+      } catch {
+        // Best effort; a failed heartbeat write falls back to pid liveness.
+      }
+    }, 60_000);
+    heartbeatTimer.unref?.();
+  } catch {
+    // Best effort; status falls back to lock + report timestamps.
+  }
   if (empty > 0) console.log(`batch-authoring: skipped ${empty} entries without a problem statement`);
   if (deselected > 0) console.log(`batch-authoring: selected ${problems.length} of ${withStatements.length} problems (--select)`);
   if (problems.length === 0) fail("problems file contains no entries");

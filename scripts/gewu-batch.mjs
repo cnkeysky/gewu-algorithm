@@ -471,6 +471,42 @@ async function doRun() {
 
 async function doStatus() {
   let liveDrafts = [];
+  // Run state: the batch CLI writes batch-run.lock (pid) and batch-run.json
+  // (pid + startedAt + problem count) while running. Alive pid = in progress;
+  // dead pid = interrupted (leftover drafts are reused by the next run); no
+  // lock = no batch run (the report below is the last finished result).
+  const lockPath = join(pidDir, "batch-run.lock");
+  const runStatePath = join(pidDir, "batch-run.json");
+  const lockPid = existsSync(lockPath) ? Number(readFileSync(lockPath, "utf8")) : 0;
+  let runMeta = {};
+  try {
+    runMeta = JSON.parse(readFileSync(runStatePath, "utf8"));
+  } catch {
+    // No run state recorded yet.
+  }
+  let lockAlive = false;
+  if (lockPid > 0) {
+    try {
+      process.kill(lockPid, 0);
+      lockAlive = true;
+    } catch {
+      // The pid is gone: the run was interrupted.
+    }
+  }
+  // Heartbeat liveness: the CLI refreshes batch-run.json every 60s, so a
+  // fresh lastHeartbeat proves the run is alive even when the pid is not
+  // visible (different pid namespace) or has been reused.
+  const heartbeatFresh = typeof runMeta.lastHeartbeat === "string"
+    && Date.now() - new Date(runMeta.lastHeartbeat).getTime() < 3 * 60_000;
+  if (lockAlive || heartbeatFresh) {
+    const started = runMeta.startedAt ? ` started ${new Date(runMeta.startedAt).toLocaleTimeString()}` : "";
+    const count = runMeta.problems ? `, ${runMeta.problems} problems` : "";
+    log(`batch run: in progress (pid ${lockPid || "?"}${started}${count}) — generation has not finished`);
+  } else if (lockPid > 0 || typeof runMeta.pid === "number") {
+    log(`batch run: interrupted earlier (pid ${lockPid} is not alive) — leftover drafts will be reused by the next run`);
+  } else {
+    log("batch run: not running (the report below is the last finished batch)");
+  }
   const health = await fetchHealth(`http://127.0.0.1:${apiPort}/api/health`);
   const healthy = health.ok;
   log(`authoring API ${healthy ? `healthy (build ${health.build ?? "unknown"})` : "down"} at ${apiUrl()}`);
@@ -518,7 +554,7 @@ async function doStatus() {
       }
     }
   } else {
-    log(`a newer run is in progress (newest draft ${newestDraftAt} is newer than the last report ${summary.generatedAt}) — live non-accepted drafts:`);
+    log(`newer drafts exist than the last report (${newestDraftAt} > ${summary.generatedAt}) — live non-accepted drafts:`);
     logActionableItems(liveDrafts.filter((draft) => draft.status !== "accepted"));
     if (showResults) {
       log("previous (last finished) batch items:");
