@@ -114,11 +114,16 @@ allowed only with explicit migration notes (see
   `schema`/`code` pass when the deterministic Rust validation passes, and
   `content_review`/`transfer_review` pass when the LLM acceptance gate
   passes — artifacts no longer claim `pending` forever, which a strict gate
-  misread as an unvalidated template. Published artifacts also advance the
-  content lifecycle to `validated` (previously every published unit still
-  claimed `draft`). `batch:status` shows report paths relative to the project
-  root and renders actionable items as one compact line per group (status ·
-  count · titles — error).
+  misread as an unvalidated template. The content lifecycle is now a
+  dedicated module (`manifest-lifecycle.ts`) following the Rust `ContentStatus`
+  chain: deterministic validation stamps `schema`/`code`, the acceptance gate
+  or human accept stamps `content_review`/`transfer_review` and advances
+  `status` to `reviewed`, and publishing finalizes to `validated` under a
+  structural guard that refuses any artifact whose status or validation
+  stages are incomplete (previously every published unit claimed `draft`).
+  `batch:status` shows report paths relative to the project root and renders
+  actionable items as one compact line per group (status · count · titles —
+  error).
 - The approval-flow doc is corrected to match the implementation: the
   published content root serves only the latest revision of each unit;
   earlier revisions live on as accepted drafts in the authoring store (their

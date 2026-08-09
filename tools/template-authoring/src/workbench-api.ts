@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type CodeRecallAssistanceSelection, type GenerationProfile, type PracticeModeSelection } from "./pi-generator.js";
 import { assertDraftTransition, draftReuseGuard } from "./draft-lifecycle.js";
+import { applyContentTransition, assertPublishable, type ContentTransitionId } from "./manifest-lifecycle.js";
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
@@ -186,24 +187,15 @@ async function revisionFeedbackFor(draft: DraftRecord, reviews: ReviewRecord[]):
   return chunks.join("\n");
 }
 
-/** Stamps the artifact manifest's validation fields after real validation or
- * the decisive acceptance gate passes. The model output schema pins these to
- * "pending"; without stamping, every artifact would claim unvalidated state
- * forever and a strict acceptance gate would reject it. */
-function stampArtifactValidation(draft: DraftRecord, fields: Record<string, string>, status?: string): void {
-  if (!draft.artifactPath) return;
+/** Applies a content-lifecycle transition to the artifact manifest. This is
+ * fail-hard: a transition is only complete when the manifest was read,
+ * stamped, and written back — an unreadable manifest aborts the request
+ * before the draft state is persisted, so the two can never drift. */
+function stampManifestWith(draft: DraftRecord, transition: ContentTransitionId): void {
+  if (!draft.artifactPath) throw new Error("cannot stamp content state without an artifact");
   const unitPath = join(artifactAbsolutePath(draft), "unit.json");
-  try {
-    const manifest = JSON.parse(readFileSync(unitPath, "utf8")) as Record<string, unknown>;
-    const validation = isRecord(manifest.validation) ? manifest.validation : {};
-    for (const [key, value] of Object.entries(fields)) validation[key] = value;
-    validation.last_validated_at = new Date().toISOString();
-    manifest.validation = validation;
-    if (status) manifest.status = status;
-    writeFileSync(unitPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  } catch {
-    // Stamping is best-effort; the validation status still gates approval.
-  }
+  const manifest = JSON.parse(readFileSync(unitPath, "utf8")) as unknown;
+  writeFileSync(unitPath, `${JSON.stringify(applyContentTransition(manifest, transition), null, 2)}\n`);
 }
 
 async function generateDraft(
@@ -471,9 +463,12 @@ async function publishArtifact(draft: DraftRecord): Promise<string> {
     }
   }
   manifest.revision = nextRevision;
-  // A published unit is validated: the manifest no longer claims a draft
-  // lifecycle (the acceptance gate / human accept already passed).
-  manifest.status = "validated";
+  // A published unit must be content-validated: apply the publish transition
+  // and refuse to publish if any validation stage is still pending — the
+  // structural guard that makes an unstamped artifact unpublishable.
+  const stamped = applyContentTransition(manifest, "publish");
+  assertPublishable(stamped);
+  Object.assign(manifest, stamped);
   // A manifest's supersedes entries reference prior revisions of the same
   // unit. When this is the first published revision (or the model claimed a
   // revision that is not earlier), drop the invalid entries so the published
@@ -736,7 +731,7 @@ const server = createServer(async (request, response) => {
       }
       draft.status = "validated";
       draft.error = undefined;
-      stampArtifactValidation(draft, { schema: "passed", code: "passed" });
+      stampManifestWith(draft, "deterministic_validation");
       await saveState(state);
       return send(response, 200, { status: "passed", draft });
     }
@@ -761,7 +756,7 @@ const server = createServer(async (request, response) => {
           // The acceptance gate is the decisive content/transfer review in
           // the automated flow; stamp the manifest so published units do not
           // claim pending validation or a draft lifecycle.
-          stampArtifactValidation(draft, { content_review: "passed", transfer_review: "passed" }, "validated");
+          stampManifestWith(draft, "acceptance_gate_pass");
         }
         state.reviews = [review, ...state.reviews];
         // The acceptance gate is the decisive LLM reviewer: a needs_revision
@@ -841,6 +836,10 @@ const server = createServer(async (request, response) => {
         };
         state.reviews = [acceptanceReview, ...state.reviews];
       }
+      // Human acceptance also completes the content lifecycle (the decisive
+      // review is the human's); stamping before publish is fail-hard, and
+      // publish itself refuses an unstamped manifest.
+      stampManifestWith(draft, "acceptance_gate_pass");
       const publishedPath = await publishArtifact(draft);
       draft.status = "accepted";
       draft.publishedPath = publishedPath;

@@ -28,6 +28,26 @@ Accepted drafts without a recorded acceptance tier default to **Human
 approved** (historically acceptance required a human); the upgrade button
 only appears for units whose approval tier is `llm_acceptance`.
 
+## Artifact content lifecycle (manifest `status` / `validation`)
+
+The workflow states above live on the draft row. The artifact manifest has a
+separate content lifecycle that follows the Rust `ContentStatus` chain
+(`draft` → `reviewed` → `validated`; later `revised` / `deprecated`), and it
+must advance with the real checks — stamping is fail-hard and publishing is
+structurally guarded:
+
+- **`draft`** — model output; the output schema pins `validation.*` to
+  `pending` and the status to `draft`.
+- Deterministic Rust contract validation passed → `validation.schema` and
+  `validation.code` become `passed` (status stays `draft`: nothing has been
+  content-reviewed yet).
+- The LLM acceptance gate passes, or a human accepts → the artifact is
+  content-reviewed: `status` becomes `reviewed` and
+  `validation.content_review` / `validation.transfer_review` become `passed`.
+- Publishing → `status` becomes `validated`. The publish step refuses any
+  artifact whose status is not `validated` or whose four validation stages
+  are not all `passed`, so an unstamped artifact can never be served.
+
 ## Backend guarantees
 
 The workbench API is the source of truth for the state machine — the UI only
