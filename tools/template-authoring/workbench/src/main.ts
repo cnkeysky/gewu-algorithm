@@ -686,6 +686,7 @@ async function refreshPracticeData(): Promise<void> {
     renderPracticeLanguageFilter();
     renderPracticeUnits();
     renderPracticeOptions();
+    syncPracticeFormToActiveSession();
     const shouldRecoverSession = practiceWasDisconnected;
     setPracticeConnection(true);
     practiceWasDisconnected = false;
@@ -755,6 +756,26 @@ function renderPracticeOptions(): void {
   // refreshPracticeData after starting/stopping); fall back to the first only
   // when the chosen variant no longer exists for this unit/mode.
   if (options.some((option) => option.id === previous)) select.value = previous;
+}
+
+/** Keeps the workspace form coherent with the active session: after a view
+ * switch or refresh, the Algorithm unit / mode / variant selects must reflect
+ * the session highlighted as in progress, instead of a stale last selection
+ * or the first catalog entry. The active session is authoritative while it
+ * exists. */
+function syncPracticeFormToActiveSession(): void {
+  const snapshot = activePracticeSnapshot;
+  if (!snapshot?.unit_id) return;
+  const unitSelect = document.querySelector<HTMLSelectElement>("#practice-unit");
+  const modeSelect = document.querySelector<HTMLSelectElement>("#practice-mode");
+  if (unitSelect && practiceUnits.some((unit) => unit.id === snapshot.unit_id)) unitSelect.value = snapshot.unit_id;
+  if (modeSelect && snapshot.mode) modeSelect.value = snapshot.mode;
+  renderPracticeOptions();
+  const optionSelect = document.querySelector<HTMLSelectElement>("#practice-id");
+  if (optionSelect) {
+    const target = snapshot.practice_id ?? snapshot.implementation ?? "";
+    if (target && [...optionSelect.options].some((option) => option.value === target)) optionSelect.value = target;
+  }
 }
 
 function renderPracticeLanguageFilter(): void {
