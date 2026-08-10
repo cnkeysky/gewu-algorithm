@@ -230,7 +230,16 @@ portable JSON (dates preserved) and restored with
 `npm run drafts:import <file>`. If a stale-writer race ever clobbers a
 published draft's row back to `failed` (two authoring API instances sharing
 one store), `npm run drafts:reconcile` restores the row to `accepted` from the
-published root (slug + language match; `--dry-run` previews). A generated artifact can be edited in the Artifact
+published root (slug + language match; `--dry-run` previews), including the
+`artifact_path` so View artifact keeps working. `npm run drafts:reconcile
+--prune-covered` deletes stale non-accepted drafts whose unit is already
+published (they are never retried because the batch skips covered problems)
+and removes their review rows and artifact directories. If a published unit
+lost its review record (stale-writer clobber + prune cycles),
+`npm run units:review-backfill` re-runs the LLM acceptance gate on the
+published artifact and writes `reviews/llm_acceptance.json` +
+`reviews/summary.json` (`--dry-run` previews, `--force` overwrites).
+A generated artifact can be edited in the Artifact
 inspector modal (opened from Drafts or Review history) and saved through
 `PUT /api/drafts/:id/artifact`; the Rust validator must pass again and
 previous LLM reviews are cleared before another review.

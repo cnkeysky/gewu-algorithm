@@ -16,6 +16,7 @@
     "stamp:published": "node scripts/stamp-published.mjs",
     "drafts:reconcile": "node scripts/reconcile-published-drafts.mjs",
     "units:pack": "node scripts/units-pack.mjs",
+    "units:review-backfill": "npm run build && node --env-file=.env.local scripts/backfill-unit-reviews.mjs",
     "units:fetch": "node scripts/units-fetch.mjs",
     "drafts:export": "node scripts/drafts-export.mjs",
     "drafts:import": "node scripts/drafts-import.mjs",

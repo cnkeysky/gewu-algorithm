@@ -6,6 +6,22 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+### Added
+
+- `npm run drafts:reconcile --prune-covered` deletes stale non-accepted
+  drafts whose unit is already published (never retried because the batch
+  skips covered problems), removing their review rows and artifact
+  directories; the restore path also re-points `artifact_path` at the
+  published revision so View artifact keeps working after a stale-writer
+  clobber.
+- `npm run units:review-backfill` re-runs the LLM acceptance gate on
+  published units that lost their review record and writes
+  `reviews/llm_acceptance.json` + `reviews/summary.json` into the content
+  pack (`--dry-run` previews, `--force` overwrites).
+- The artifact inspector now shows each review's rationale next to its
+  verdict, so a pass-without-findings verdict still displays meaningful
+  feedback instead of an empty section.
+
 ## [0.1.10] - 2026-08-10
 
 ### Added

@@ -805,7 +805,7 @@ interface DraftRecord {
   failureCount?: number;
 }
 interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; reportPath?: string; rationale?: string; createdAt: string; }
-interface ArtifactPayload { draft: DraftRecord; files: Record<string, string>; reviews: Array<ReviewRecord & { report?: { verdict?: string; findings?: Array<{ rule_id: string; severity: string; path: string; problem: string; evidence: string; suggested_change: string }> } }> }
+interface ArtifactPayload { draft: DraftRecord; files: Record<string, string>; reviews: Array<ReviewRecord & { report?: { verdict?: string; rationale?: string; findings?: Array<{ rule_id: string; severity: string; path: string; problem: string; evidence: string; suggested_change: string }> } }> }
 
 const DRAFTS_KEY = "gewu.authoring.drafts.v1";
 const REVIEWS_KEY = "gewu.authoring.reviews.v1";
@@ -1169,7 +1169,14 @@ function renderArtifactReviews(): void {
   const container = document.querySelector<HTMLElement>("#artifact-reviews")!;
   if (!currentArtifactReviews.length) { container.innerHTML = "<p class='compact-empty'>No LLM pre-review report yet.</p>"; return; }
   const roleSummary = currentArtifactReviews.map((review) => `<span class="role-verdict ${escapeHtml(review.verdict)}">${escapeHtml(displayRole(review.role))} · ${escapeHtml(review.verdict)}</span>`).join("");
-  if (!findings.length) { container.innerHTML = `<div class="role-verdicts">${roleSummary}</div><p class='compact-empty'>No findings were returned.</p>`; return; }
+  // A verdict without findings is still meaningful: surface each review's
+  // rationale (e.g. the acceptance gate's pass rationale) instead of showing
+  // an empty section.
+  const rationales = currentArtifactReviews
+    .filter((review) => typeof review.report?.rationale === "string" && review.report.rationale.trim())
+    .map((review) => `<blockquote class="review-rationale"><small>${escapeHtml(displayRole(review.role))} rationale</small><p>${escapeHtml(String(review.report!.rationale))}</p></blockquote>`)
+    .join("");
+  if (!findings.length) { container.innerHTML = `<div class="role-verdicts">${roleSummary}</div>${rationales || "<p class='compact-empty'>No findings were returned.</p>"}`; return; }
   const totalPages = Math.max(1, Math.ceil(findings.length / ARTIFACT_REVIEW_PAGE_SIZE));
   artifactReviewPage = Math.min(artifactReviewPage, totalPages - 1);
   const page = findings.slice(artifactReviewPage * ARTIFACT_REVIEW_PAGE_SIZE, (artifactReviewPage + 1) * ARTIFACT_REVIEW_PAGE_SIZE);
@@ -1187,7 +1194,7 @@ function renderArtifactReviews(): void {
     ? `<span class="page-ellipsis" aria-hidden="true">…</span>`
     : `<button class="page-button page-number ${item === artifactReviewPage + 1 ? "active" : ""}" type="button" data-review-page-number data-review-page-value="${item}" aria-label="Page ${item}" ${item === artifactReviewPage + 1 ? 'aria-current="page"' : ""}>${item}</button>`).join("");
   const controls = totalPages > 1 ? `<div class="list-pagination finding-pagination"><span class="pagination-info">${start}–${end} of ${findings.length}</span><span class="pagination-controls"><button class="page-button" type="button" data-review-page-prev aria-label="Previous page" ${artifactReviewPage === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-review-page-next aria-label="Next page" ${artifactReviewPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : "";
-  container.innerHTML = `<div class="role-verdicts">${roleSummary}</div><div class="finding-grid">${cards}</div>${controls}`;
+  container.innerHTML = `<div class="role-verdicts">${roleSummary}</div>${rationales}<div class="finding-grid">${cards}</div>${controls}`;
 }
 document.querySelector<HTMLButtonElement>("#close-artifact")!.addEventListener("click", () => { artifactInspector.hidden = true; });
 document.querySelector<HTMLButtonElement>("#workflow-revise")!.addEventListener("click", () => {
