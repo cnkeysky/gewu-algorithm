@@ -145,7 +145,6 @@ export function mountShadowEditor(
       const accepted = result.acceptedText;
       confirmedText = accepted;
       if (accepted !== transaction.afterText) {
-        console.debug("[gewu-rollback]", JSON.stringify({ confirmedText, afterText: transaction.afterText, accepted, targetPrefix: targetText.slice(0, Math.max(accepted.length, transaction.afterText.length) + 2) }));
         // A rejected transaction invalidates optimistic edits after it. The
         // Core-confirmed snapshot is the only safe recovery boundary.
         pending.length = 0;
@@ -229,8 +228,6 @@ export function mountShadowEditor(
   // keybinding race, especially for a held key that repeats rapidly.
   const captureEnter = (event: KeyboardEvent) => {
     if (event.key !== "Enter" || event.isComposing) return;
-    const boundaryChar = Array.from(targetText)[Array.from(editor.getModel()?.getValue() ?? "").length];
-    console.debug("[gewu-enter]", JSON.stringify({ activated, syncing, locked, composing: event.isComposing, valueLen: Array.from(editor.getModel()?.getValue() ?? "").length, targetLen: Array.from(targetText).length, boundaryChar }));
     if (syncing || locked || !activated) return;
     event.preventDefault();
     event.stopImmediatePropagation();
