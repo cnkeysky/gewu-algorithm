@@ -872,7 +872,15 @@ async function main(): Promise<void> {
       return accepted !== undefined && options.modes.every((mode) => accepted.modes.has(mode));
     });
     if (covered.length > 0) {
-      console.log(`batch-authoring: ${covered.length} problem(s) already fully covered by accepted units — they will be skipped unless you pick --regenerate <id>:`);
+      const coveredByDraft = covered.filter((problem) => {
+        const language = resolveLanguage(options, problem);
+        const accepted = indexes.accepted.get(problemKey(problem, language))
+          ?? indexes.acceptedByFingerprint.get(coverageKey(textIdentity(problem.problem), language));
+        return accepted !== undefined && !String(accepted.draftId).startsWith("published:");
+      }).length;
+      console.log(
+        `batch-authoring: ${covered.length} problem(s) already fully covered — ${coveredByDraft} by accepted draft, ${covered.length - coveredByDraft} by published unit only (skipped unless --regenerate):`,
+      );
       for (const problem of covered) console.log(`  - ${problem.title}`);
     }
   }
