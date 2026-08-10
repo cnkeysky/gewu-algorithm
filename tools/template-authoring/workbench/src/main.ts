@@ -346,17 +346,6 @@ function pageNumberItems(page: number, totalPages: number): Array<number | "…"
   return items;
 }
 
-const PAGINATION_SLOTS = 7;
-/** Fixed-slot pagination: every strip renders exactly `PAGINATION_SLOTS`
- * equal-width slots between the prev/next buttons (real page numbers plus
- * invisible fill ellipses), so the controls never change width and the
- * prev/next buttons never move as the page window slides. */
-function paginationSlots(page: number, totalPages: number): Array<{ value: number | "…"; fill: boolean }> {
-  const slots = pageNumberItems(page, totalPages).map((value) => ({ value, fill: false }));
-  while (slots.length < PAGINATION_SLOTS) slots.push({ value: "…" as const, fill: true });
-  return slots;
-}
-
 function paginationHtml(kind: PaginationKind, page: number, totalPages: number, totalItems: number, pageSize: number): string {
   if (totalItems === 0) return "";
   // Reserve the pagination strip even on a single page so the surrounding
@@ -365,10 +354,10 @@ function paginationHtml(kind: PaginationKind, page: number, totalPages: number, 
   if (totalPages <= 1) return `<div class="list-pagination is-empty" aria-hidden="true"></div>`;
   const start = page * pageSize + 1;
   const end = Math.min((page + 1) * pageSize, totalItems);
-  const pagesHtml = paginationSlots(page, totalPages).map((slot) => slot.value === "…"
-    ? `<span class="page-ellipsis${slot.fill ? " page-ellipsis-fill" : ""}" aria-hidden="true">…</span>`
-    : `<button class="page-button page-number ${slot.value === page + 1 ? "active" : ""}" type="button" data-page-number="${kind}" data-page-value="${slot.value}" aria-label="Page ${slot.value}" ${slot.value === page + 1 ? 'aria-current="page"' : ""}>${slot.value}</button>`).join("");
-  return `<div class="list-pagination"><span class="pagination-info">${start}–${end} of ${totalItems}</span><span class="pagination-controls"><button class="page-button" type="button" data-page-prev="${kind}" aria-label="Previous page" ${page === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-page-next="${kind}" aria-label="Next page" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>`;
+  const pagesHtml = pageNumberItems(page, totalPages).map((item) => item === "…"
+    ? `<span class="page-ellipsis" aria-hidden="true">…</span>`
+    : `<button class="page-button page-number ${item === page + 1 ? "active" : ""}" type="button" data-page-number="${kind}" data-page-value="${item}" aria-label="Page ${item}" ${item === page + 1 ? 'aria-current="page"' : ""}>${item}</button>`).join("");
+  return `<div class="list-pagination"><span class="pagination-info">${start}–${end} of ${totalItems}</span><span class="pagination-controls"><button class="page-button" type="button" data-page-prev="${kind}" aria-label="Previous page" ${page === 0 ? "disabled" : ""}>&#8249;</button><span class="pagination-pages">${pagesHtml}</span><button class="page-button" type="button" data-page-next="${kind}" aria-label="Next page" ${page >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>`;
 }
 
 function paginationKindTotal(kind: PaginationKind): number {
@@ -1201,10 +1190,10 @@ function renderArtifactReviews(): void {
   const cards = page.map((finding) => `<article class="finding-card severity-${severity(finding.severity)}"><div class="finding-head"><span class="severity-chip">${escapeHtml(finding.severity)}</span><b>${escapeHtml(finding.rule_id)}</b><small>${escapeHtml(finding.role.replaceAll("_", " "))} · ${escapeHtml(finding.path)}</small></div><p>${escapeHtml(finding.problem)}</p><small class="finding-evidence">${escapeHtml(finding.evidence)}</small>${finding.suggested_change ? `<small class="finding-suggestion">Suggestion: ${escapeHtml(finding.suggested_change)}</small>` : ""}</article>`).join("");
   const start = artifactReviewPage * ARTIFACT_REVIEW_PAGE_SIZE + 1;
   const end = Math.min((artifactReviewPage + 1) * ARTIFACT_REVIEW_PAGE_SIZE, findings.length);
-  const pagesHtml = paginationSlots(artifactReviewPage, totalPages).map((slot) => slot.value === "…"
-    ? `<span class="page-ellipsis${slot.fill ? " page-ellipsis-fill" : ""}" aria-hidden="true">…</span>`
-    : `<button class="page-button page-number ${slot.value === artifactReviewPage + 1 ? "active" : ""}" type="button" data-review-page-number data-review-page-value="${slot.value}" aria-label="Page ${slot.value}" ${slot.value === artifactReviewPage + 1 ? 'aria-current="page"' : ""}>${slot.value}</button>`).join("");
-  const controls = totalPages > 1 ? `<div class="list-pagination finding-pagination"><span class="pagination-info">${start}–${end} of ${findings.length}</span><span class="pagination-controls"><button class="page-button" type="button" data-review-page-prev aria-label="Previous page" ${artifactReviewPage === 0 ? "disabled" : ""}>&#8249;</button>${pagesHtml}<button class="page-button" type="button" data-review-page-next aria-label="Next page" ${artifactReviewPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : "";
+  const pagesHtml = pageNumberItems(artifactReviewPage, totalPages).map((item) => item === "…"
+    ? `<span class="page-ellipsis" aria-hidden="true">…</span>`
+    : `<button class="page-button page-number ${item === artifactReviewPage + 1 ? "active" : ""}" type="button" data-review-page-number data-review-page-value="${item}" aria-label="Page ${item}" ${item === artifactReviewPage + 1 ? 'aria-current="page"' : ""}>${item}</button>`).join("");
+  const controls = totalPages > 1 ? `<div class="list-pagination finding-pagination"><span class="pagination-info">${start}–${end} of ${findings.length}</span><span class="pagination-controls"><button class="page-button" type="button" data-review-page-prev aria-label="Previous page" ${artifactReviewPage === 0 ? "disabled" : ""}>&#8249;</button><span class="pagination-pages">${pagesHtml}</span><button class="page-button" type="button" data-review-page-next aria-label="Next page" ${artifactReviewPage >= totalPages - 1 ? "disabled" : ""}>&#8250;</button></span></div>` : "";
   container.innerHTML = `<div class="role-verdicts">${roleSummary}</div>${rationales}<div class="finding-grid">${cards}</div>${controls}`;
 }
 document.querySelector<HTMLButtonElement>("#close-artifact")!.addEventListener("click", () => { artifactInspector.hidden = true; });
