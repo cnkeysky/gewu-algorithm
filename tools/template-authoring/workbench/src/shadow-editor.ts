@@ -35,6 +35,13 @@ export function mountShadowEditor(
 ): ShadowEditorController {
   const languageId = language.toLowerCase() === "python" ? "python" : "plaintext";
   const model = monaco.editor.createModel(acceptedText, languageId);
+  // The Core's canonical target is LF (line_endings: "lf"). Monaco may
+  // auto-detect CRLF when a value carries a stray \r (a legacy checkpoint or
+  // an external source) and then rewrite every inserted "\n" as "\r\n" —
+  // which the Core rejects as a non-prefix and rolls back (the recurring
+  // "Enter flashes line 2 then snaps back"). Pin the model EOL to LF and
+  // re-assert it after every value write so inserted newlines always match.
+  model.setEOL(monaco.editor.EndOfLineSequence.LF);
   const editor = monaco.editor.create(container, {
     model,
     automaticLayout: true,
@@ -138,11 +145,13 @@ export function mountShadowEditor(
       const accepted = result.acceptedText;
       confirmedText = accepted;
       if (accepted !== transaction.afterText) {
+        console.debug("[gewu-rollback]", JSON.stringify({ confirmedText, afterText: transaction.afterText, accepted, targetPrefix: targetText.slice(0, Math.max(accepted.length, transaction.afterText.length) + 2) }));
         // A rejected transaction invalidates optimistic edits after it. The
         // Core-confirmed snapshot is the only safe recovery boundary.
         pending.length = 0;
         syncing = true;
         model.setValue(accepted);
+        model.setEOL(monaco.editor.EndOfLineSequence.LF);
         editor.setPosition(model.getPositionAt(accepted.length));
         paintGhost(accepted);
         syncing = false;
@@ -219,7 +228,10 @@ export function mountShadowEditor(
   // command is registered at the editor layer and can otherwise win the
   // keybinding race, especially for a held key that repeats rapidly.
   const captureEnter = (event: KeyboardEvent) => {
-    if (event.key !== "Enter" || event.isComposing || syncing || locked || !activated) return;
+    if (event.key !== "Enter" || event.isComposing) return;
+    const boundaryChar = Array.from(targetText)[Array.from(editor.getModel()?.getValue() ?? "").length];
+    console.debug("[gewu-enter]", JSON.stringify({ activated, syncing, locked, composing: event.isComposing, valueLen: Array.from(editor.getModel()?.getValue() ?? "").length, targetLen: Array.from(targetText).length, boundaryChar }));
+    if (syncing || locked || !activated) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     insertNewline();
@@ -263,7 +275,10 @@ export function mountShadowEditor(
       const responseMatchesInFlight = inFlight?.afterText === value;
       confirmedText = value;
       const replaceModel = force || readOnlyNext || (!responseMatchesInFlight && !inFlight && pending.length === 0);
-      if (replaceModel) model.setValue(value);
+      if (replaceModel) {
+        model.setValue(value);
+        model.setEOL(monaco.editor.EndOfLineSequence.LF);
+      }
       monaco.editor.setModelLanguage(model, nextLanguage.toLowerCase() === "python" ? "python" : "plaintext");
       locked = readOnlyNext;
       guidanceEnabled = showGuidanceNext;
