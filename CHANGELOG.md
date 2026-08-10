@@ -144,6 +144,15 @@ allowed only with explicit migration notes (see
   language match against the published root; `--dry-run` previews). This
   repairs the accepted-but-failed state left behind when two authoring API
   instances shared one store.
+- The LLM acceptance gate is hardened against review echo: it never reads its
+  own previous verdicts (a reviewer fed its own past rejection repeats stale
+  or hallucinated findings instead of re-deriving from the artifact), and a
+  single `needs_revision` verdict on an artifact that passed deterministic
+  validation gets one fresh independent re-read. Two agreeing rejections
+  stick; a rejection a clean re-read does not confirm no longer drives the
+  artifact into a repair loop. Both verdicts are recorded in the audit trail
+  (`llm_acceptance.json` + `llm_acceptance.recheck.json`), and the API
+  response includes the `recheck` outcome.
 - The artifact manifest's `validation` fields are stamped after real checks:
   `schema`/`code` pass when the deterministic Rust validation passes, and
   `content_review`/`transfer_review` pass when the LLM acceptance gate

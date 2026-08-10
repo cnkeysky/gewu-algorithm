@@ -11,7 +11,7 @@ import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type 
 import { assertDraftTransition, draftReuseGuard } from "./draft-lifecycle.js";
 import { applyContentTransition, assertPublishable, type ContentTransitionId } from "./manifest-lifecycle.js";
 import { providerRegistry } from "./provider-registry.js";
-import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
+import { acceptanceContextReviews, buildAcceptanceTask, reviewTemplateDraft, shouldRecheckAcceptance } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
 import { dbPath, devPidsDir, ledgerPath, repoRoot, storageRoot, toolsRoot } from "./paths.js";
@@ -368,6 +368,7 @@ async function runModelAcceptance(
   draft: DraftRecord,
   reviews: ReviewRecord[],
   overrides?: { provider?: string; model?: string },
+  reportFileName = "llm_acceptance.json",
 ): Promise<{ review: ReviewRecord; rationale: string }> {
   const root = artifactAbsolutePath(draft);
   const manifest = await readFile(join(root, "unit.json"), "utf8");
@@ -384,8 +385,8 @@ async function runModelAcceptance(
     }
   }
   const reports = await Promise.all(
-    reviews
-      .filter((review) => review.draftId === draft.id && review.reportPath)
+    acceptanceContextReviews(reviews, draft.id)
+      .filter((review) => review.reportPath)
       .map(async (review) => {
         const report = JSON.parse(await readFile(resolve(repoRoot, review.reportPath!), "utf8")) as unknown;
         return { role: review.role, verdict: review.verdict, report: isRecord(report) ? report : {} };
@@ -412,7 +413,7 @@ async function runModelAcceptance(
   };
   const reviewsDir = join(root, "reviews");
   await mkdir(reviewsDir, { recursive: true });
-  await writeFile(join(reviewsDir, "llm_acceptance.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(join(reviewsDir, reportFileName), `${JSON.stringify(report, null, 2)}\n`, "utf8");
   return {
     rationale,
     review: {
@@ -421,7 +422,7 @@ async function runModelAcceptance(
       role: "llm_acceptance",
       verdict,
       artifactHash: latestArtifactHash(reviews, draft.id),
-      reportPath: relative(repoRoot, join(reviewsDir, "llm_acceptance.json")),
+      reportPath: relative(repoRoot, join(reviewsDir, reportFileName)),
       createdAt: new Date().toISOString(),
     },
   };
@@ -884,22 +885,45 @@ const server = createServer(async (request, response) => {
         const overrides = isRecord(payload) && (typeof payload.provider === "string" || typeof payload.model === "string")
           ? { provider: typeof payload.provider === "string" ? payload.provider : undefined, model: typeof payload.model === "string" ? payload.model : undefined }
           : undefined;
-        const { review, rationale } = await runModelAcceptance(draft, state.reviews, overrides);
-        if (review.verdict === "pass") {
+        // Deterministic validation passed for the current artifact: the gate's
+        // rejection is a judgment call, so a single unconfirmed rejection gets
+        // one fresh independent re-read (see shouldRecheckAcceptance).
+        const wasDeterministicallyValidated = draft.status === "validated" || draft.status === "llm_reviewed";
+        const artifactHash = latestArtifactHash(state.reviews, draft.id);
+        const first = await runModelAcceptance(draft, state.reviews, overrides);
+        let finalReview = first.review;
+        let finalRationale = first.rationale;
+        const recheck: { firstVerdict?: string; secondVerdict?: string } = { firstVerdict: first.review.verdict };
+        if (
+          first.review.verdict === "needs_revision"
+          && shouldRecheckAcceptance(wasDeterministicallyValidated, state.reviews, draft.id, artifactHash)
+        ) {
+          // Fresh context: the first gate report is not in state.reviews yet,
+          // and the gate never reads its own prior reports anyway.
+          const second = await runModelAcceptance(draft, state.reviews, overrides, "llm_acceptance.recheck.json");
+          recheck.secondVerdict = second.review.verdict;
+          state.reviews = [second.review, first.review, ...state.reviews];
+          finalReview = second.review;
+          finalRationale = second.review.verdict === "pass"
+            ? `${second.rationale}\n\n[recheck] The first acceptance read returned needs_revision; a fresh independent re-read passed, so the rejection was not confirmed and the artifact was accepted.`
+            : `${second.rationale}\n\n[recheck] The rejection was confirmed by a second independent read.`;
+        } else {
+          state.reviews = [first.review, ...state.reviews];
+        }
+        if (finalReview.verdict === "pass") {
           // The acceptance gate is the decisive content/transfer review in
           // the automated flow; stamp the manifest so published units do not
           // claim pending validation or a draft lifecycle.
           stampManifestWith(draft, "acceptance_gate_pass");
         }
-        state.reviews = [review, ...state.reviews];
         // The acceptance gate is the decisive LLM reviewer: a needs_revision
         // verdict moves the draft to that state so the UI offers revision,
         // while a pass leaves the draft ready for the llm_acceptance publish.
-        if (review.verdict === "needs_revision" && draft.status !== "needs_revision") {
+        if (finalReview.verdict === "needs_revision" && draft.status !== "needs_revision") {
           draft.status = "needs_revision";
         }
         await saveState(state);
-        return send(response, 200, { verdict: review.verdict, rationale, review });
+        return send(response, 200, { verdict: finalReview.verdict, rationale: finalRationale, review: finalReview, recheck });
       } finally {
         releaseClaim(database, draft.id, "acceptance");
       }

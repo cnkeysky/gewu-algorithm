@@ -107,6 +107,39 @@ Return only the JSON report shape requested.\n\nProblem:\n${problem}\n\nManifest
   };
 }
 
+/**
+ * Reviews that inform the acceptance gate: pre-review role findings only.
+ * The gate never reads its own previous verdicts — feeding a reviewer its own
+ * past rejection is a classic echo loop (a stale or hallucinated finding gets
+ * repeated instead of re-derived from the artifact).
+ */
+export function acceptanceContextReviews<T extends { draftId: string; role: string }>(
+  reviews: T[],
+  draftId: string,
+): T[] {
+  return reviews.filter((review) => review.draftId === draftId && review.role !== "llm_acceptance");
+}
+
+/**
+ * Mature rejection handling for the LLM publication gate: when the gate
+ * rejects an artifact that passed deterministic validation, and this artifact
+ * hash has not been rejected by the gate before, allow ONE fresh independent
+ * re-read. Two agreeing rejections stick; a single rejection contradicted by
+ * a clean re-read does not drive the artifact into a repair loop over a
+ * finding the model itself could not reproduce.
+ */
+export function shouldRecheckAcceptance(
+  wasDeterministicallyValidated: boolean,
+  reviews: Array<{ draftId: string; role: string; artifactHash: string | null }>,
+  draftId: string,
+  artifactHash: string | null,
+): boolean {
+  if (!wasDeterministicallyValidated || !artifactHash) return false;
+  return !reviews.some(
+    (review) => review.draftId === draftId && review.role === "llm_acceptance" && review.artifactHash === artifactHash,
+  );
+}
+
 function parseRole(value: string | undefined): ReviewRole {
   if (value && (ROLES as readonly string[]).includes(value)) return value as ReviewRole;
   throw new Error(`review role must be one of: ${ROLES.join(", ")}`);

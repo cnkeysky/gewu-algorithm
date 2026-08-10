@@ -116,6 +116,20 @@ same immutable artifact hash and a versioned subset of the universal algorithm
 rubric, then returns a structured verdict and findings. A model `pass` still
 requires human confirmation and never mutates lifecycle state.
 
+The decisive LLM acceptance gate follows two reliability rules so a single
+stale or hallucinated judgment cannot cascade into a repair loop:
+
+- **No self-reference**: the gate's context includes only the independent
+  pre-review role findings — never its own previous `llm_acceptance`
+  verdicts. Feeding a reviewer its own past rejection causes echo: the model
+  repeats the old finding instead of re-deriving it from the artifact.
+- **One fresh re-read**: when the gate rejects an artifact that passed
+  deterministic validation, and this artifact hash has not been judged by the
+  gate before, the gate runs once more with clean context. Two agreeing
+  rejections stick; a rejection a clean re-read does not confirm is not fed
+  back as a repair instruction. Both verdicts stay in the audit trail
+  (`llm_acceptance.json` and `llm_acceptance.recheck.json`).
+
 Rubric v2 adds the required learner-facing statement contract. Algorithm review
 checks Markdown/math safety and agreement with code and tests; learning-design
 review checks that modes and variants remain projections of the same unit

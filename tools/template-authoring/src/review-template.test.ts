@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAcceptanceTask } from "./review-template.js";
+import { acceptanceContextReviews, buildAcceptanceTask, shouldRecheckAcceptance } from "./review-template.js";
 
 test("acceptance task embeds the problem and every pre-review finding", () => {
   const task = buildAcceptanceTask(
@@ -27,4 +27,36 @@ test("acceptance task embeds the problem and every pre-review finding", () => {
 test("acceptance task tolerates drafts without findings", () => {
   const task = buildAcceptanceTask("Problem text", "{}", [{ role: "algorithm_correctness", verdict: "pass", report: { findings: [] } }]);
   assert.match(task.instruction, /No findings/);
+});
+
+test("acceptance gate never reads its own previous verdicts", () => {
+  const reviews = [
+    { draftId: "a", role: "algorithm_correctness" },
+    { draftId: "a", role: "learning_design" },
+    { draftId: "a", role: "llm_acceptance" },
+    { draftId: "b", role: "llm_acceptance" },
+    { draftId: "b", role: "provenance_safety" },
+  ];
+  const context = acceptanceContextReviews(reviews, "a");
+  assert.deepEqual(context.map((review) => review.role), ["algorithm_correctness", "learning_design"]);
+});
+
+test("a single unconfirmed gate rejection gets one fresh re-read", () => {
+  const reviews = [
+    { draftId: "a", role: "algorithm_correctness", artifactHash: "h1" },
+  ];
+  // Deterministic validation passed and no prior gate verdict for this hash.
+  assert.equal(shouldRecheckAcceptance(true, reviews, "a", "h1"), true);
+  // Not deterministically validated -> no re-read.
+  assert.equal(shouldRecheckAcceptance(false, reviews, "a", "h1"), false);
+  // The gate already judged this artifact hash -> no re-read (respect it).
+  assert.equal(
+    shouldRecheckAcceptance(true, [...reviews, { draftId: "a", role: "llm_acceptance", artifactHash: "h1" }], "a", "h1"),
+    false,
+  );
+  // A different artifact hash (repaired artifact) is a fresh judgment.
+  assert.equal(
+    shouldRecheckAcceptance(true, [...reviews, { draftId: "a", role: "llm_acceptance", artifactHash: "h1" }], "a", "h2"),
+    true,
+  );
 });
