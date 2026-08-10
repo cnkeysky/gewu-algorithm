@@ -91,6 +91,33 @@ test("shadow typing advances multiline guidance through Enter and indentation", 
   await expect(guidance).toHaveText("node = queue.popleft()");
 });
 
+test("Enter advances even when typing interleaves with accepted-edit re-renders", async ({ page }) => {
+  // Natural-paced typing (per-character delays) lets each accepted edit land
+  // while later characters are already optimistic in the model. Re-rendering
+  // the editor from the per-edit session response used to reset/truncate the
+  // model mid-flight and race the per-keystroke transaction pump, rejecting
+  // the newline — the recurring "Enter flashes line 2 but stays on line 1".
+  await page.goto("/");
+  await page.getByRole("button", { name: "Practice", exact: true }).click();
+  await expect(page.locator("#practice-connection")).toContainText("Core connected");
+  await page.locator("#practice-unit").selectOption("graph.bfs");
+  await page.locator("#practice-mode").selectOption("shadow_typing");
+  await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
+  await expect(page.locator(".session-problem")).toBeVisible();
+  const editor = page.locator("#session-editor");
+  const monaco = editor.locator(".monaco-editor");
+  await monaco.click({ position: { x: 220, y: 30 } });
+  const meta = page.locator("#session-meta");
+  const cursor = editor.locator(".cursor").first();
+  const before = await cursor.boundingBox();
+  expect(before).not.toBeNull();
+  for (const ch of "from collections import deque") await page.keyboard.type(ch, { delay: 25 });
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await cursor.boundingBox())?.y ?? 0).toBeGreaterThan((before?.y ?? 0) + 10);
+  await expect(meta).toContainText("rejected inputs 0");
+  await expect(meta).toContainText(/accepted inputs \d+/);
+});
+
 test("problem statement stays bound across modes, restart, and checkpoint resume", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();

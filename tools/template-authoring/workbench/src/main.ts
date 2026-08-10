@@ -530,7 +530,7 @@ function setPracticeFocus(focused: boolean): void {
   document.querySelector<HTMLElement>("#practice-view")!.hidden = focused;
   document.querySelector<HTMLElement>("#practice-session")!.hidden = !focused;
 }
-function renderPracticeSession(session: PracticeSession): void {
+function renderPracticeSession(session: PracticeSession, skipEditorSync = false): void {
   const sessionChanged = activePracticeSnapshot?.session_id !== session.session_id;
   activePracticeSnapshot = session;
   document.querySelector<HTMLElement>("#session-title")!.textContent = session.unit_title;
@@ -599,7 +599,7 @@ function renderPracticeSession(session: PracticeSession): void {
     shadowAcceptedText = session.accepted_text;
     shadowTargetText = session.target_text;
     shadowLanguage = session.language;
-    void updateShadowEditor(editorContainer, session, sessionChanged, isShadow);
+    void updateShadowEditor(editorContainer, session, sessionChanged, isShadow, skipEditorSync);
   }
   target.textContent = session.target_text || session.accepted_text || "Awaiting the next response.";
   observeTextElement(document.querySelector<HTMLElement>("#session-prompt")!);
@@ -623,18 +623,19 @@ function renderPracticeSession(session: PracticeSession): void {
     restart.disabled = false;
   }
 }
-async function updateShadowEditor(container: HTMLElement, session: PracticeSession, sessionChanged = false, showGuidance = true): Promise<void> {
+async function updateShadowEditor(container: HTMLElement, session: PracticeSession, sessionChanged = false, showGuidance = true, skipEditorSync = false): Promise<void> {
   if (!shadowEditor && !shadowEditorLoading) {
     container.addEventListener("pointerdown", () => {
       if (shadowEditor) shadowEditor.focus();
       else shadowEditorPendingFocus = true;
     }, { once: true });
   }
-  if (shadowEditor) {
+  if (shadowEditor && !skipEditorSync) {
     shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
     if (sessionChanged && session.status === "active") shadowEditor.focus();
     return;
   }
+  if (shadowEditor && skipEditorSync) return;
   if (!shadowEditorLoading) {
     shadowEditorLoading = import("./shadow-editor").then(({ mountShadowEditor }) => mountShadowEditor(container, shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", showGuidance, applyShadowEdit));
   }
@@ -656,7 +657,11 @@ async function applyShadowEdit(edit: { start: number; end: number; text: string 
   const event = edit.start === edit.end ? { type: "insert_text", text: edit.text } : edit.text ? { type: "replace_range", start: edit.start, end: edit.end, text: edit.text } : { type: "delete_range", start: edit.start, end: edit.end };
   try {
     const result = await practiceRpc<{ session: PracticeSession }>("gewu/applyEvent", { session_id: requestSessionId, event, elapsed: { active_ms: 1000, wall_ms: 1000 } });
-    if (activePracticeSession?.session_id === requestSessionId) renderPracticeSession(result.session);
+    // The shadow editor's transaction pump already applies the accepted text
+    // internally; re-rendering the editor here would reset/truncate the model
+    // mid-flight and race the per-keystroke transactions (rejections that
+    // read as a broken Enter). Update only the lightweight session UI.
+    if (activePracticeSession?.session_id === requestSessionId) renderPracticeSession(result.session, true);
     if (result.session.status !== "active") await refreshPracticeData();
     return { acceptedText: result.session.accepted_text };
   } catch (error) {
