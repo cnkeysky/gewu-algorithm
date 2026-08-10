@@ -42,6 +42,9 @@ allowed only with explicit migration notes (see
 - The Practice workspace form (Algorithm unit / mode / variant) syncs to the
   active session after a view switch or refresh, so the selectors no longer
   disagree with the in-progress highlight in Interrupted.
+- The active-session Problem pane's background fills the full pane height
+  again (the green box stretches with flex; long statements still scroll with
+  the pane).
 - Published corrected r2 revisions for `group-anagrams.python` and
   `letter-combinations-of-a-phone-number.python` (reasoning-recall prompt
   defects found by the re-run acceptance gate), and refreshed the content
