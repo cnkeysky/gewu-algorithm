@@ -39,6 +39,9 @@ allowed only with explicit migration notes (see
 - The practice lists (Interrupted, Spaced review, Recent attempts) render
   incrementally as each Core RPC resolves instead of waiting for the slowest
   one, so the fast modules appear without delay.
+- The Practice workspace form (Algorithm unit / mode / variant) syncs to the
+  active session after a view switch or refresh, so the selectors no longer
+  disagree with the in-progress highlight in Interrupted.
 - Published corrected r2 revisions for `group-anagrams.python` and
   `letter-combinations-of-a-phone-number.python` (reasoning-recall prompt
   defects found by the re-run acceptance gate), and refreshed the content
