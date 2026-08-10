@@ -4,13 +4,10 @@
 // work-in-progress review queue. Published units ship separately via the
 // content pack; this covers the local authoring state.
 import { writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { dbPath, repoRoot } from "../../../scripts/gewu-paths.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "../../..");
-const dbPath = join(repoRoot, "tools", "template-authoring", "drafts", ".workbench", "authoring.sqlite");
 const outPath = process.argv[2] ? resolve(process.cwd(), process.argv[2]) : join(repoRoot, "tools", "template-authoring", "drafts-export.json");
 
 const db = new DatabaseSync(dbPath, { readOnly: true });

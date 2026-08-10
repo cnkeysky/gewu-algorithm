@@ -4,13 +4,10 @@
 // review timestamp are preserved. The running authoring API should be stopped
 // first; it loads state per request, so restart it after importing.
 import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { dbPath, repoRoot } from "../../../scripts/gewu-paths.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "../../..");
-const dbPath = join(repoRoot, "tools", "template-authoring", "drafts", ".workbench", "authoring.sqlite");
 const input = process.argv[2];
 if (!input) {
   console.error("usage: node scripts/drafts-import.mjs <drafts-export.json>");

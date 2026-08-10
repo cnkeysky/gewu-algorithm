@@ -6,11 +6,12 @@
 // already stamped are skipped. The Rust core refuses to load published roots
 // containing non-validated units, so this must run before starting practice.
 import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
+import { contentRootDefault, repoRoot } from "../../../scripts/gewu-paths.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const publishedRoot = resolve(here, "../drafts/.workbench/published");
+const publishedRoot = process.env.GEWU_PUBLISHED_ROOT
+  ? resolve(repoRoot, process.env.GEWU_PUBLISHED_ROOT)
+  : contentRootDefault;
 const now = new Date().toISOString();
 
 function walkUnitJson(dir, out) {

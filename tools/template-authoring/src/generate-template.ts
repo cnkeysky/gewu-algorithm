@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PiGenerator, optionsFromEnvironment, type DraftTask, type GenerationProfile } from "./pi-generator.js";
+import { draftsRoot, repoRoot } from "./paths.js";
 import { sourcePathFor, testPathFor } from "./publish.js";
 
 /**
@@ -476,9 +477,6 @@ export async function generateTemplateDraft(problem: string): Promise<void> {
   const trustedDraft = { ...artifact.manifest, manifest: trustedManifest } as { manifest: Record<string, unknown>; sources: Record<string, unknown> };
   materializeSourceTemplates(trustedManifest, trustedDraft.sources);
 
-  const here = dirname(fileURLToPath(import.meta.url));
-  const repoRoot = resolve(here, "../..", "..");
-  const draftsRoot = resolve(here, "../drafts");
   const suffix = generatedAt.replaceAll(/[-:.TZ]/g, "");
   const finalRoot = join(draftsRoot, `generated-${suffix}`);
   const stagingRoot = join(draftsRoot, `.staging-${randomUUID()}`);

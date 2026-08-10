@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { coverageKey, defaultApproverSpec, draftKey, loadProblems, mergePublishedUnits, parseOptions, problemKey, publishedUnitKey, reconcileResults, resolveLanguage, selectProblems } from "./batch-authoring.js";
+import { ledgerPath } from "./paths.js";
 
 test("parseOptions applies defaults and overrides", () => {
   const defaults = parseOptions(["--problems", "hot100.json"]);
@@ -221,9 +222,6 @@ test("mergePublishedUnits marks published problems as covered without local draf
 
 test("the committed units ledger is well-formed for dedup and audit", async () => {
   const { readFileSync } = await import("node:fs");
-  const { dirname, join } = await import("node:path");
-  const { fileURLToPath } = await import("node:url");
-  const ledgerPath = join(dirname(fileURLToPath(import.meta.url)), "../../../units/index.json");
   const ledger = JSON.parse(readFileSync(ledgerPath, "utf8")) as { units?: Array<Record<string, unknown>> };
   assert.ok(Array.isArray(ledger.units) && ledger.units.length > 0);
   for (const unit of ledger.units) {

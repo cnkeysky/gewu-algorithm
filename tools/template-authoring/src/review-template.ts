@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PiGenerator, optionsFromEnvironment, type DraftTask } from "./pi-generator.js";
+import { draftsRoot, repoRoot, rulesRoot } from "./paths.js";
 
 const RUBRIC_VERSION = "algorithm-template-review.v2";
 const ROLES = ["algorithm_correctness", "learning_design", "provenance_safety"] as const;
@@ -152,9 +153,6 @@ async function hashDraft(draftRoot: string, files: Array<{ path: string; content
 }
 
 export async function reviewTemplateDraft(draftArgument: string, roleArgument: string | undefined): Promise<void> {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const repoRoot = resolve(here, "../..", "..");
-  const draftsRoot = resolve(here, "../drafts");
   const draftRoot = resolve(repoRoot, draftArgument);
   if (!draftRoot.startsWith(`${draftsRoot}/`)) throw new Error("review target must be inside ignored drafts/");
   const role = parseRole(roleArgument ?? process.env.GEWU_REVIEW_ROLE);
@@ -167,7 +165,7 @@ export async function reviewTemplateDraft(draftArgument: string, roleArgument: s
     return { path, content: await readFile(absolute, "utf8") };
   }));
   const rubricDocument = JSON.parse(
-    await readFile(join(here, "../rules/algorithm-template-review.v2.json"), "utf8"),
+    await readFile(join(rulesRoot, "algorithm-template-review.v2.json"), "utf8"),
   ) as { id: string; roles: Record<string, string[]>; rules: Array<{ id: string; description: string }> };
   const assignedRuleIds = rubricDocument.roles[role];
   if (!assignedRuleIds) throw new Error(`rubric does not define role: ${role}`);

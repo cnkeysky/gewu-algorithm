@@ -18,17 +18,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { contentRootDefault, dbPath, ledgerPath, repoRoot } from "../../../scripts/gewu-paths.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "../../..");
 const contentRoot = process.env.GEWU_PUBLISHED_ROOT
   ? resolve(repoRoot, process.env.GEWU_PUBLISHED_ROOT)
-  : join(repoRoot, "tools", "template-authoring", "drafts", ".workbench", "published");
-const indexPath = join(repoRoot, "units", "index.json");
+  : contentRootDefault;
+const indexPath = ledgerPath;
 const version = process.env.GEWU_UNITS_VERSION ?? "latest";
 const tarball = join(repoRoot, "tools", "template-authoring", `gewu-units-${version}.tar.gz`);
-const dbPath = join(repoRoot, "tools", "template-authoring", "drafts", ".workbench", "authoring.sqlite");
 
 function reviewSummary(reviews) {
   const acceptance = [...reviews].reverse().find((r) => (r.role === "llm_acceptance" || r.role === "human_acceptance") && r.verdict === "pass");

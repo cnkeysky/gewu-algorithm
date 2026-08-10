@@ -5,14 +5,12 @@
 // brings the actual content.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
+import { contentRootDefault, repoRoot } from "../../../scripts/gewu-paths.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, "../../..");
 const contentRoot = process.env.GEWU_PUBLISHED_ROOT
   ? resolve(repoRoot, process.env.GEWU_PUBLISHED_ROOT)
-  : join(repoRoot, "tools", "template-authoring", "drafts", ".workbench", "published");
+  : contentRootDefault;
 const tag = process.env.GEWU_UNITS_TAG ?? "";
 
 function gh(args) {

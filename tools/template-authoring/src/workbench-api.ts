@@ -14,6 +14,7 @@ import { providerRegistry } from "./provider-registry.js";
 import { buildAcceptanceTask, reviewTemplateDraft } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
+import { dbPath, devPidsDir, ledgerPath, repoRoot, storageRoot, toolsRoot } from "./paths.js";
 import { buildReviewSummary, normalizeSupersedes, qualifyUnitId, sourcePathFor, testPathFor } from "./publish.js";
 import { casUpsertDraft, releaseClaim, tryAcquireClaim, upsertDraft, upsertReview } from "./persist.js";
 import {
@@ -29,7 +30,6 @@ import {
 } from "./staged-generation.js";
 
 const PORT = Number(process.env.GEWU_WORKBENCH_PORT ?? 4174);
-const here = dirname(fileURLToPath(import.meta.url));
 /** Short build id of the executing API bundle: hashes every runtime module
  * (not just workbench-api.js), so any source change (pi-generator, lifecycle,
  * staging, …) makes dev scripts detect a stale API process and restart it
@@ -46,11 +46,11 @@ const BUILD_ID = createHash("sha256")
   )
   .digest("hex")
   .slice(0, 12);
-const storageRoot = resolve(here, "../drafts/.workbench");
-const databasePath = join(storageRoot, "authoring.sqlite");
 mkdirSync(storageRoot, { recursive: true });
-const database = new DatabaseSync(databasePath);
-const publishedRoot = resolve(process.env.GEWU_PUBLISHED_ROOT ?? join(storageRoot, "published"));
+const database = new DatabaseSync(dbPath);
+const publishedRoot = process.env.GEWU_PUBLISHED_ROOT
+  ? resolve(repoRoot, process.env.GEWU_PUBLISHED_ROOT)
+  : join(storageRoot, "published");
 const modelCatalog = modelCatalogFromEnvironment();
 database.exec(`
   CREATE TABLE IF NOT EXISTS drafts (
@@ -179,7 +179,7 @@ async function revisionFeedbackFor(draft: DraftRecord, reviews: ReviewRecord[]):
   const relevant = reviews.filter((review) => review.draftId === draft.id && (review.verdict === "needs_revision" || review.verdict === "reject") && review.reportPath);
   const chunks: string[] = [];
   for (const review of relevant) {
-    const reportPath = resolve(here, "../..", "..", review.reportPath!);
+    const reportPath = resolve(repoRoot, review.reportPath!);
     try {
       const report = JSON.parse(await readFile(reportPath, "utf8")) as { findings?: Array<{ rule_id?: string; severity?: string; path?: string; problem?: string; suggested_change?: string }> };
       if (!Array.isArray(report.findings)) continue;
@@ -323,7 +323,7 @@ async function generateDraft(
   }
   await writeFile(join(artifactAbsolutePath, "generation.json"), `${JSON.stringify({ provider: options.provider, model: options.model, task_id: baseTask.taskId, task_version: baseTask.taskVersion, review: "pending" }, null, 2)}\n`, "utf8");
   await validateArtifactWithRust(artifactAbsolutePath);
-  return { provider: options.provider, model: options.model, artifactPath: relative(resolve(here, "../..", ".."), artifactAbsolutePath) };
+  return { provider: options.provider, model: options.model, artifactPath: relative(repoRoot, artifactAbsolutePath) };
 }
 
 const execFileAsync = promisify(execFile);
@@ -384,7 +384,7 @@ async function runModelAcceptance(
     reviews
       .filter((review) => review.draftId === draft.id && review.reportPath)
       .map(async (review) => {
-        const report = JSON.parse(await readFile(resolve(here, "../..", "..", review.reportPath!), "utf8")) as unknown;
+        const report = JSON.parse(await readFile(resolve(repoRoot, review.reportPath!), "utf8")) as unknown;
         return { role: review.role, verdict: review.verdict, report: isRecord(report) ? report : {} };
       }),
   );
@@ -418,14 +418,13 @@ async function runModelAcceptance(
       role: "llm_acceptance",
       verdict,
       artifactHash: latestArtifactHash(reviews, draft.id),
-      reportPath: relative(resolve(here, "../..", ".."), join(reviewsDir, "llm_acceptance.json")),
+      reportPath: relative(repoRoot, join(reviewsDir, "llm_acceptance.json")),
       createdAt: new Date().toISOString(),
     },
   };
 }
 
 async function validateArtifactWithRust(artifactPath: string, cleanupOnFailure = true): Promise<void> {
-  const repoRoot = resolve(here, "../..", "..");
   const validator = join(repoRoot, "target/debug/validate");
   try {
     if (existsSync(validator)) {
@@ -442,9 +441,8 @@ async function validateArtifactWithRust(artifactPath: string, cleanupOnFailure =
 
 function artifactAbsolutePath(draft: DraftRecord): string {
   if (!draft.artifactPath) throw new Error("draft has no generated artifact");
-  const repoRoot = resolve(here, "../..", "..");
   const absolute = resolve(repoRoot, draft.artifactPath);
-  const draftsRoot = resolve(here, "../drafts");
+  const draftsRoot = join(toolsRoot, "drafts");
   if (!absolute.startsWith(`${draftsRoot}/`)) throw new Error("artifact is outside the drafts root");
   return absolute;
 }
@@ -469,7 +467,7 @@ async function readArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Promis
   await walk(root);
   const reports = await Promise.all(reviews.filter((review) => review.draftId === draft.id && review.reportPath).map(async (review) => ({
     ...review,
-    report: JSON.parse(await readFile(resolve(here, "../..", "..", review.reportPath!), "utf8")) as unknown,
+    report: JSON.parse(await readFile(resolve(repoRoot, review.reportPath!), "utf8")) as unknown,
   })));
   return { draft, files, reviews: reports };
 }
@@ -549,7 +547,7 @@ async function publishArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Pro
     }
   }
   await buildPublishedPackManifest();
-  return relative(resolve(here, "../..", ".."), destination);
+  return relative(repoRoot, destination);
 }
 
 /**
@@ -579,7 +577,6 @@ async function validatePublishedContent(): Promise<void> {
 
 async function buildPublishedPackManifest(): Promise<void> {
   const manifestPath = join(publishedRoot, "pack.json");
-  const repoRoot = resolve(here, "../..", "..");
   const packBinary = join(repoRoot, "target/debug/pack");
   const args = ["build", publishedRoot, manifestPath, "gewu-workbench", "0.1.0"];
   if (existsSync(packBinary)) await execFileAsync(packBinary, args, { cwd: repoRoot, maxBuffer: 2_000_000 });
@@ -688,7 +685,6 @@ const server = createServer(async (request, response) => {
       // the content pack is fetched. Fall back to scanning the content root
       // when the ledger is missing (legacy setups).
       const units: Array<{ id: string; title: string; language: string; revision: number; modes: string[]; updatedAt: string }> = [];
-      const ledgerPath = join(resolve(here, "../../.."), "units", "index.json");
       if (existsSync(ledgerPath)) {
         try {
           const ledger = JSON.parse(await readFile(ledgerPath, "utf8")) as { units?: Array<Record<string, unknown>> };
@@ -1013,12 +1009,11 @@ const server = createServer(async (request, response) => {
         return send(response, 409, { error: `review role ${payload.role} is already in progress for this draft` });
       }
       try {
-        const repoRoot = resolve(here, "../..", "..");
         const artifactAbsolutePath = resolve(repoRoot, draft.artifactPath);
         await reviewTemplateDraft(relative(repoRoot, artifactAbsolutePath), payload.role);
         const reportPath = join(artifactAbsolutePath, "reviews", `${payload.role}.json`);
         const report = JSON.parse(await readFile(reportPath, "utf8")) as { verdict?: ReviewRecord["verdict"]; artifact_hash?: string };
-        const reportPathRelative = relative(resolve(here, "../..", ".."), reportPath);
+        const reportPathRelative = relative(repoRoot, reportPath);
         const review: ReviewRecord = { id: crypto.randomUUID(), draftId: draft.id, role: payload.role, verdict: report.verdict ?? "pending", artifactHash: report.artifact_hash ?? null, reportPath: reportPathRelative, createdAt: new Date().toISOString() };
         state.reviews = [review, ...state.reviews];
         const currentHash = review.artifactHash;
@@ -1130,7 +1125,7 @@ server.listen(PORT, "127.0.0.1", () => console.log(`GEWU authoring API listening
 // regardless of how this API was started, `batch:stop` can kill it by port
 // even when the process tree is hidden or the npm wrapper already exited.
 try {
-  const pidDir = join(resolve(here, "../../.."), ".gewu-dev", "pids");
+  const pidDir = devPidsDir;
   mkdirSync(pidDir, { recursive: true });
   writeFileSync(join(pidDir, `api-${PORT}.pid`), String(process.pid));
 } catch {

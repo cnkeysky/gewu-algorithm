@@ -2,10 +2,11 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { createHash } from "node:crypto";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
+import { devPidsDir, repoRoot } from "./paths.js";
 
 /**
  * Batch authoring CLI. Drives the same workbench API used by the web UI so
@@ -735,8 +736,7 @@ async function main(): Promise<void> {
   // generate the same drafts, double-spending gateway quota and racing each
   // other's state. The lock is a pid file with a liveness check (the common
   // portable pattern; flock is unavailable on Windows without a dependency).
-  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-  const lockDirPath = join(repoRoot, ".gewu-dev", "pids");
+  const lockDirPath = devPidsDir;
   const lockPath = join(lockDirPath, "batch-run.lock");
   const runStatePath = join(lockDirPath, "batch-run.json");
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
