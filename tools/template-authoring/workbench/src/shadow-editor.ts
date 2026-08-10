@@ -1,5 +1,17 @@
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
+import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+
+// Without a configured MonacoEnvironment the editor falls back to running its
+// workers on the main thread, which freezes the UI during input handling
+// (tokenization/color detection raced the per-keystroke transaction pump and
+// manifested as a broken Enter). Route the editor worker through a real web
+// worker so typing stays on the UI thread.
+if (!(self as unknown as { MonacoEnvironment?: { getWorker?: unknown } }).MonacoEnvironment?.getWorker) {
+  (self as unknown as { MonacoEnvironment: { getWorker: () => Worker } }).MonacoEnvironment = {
+    getWorker: () => new EditorWorker(),
+  };
+}
 
 export type ShadowEdit = { start: number; end: number; text: string };
 export type ShadowEditResult = { acceptedText: string };
