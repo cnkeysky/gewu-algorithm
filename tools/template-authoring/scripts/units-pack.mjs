@@ -7,7 +7,9 @@
 // units/index.json -> `gh release upload <tag> <tarball>`.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -26,6 +28,41 @@ const contentRoot = process.env.GEWU_PUBLISHED_ROOT
 const indexPath = join(repoRoot, "units", "index.json");
 const version = process.env.GEWU_UNITS_VERSION ?? "latest";
 const tarball = join(repoRoot, "tools", "template-authoring", `gewu-units-${version}.tar.gz`);
+const dbPath = join(repoRoot, "tools", "template-authoring", "drafts", ".workbench", "authoring.sqlite");
+
+function reviewSummary(reviews) {
+  const acceptance = [...reviews].reverse().find((r) => (r.role === "llm_acceptance" || r.role === "human_acceptance") && r.verdict === "pass");
+  const history = reviews.filter((r) => r.verdict === "needs_revision" || r.verdict === "reject");
+  return { acceptance, history };
+}
+
+/** Backfills the review record for units published before the pack carried
+ * reviews: copies the artifact's reports and writes reviews/summary.json from
+ * the local store. Idempotent (skips units that already have a summary). */
+function backfillReviews(unitDir, unitId) {
+  const revision = latestRevisionDir(unitDir);
+  const unitReviews = join(unitDir, revision, "reviews");
+  if (existsSync(join(unitReviews, "summary.json"))) return;
+  if (!existsSync(dbPath)) return;
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    const draft = db.prepare("SELECT id, artifact_path FROM drafts WHERE unit_id = ? AND status = 'accepted' ORDER BY created_at DESC LIMIT 1").get(unitId);
+    if (!draft?.artifact_path) return;
+    const artifactReviews = join(repoRoot, String(draft.artifact_path), "reviews");
+    if (existsSync(artifactReviews)) {
+      mkdirSync(unitReviews, { recursive: true });
+      for (const file of readdirSync(artifactReviews)) {
+        if (!existsSync(join(unitReviews, file))) {
+          copyFileSync(join(artifactReviews, file), join(unitReviews, file));
+        }
+      }
+    }
+    const reviews = db.prepare("SELECT role, verdict, rationale, created_at AS at FROM reviews WHERE draft_id = ? ORDER BY created_at").all(draft.id);
+    writeFileSync(join(unitReviews, "summary.json"), `${JSON.stringify(reviewSummary(reviews), null, 2)}\n`);
+  } finally {
+    db.close();
+  }
+}
 
 function latestRevisionDir(unitDir) {
   let latest = "";
@@ -51,6 +88,7 @@ for (const entry of readdirSync(contentRoot, { withFileTypes: true })) {
   const unitDir = join(contentRoot, entry.name);
   const revision = latestRevisionDir(unitDir);
   if (!revision) continue;
+  backfillReviews(unitDir, entry.name);
   const unitPath = join(unitDir, revision, "unit.json");
   if (!existsSync(unitPath)) continue;
   const manifest = JSON.parse(readFileSync(unitPath, "utf8"));
