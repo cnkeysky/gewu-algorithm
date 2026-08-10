@@ -337,10 +337,12 @@ dedup and audit record) plus a `gewu-units-*.tar.gz`, then
 `gh release upload <tag> <tarball>`. A fresh clone runs `npm run units:fetch`
 to download and extract the pack for practice; dedup already works from the
 committed ledger, so reruns skip published problems without regenerating
-duplicates. Each published unit carries `reviews/summary.json` (the acceptance
-rationale and needs_revision history), so reviewers see the LLM/human
-feedback behind it. The approval state machine, the human-over-LLM hierarchy,
-and the published-unit correction model are documented in
+duplicates. Each published unit carries its **full review record** — the LLM
+pre-review role reports and the acceptance gate report under `reviews/`, plus
+`reviews/summary.json` (acceptance rationale and needs_revision history) — so
+reviewers see the LLM/human feedback behind it. The approval state machine,
+the human-over-LLM hierarchy, and the published-unit correction model are
+documented in
 [`docs/architecture/approval-flow.md`](docs/architecture/approval-flow.md).
 
 Problem statements are Markdown and images are **URL references by default**

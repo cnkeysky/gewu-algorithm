@@ -173,11 +173,13 @@ allowed only with explicit migration notes (see
   batch dedup and audit, while the full content is packaged into a release
   artifact (`npm run units:pack` -> tar.gz -> `gh release upload`; a fresh
   clone runs `npm run units:fetch`). Each published unit carries
-  `reviews/summary.json` with the acceptance rationale and needs_revision
-  history, so the LLM/human review feedback survives the sync. The web Units
-  page merges `/api/published-units` (ledger-backed) with local accepted
-  drafts, and batch reruns skip problems already covered by a published unit
-  even on an empty store.
+  its **full review record** — the LLM pre-review role reports and the
+  acceptance gate report under `reviews/`, plus a distilled
+  `reviews/summary.json` (acceptance rationale + needs_revision history) — so
+  the LLM/human review feedback survives the sync. The web Units page merges
+  `/api/published-units` (ledger-backed) with local accepted drafts, and batch
+  reruns skip problems already covered by a published unit even on an empty
+  store.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring

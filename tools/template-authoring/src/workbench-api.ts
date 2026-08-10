@@ -508,7 +508,11 @@ async function publishArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Pro
   if (!destination.startsWith(`${publishedRoot}/`)) throw new Error("published artifact path escaped configured root");
   await mkdir(publishedRoot, { recursive: true });
   await rm(destination, { recursive: true, force: true });
-  await cp(source, destination, { recursive: true, filter: (path) => !path.includes(`${resolve(source, "reviews")}`) });
+  // The content pack carries the full review record: copy the artifact's
+  // reviews/ (LLM pre-review role reports + acceptance gate report) and add
+  // the distilled summary below, so reviewers see the LLM/human feedback
+  // behind each published unit even without the local authoring store.
+  await cp(source, destination, { recursive: true });
   await writeFile(join(destination, "unit.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   // The content pack carries the audit summary (acceptance rationale + the
   // needs_revision history), so reviewers on a fresh clone see the LLM/human

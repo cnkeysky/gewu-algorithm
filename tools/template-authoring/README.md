@@ -204,9 +204,11 @@ removes the draft's artifact and review reports.
 Human approval also publishes a validated copy under
 `drafts/.workbench/published/` by default. Set `GEWU_PUBLISHED_ROOT` to point at
 the content root used by `gewu-cli`; the published directory contains only
-Core-readable unit files plus `reviews/summary.json` per unit (the acceptance
-rationale and needs_revision history). Published units ship as a **content
-pack**: `npm run units:pack` regenerates the committed ledger
+Core-readable unit files plus the unit's **full review record** under
+`reviews/` (LLM pre-review role reports, the acceptance gate report, and a
+distilled `reviews/summary.json` with the acceptance rationale and
+needs_revision history). Published units ship as a **content pack**:
+`npm run units:pack` regenerates the committed ledger
 `units/index.json` (id, language, revision, modes, sha256) and a
 `gewu-units-*.tar.gz` for `gh release upload <tag> <tarball>`; a fresh clone
 runs `npm run units:fetch` to extract the pack for practice, and batch dedup
