@@ -14,6 +14,7 @@
     "review-template:local": "npm run build && node --env-file=.env.local dist/review-template.js",
     "fetch:hot100": "node scripts/fetch-hot100.mjs",
     "stamp:published": "node scripts/stamp-published.mjs",
+    "drafts:reconcile": "node scripts/reconcile-published-drafts.mjs",
     "units:pack": "node scripts/units-pack.mjs",
     "units:fetch": "node scripts/units-fetch.mjs",
     "drafts:export": "node scripts/drafts-export.mjs",

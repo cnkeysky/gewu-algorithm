@@ -139,6 +139,11 @@ allowed only with explicit migration notes (see
   an explicit human retry (`--force` / `--regenerate`, or the web workbench's
   "Retry generation") resets the counter. The Drafts list shows the failure
   count on failed entries.
+- `npm run drafts:reconcile` restores drafts whose unit is published but whose
+  row was clobbered back to `failed` by a stale-writer divergence (slug +
+  language match against the published root; `--dry-run` previews). This
+  repairs the accepted-but-failed state left behind when two authoring API
+  instances shared one store.
 - The artifact manifest's `validation` fields are stamped after real checks:
   `schema`/`code` pass when the deterministic Rust validation passes, and
   `content_review`/`transfer_review` pass when the LLM acceptance gate
