@@ -183,7 +183,11 @@ export function mountShadowEditor(
     // newline at the accepted boundary. A held/repeated Enter at a single
     // marker is silently ignored instead of stacking newlines that Core would
     // reject and roll back (which previously read as a broken Enter).
-    if (Array.from(targetText)[Array.from(value).length] !== "\n") return;
+    // A CRLF target (normalization must be lf, but a legacy fixture or an
+    // externally authored source can carry \r\n) expects the boundary at the
+    // "\n" following the trailing "\r" — treat both as a valid newline gate.
+    const nextChars = Array.from(targetText).slice(Array.from(value).length);
+    if (nextChars[0] !== "\n" && !(value.endsWith("\r") && nextChars[0] === "\n")) return;
     // Insert at the accepted boundary (end of the optimistic value) rather
     // than at the cursor, so the model always stays a strict prefix extension
     // of the target and the insert can never be rejected for positioning.
