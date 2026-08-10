@@ -36,6 +36,9 @@ allowed only with explicit migration notes (see
   immediately from the cached catalog and refreshes checkpoints /
   recommendations / attempts in the background, so the practice view no
   longer blocks on the slow RPCs.
+- The practice lists (Interrupted, Spaced review, Recent attempts) render
+  incrementally as each Core RPC resolves instead of waiting for the slowest
+  one, so the fast modules appear without delay.
 - Published corrected r2 revisions for `group-anagrams.python` and
   `letter-combinations-of-a-phone-number.python` (reasoning-recall prompt
   defects found by the re-run acceptance gate), and refreshed the content
