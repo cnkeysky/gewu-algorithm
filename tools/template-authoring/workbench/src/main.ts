@@ -958,7 +958,7 @@ function renderProblemLibrary(): void {
   list.innerHTML = items.length
     ? items.map((draft) => {
         const inCore = practiceUnits.some((item) => item.id === draft.unitId);
-        return `<div class="problem-row" role="button" tabindex="0" data-library-id="${draft.id}" aria-label="Load ${draft.title}"><span class="problem-row-main"><strong>${escapeHtml(draft.title)}</strong><small>${escapeHtml(draft.language)} · ${draft.modes.length} projection${draft.modes.length === 1 ? "" : "s"} · ${formatDate(draft.createdAt)}${draft.unitId ? ` · ${escapeHtml(draft.unitId)}` : ""}</small></span><button class="inline-action practice-action" type="button" data-practice-library-id="${draft.id}" aria-label="Practice ${draft.title}" ${inCore ? "" : `disabled title="Not loaded in the Core; add the published content root to practice it"`}>Practice</button></div>`;
+        return `<div class="problem-row" role="button" tabindex="0" data-library-id="${draft.id}" aria-label="Load ${draft.title}"><span class="problem-row-main"><strong>${escapeHtml(draft.title)}</strong><small>${escapeHtml(draft.language)} · ${draft.modes.length} projection${draft.modes.length === 1 ? "" : "s"} · ${formatDate(draft.createdAt)}${draft.unitId ? ` · ${escapeHtml(draft.unitId)}` : ""}</small></span><button class="inline-action practice-action" type="button" data-practice-library-id="${draft.unitId ?? draft.id}" aria-label="Practice ${draft.title}" ${inCore ? "" : `disabled title="Not loaded in the Core; add the published content root to practice it"`}>Practice</button></div>`;
       }).join("")
     : `<p class="compact-empty">${published.length ? "No published unit matches the search." : "No published units yet — approve a draft to make it reusable here."}</p>`;
 }
@@ -1034,7 +1034,7 @@ function renderUnits(): void {
   list.innerHTML = units.length
     ? `<div class="paged-scroll">${visible.map((unit) => {
         const inCore = practiceUnits.some((item) => item.id === unit.unitId);
-        return `<div class="unit-row"><span class="unit-main"><strong>${escapeHtml(unit.title)}</strong><small>${escapeHtml(unit.unitId ?? unit.id)} · ${escapeHtml(unit.language)} · ${unit.modes.length} projection${unit.modes.length === 1 ? "" : "s"} · ${formatDate(unit.createdAt)}</small></span><span class="unit-actions"><button class="inline-action practice-action" type="button" data-unit-practice-id="${unit.id}" ${inCore ? "" : `disabled title="Not loaded in the Core; add the published content root to practice it"`}>Practice</button></span></div>`;
+        return `<div class="unit-row"><span class="unit-main"><strong>${escapeHtml(unit.title)}</strong><small>${escapeHtml(unit.unitId ?? unit.id)} · ${escapeHtml(unit.language)} · ${unit.modes.length} projection${unit.modes.length === 1 ? "" : "s"} · ${formatDate(unit.createdAt)}</small></span><span class="unit-actions"><button class="inline-action practice-action" type="button" data-unit-practice-id="${unit.unitId ?? unit.id}" ${inCore ? "" : `disabled title="Not loaded in the Core; add the published content root to practice it"`}>Practice</button></span></div>`;
       }).join("")}</div>${paginationHtml("units", unitsPage, totalPages, units.length, UNITS_PAGE_SIZE)}`
     : `<div class="empty-state"><strong>${unitsSearch || unitsLanguage !== "all" ? "No published units match" : "No published units yet"}</strong><span>${unitsSearch || unitsLanguage !== "all" ? "Try another search or language filter." : "Approve a draft to publish it here."}</span></div><div class="list-pagination is-empty" aria-hidden="true"></div>`;
 }
@@ -1579,8 +1579,10 @@ document.querySelector<HTMLElement>("#units-list")!.addEventListener("click", (e
   const practiceButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-unit-practice-id]");
   if (practiceButton) {
     event.stopPropagation();
-    const draft = readDrafts().find((item) => item.id === practiceButton.dataset.unitPracticeId);
-    if (draft) practicePublishedUnit(draft);
+    const unitId = practiceButton.dataset.unitPracticeId ?? "";
+    const source = readDrafts().find((item) => item.unitId === unitId && item.status === "accepted")
+      ?? externalPublished.find((item) => item.unitId === unitId);
+    if (source) practicePublishedUnit(source);
   }
 });
 document.querySelector<HTMLButtonElement>("#browse-problems")!.addEventListener("click", openProblemLibrary);
@@ -1596,8 +1598,10 @@ document.querySelector<HTMLElement>("#problem-library-list")!.addEventListener("
   const practiceButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-practice-library-id]");
   if (practiceButton) {
     event.stopPropagation();
-    const draft = readDrafts().find((item) => item.id === practiceButton.dataset.practiceLibraryId);
-    if (draft) practicePublishedUnit(draft);
+    const unitId = practiceButton.dataset.practiceLibraryId ?? "";
+    const source = readDrafts().find((item) => item.unitId === unitId && item.status === "accepted")
+      ?? externalPublished.find((item) => item.unitId === unitId);
+    if (source) practicePublishedUnit(source);
     return;
   }
   const row = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-library-id]");
