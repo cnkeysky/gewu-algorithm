@@ -87,10 +87,10 @@ conventions come from Pi, so vendor changes are handled by updating Pi.
 Relays are our OpenAI-compatible extension and live in `providers.json`
 (`id -> { label, keyEnv, baseUrlEnv, wireApi, opencodeHeaders }`); adding a
 named relay is data-only: add an entry, set its env vars, and point
-`GEWU_LLM_PROVIDER` at it. Relay transport honors `GEWU_LLM_PROXY`
-(`off`/`none`/`direct` forces a direct connection), otherwise
-`HTTPS_PROXY` / `HTTP_PROXY` (`NO_PROXY` applies), or connects directly when
-no proxy is configured.
+`GEWU_LLM_PROVIDER` at it. LLM transport (relays and Pi built-in providers)
+honors `GEWU_LLM_PROXY` (`off`/`none`/`direct` forces a direct connection),
+otherwise `HTTPS_PROXY` / `HTTP_PROXY` (`NO_PROXY` applies), or connects
+directly when no proxy is configured.
 
 ### Generality and boundaries
 

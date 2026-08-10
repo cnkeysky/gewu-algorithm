@@ -110,15 +110,15 @@ allowed only with explicit migration notes (see
   text; reuse of a failed/needs-revision draft keeps its
   needs_revision/reject reviews so the next generation is informed by the
   previous gate rationale.
-- Relay transport is proxy-aware without new protocol code: requests route
-  through an explicit `GEWU_LLM_PROXY` when set, otherwise honor
-  `HTTPS_PROXY` / `HTTP_PROXY` (with `NO_PROXY` respected), and connect
-  directly when no proxy is configured; `GEWU_LLM_PROXY=off` (or
-  `none`/`direct`) forces a direct connection even when proxy env vars are
-  present — implemented with undici's `EnvHttpProxyAgent` / `Agent` paired
-  with undici's own fetch, because Node's built-in fetch ignores proxy env
-  vars and rejects a dispatcher from a different undici copy. The
-  opencode-style `x-opencode-session` /
+- LLM transport (relay **and** Pi built-in providers) is proxy-aware without
+  new protocol code: requests route through an explicit `GEWU_LLM_PROXY` when
+  set, otherwise honor `HTTPS_PROXY` / `HTTP_PROXY` (with `NO_PROXY`
+  respected), and connect directly when no proxy is configured;
+  `GEWU_LLM_PROXY=off` (or `none`/`direct`) forces a direct connection even
+  when proxy env vars are present — implemented with undici's
+  `EnvHttpProxyAgent` / `Agent` paired with undici's own fetch, because Node's
+  built-in fetch ignores proxy env vars and rejects a dispatcher from a
+  different undici copy. The opencode-style `x-opencode-session` /
   `x-opencode-request` headers are now opt-in per relay (`opencodeHeaders` in
   `providers.json`) instead of hardcoded, and relay tool schemas are sent
   non-strict (`supportsStrictMode: false`) since open gateways vary in their

@@ -274,6 +274,20 @@ export class PiGenerator {
     ) as Promise<Response>;
   };
 
+  /**
+   * Transport-only wrapper for non-relay (built-in Pi) providers: routes
+   * through the configured proxy via undici's own fetch, without touching the
+   * SDK headers or body. Node's built-in fetch ignores HTTP(S)_PROXY and
+   * rejects a dispatcher from a different undici copy, so every provider path
+   * needs undici's fetch + this agent.
+   */
+  readonly #proxyFetch: typeof fetch = (input, init) => {
+    return undiciFetch(
+      input as unknown as Parameters<typeof undiciFetch>[0],
+      { ...init, dispatcher: this.#dispatcher } as unknown as Parameters<typeof undiciFetch>[1],
+    ) as Promise<Response>;
+  };
+
   async generate(task: DraftTask): Promise<DraftArtifact> {
     if (!task.taskId || !task.taskVersion || !task.selectedInputHash)
       throw new Error("task identity and selected input hash are required");
@@ -318,7 +332,7 @@ export class PiGenerator {
             : this.#options.toolChoice === "required"
               ? "required"
               : { type: "function", function: { name: tool.name } },
-          ...(this.#isRelay ? { fetch: this.#relayFetch } : {}),
+          fetch: this.#isRelay ? this.#relayFetch : this.#proxyFetch,
           ...(this.#isRelay && this.#wireApi === "responses" && this.#options.reasoningEffort ? { reasoningEffort: this.#options.reasoningEffort } : {}),
           signal: AbortSignal.timeout(this.#options.timeoutMs ?? 60_000),
         });

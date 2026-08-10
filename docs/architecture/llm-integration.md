@@ -65,16 +65,16 @@ features outside OpenAI's strict subset (e.g. open `sources` maps). Pi-ai
 still validates every returned tool call and repairs violations with
 feedback. `opencodeHeaders: true` adds the `x-opencode-session` /
 `x-opencode-request` headers that some Codex-style gateways recommend; generic
-relays leave it off. Relay transport routes through an explicit
-`GEWU_LLM_PROXY` when set, otherwise honors `HTTPS_PROXY` / `HTTP_PROXY`
-(`NO_PROXY` applies either way), and connects directly when no proxy is
-configured; `GEWU_LLM_PROXY=off` (or `none`/`direct`) forces a direct
-connection even when proxy env vars are present — implemented with undici's
-`EnvHttpProxyAgent` / `Agent` because Node's built-in fetch ignores proxy env
-vars. Anthropic-Messages-only gateways and custom auth schemes are out of
-scope for the generic relay and need a dedicated adapter or extension. No
-endpoint URL is hardcoded; the relay model carries DeepSeek-style
-compatibility defaults, and a relaxed per-call timeout
+relays leave it off. LLM transport (relays **and** Pi built-in providers)
+routes through an explicit `GEWU_LLM_PROXY` when set, otherwise honors
+`HTTPS_PROXY` / `HTTP_PROXY` (`NO_PROXY` applies either way), and connects
+directly when no proxy is configured; `GEWU_LLM_PROXY=off` (or `none`/`direct`)
+forces a direct connection even when proxy env vars are present — implemented
+with undici's `EnvHttpProxyAgent` / `Agent` because Node's built-in fetch
+ignores proxy env vars. Anthropic-Messages-only gateways and custom auth
+schemes are out of scope for the generic relay and need a dedicated adapter or
+extension. No endpoint URL is hardcoded; the relay model carries
+DeepSeek-style compatibility defaults, and a relaxed per-call timeout
 (`GEWU_LLM_TIMEOUT_MS`) is recommended for reasoning-mode upstreams.
 Built-in providers (everything Pi-ai ships) are derived from the Pi package —
 ids, labels, models, and key env conventions — so vendor changes are handled
