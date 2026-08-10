@@ -107,7 +107,9 @@ for (const entry of readdirSync(contentRoot, { withFileTypes: true })) {
 units.sort((a, b) => a.id.localeCompare(b.id));
 
 mkdirSync(dirname(indexPath), { recursive: true });
-writeFileSync(indexPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), units }, null, 2)}\n`);
+// Deterministic ledger (no volatile generatedAt): only the per-unit checksum
+// metadata, so committing it only changes when a unit actually changes.
+writeFileSync(indexPath, `${JSON.stringify({ units }, null, 2)}\n`);
 console.log(`ledger written to ${resolve(repoRoot, "units/index.json")} (${units.length} units)`);
 
 // tar the content root (excluding the ledger and the generated pack manifest)
