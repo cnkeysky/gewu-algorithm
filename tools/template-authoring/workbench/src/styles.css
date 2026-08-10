@@ -246,6 +246,9 @@ input:hover, select:hover, textarea:hover { border-color: #b9c6be; }
 .role-verdict { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: capitalize; }
 .role-verdict.pass { border-color: #9fc6b5; color: var(--green); background: #f1f8f4; }
 .role-verdict.needs_revision, .role-verdict.reject { border-color: #e4b3a3; color: #a85126; background: #fdf1ed; }
+.review-rationale { margin: 10px 0; padding: 11px 13px; border: 1px solid var(--line); border-left: 3px solid var(--green); border-radius: 10px; background: #f6f9f7; }
+.review-rationale small { display: block; margin-bottom: 5px; color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.review-rationale p { margin: 0; color: var(--ink); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
 .finding-grid { display: grid; gap: 10px; height: 620px; overflow-y: auto; align-content: start; }
 .finding-card { padding: 13px 15px; border: 1px solid var(--line); border-left: 3px solid var(--finding-color); border-radius: 10px; background: #fff; }
 .finding-card.severity-info { --finding-color: #4a8db7; }
