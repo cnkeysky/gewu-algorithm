@@ -977,17 +977,21 @@ function practicePublishedUnit(draft: DraftRecord): void {
   closeProblemLibrary();
   if (draft.language) practiceLanguage = draft.language;
   showView("practice");
-  void refreshPracticeData().then(() => {
+  // The unit catalog is already cached (ensurePracticeUnitsLoaded runs when
+  // the Units view opens), so populate the Algorithm unit selector immediately
+  // and refresh the dynamic practice data (checkpoints, recommendations,
+  // attempts — the slow RPCs) in the background instead of blocking on them.
+  void ensurePracticeUnitsLoaded().then(() => {
+    renderPracticeUnits();
     const select = document.querySelector<HTMLSelectElement>("#practice-unit");
     const unit = practiceUnits.find((item) => item.id === draft.unitId);
     if (select && unit) {
       select.value = unit.id;
       renderPracticeOptions();
       practiceMessage(`Loaded "${unit.title}" — choose a mode to start.`);
-    } else {
-      practiceMessage(`Unit "${draft.title}" is not loaded in the Core; start the Core with the published content root to practice it.`, true);
     }
   });
+  void refreshPracticeData();
 }
 /** Real published units: accepted drafts bound to a unit id, deduplicated by
  * unit id (latest accepted revision wins). Legacy accepted drafts without a
