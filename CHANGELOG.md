@@ -194,6 +194,14 @@ allowed only with explicit migration notes (see
   shipped build now excludes `*.test.ts` via `tsconfig.build.json` — `npm run
   build` emits a clean runtime `dist/` (no test files) while `npm test`
   compiles the full source.
+- Relay providers declare a wire protocol (`wireApi` in `providers.json`):
+  `chat` (openai-completions, default) or `responses` (OpenAI Responses API,
+  used by Codex-style gateways like `https://shu26.cfd/v1` per
+  `codex-gewu.sh`'s `wire_api = "responses"`). `GEWU_LLM_TOOL_CHOICE=required`
+  sends the plain `tool_choice: "required"` for relays that reject the forced
+  function object, and `batch:stop` never kills the current process/parent
+  (stale or cross-namespace pid reuse) and tolerates a missing
+  `api-<port>.pid`.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring
