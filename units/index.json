@@ -424,7 +424,7 @@
       "id": "group-anagrams.python",
       "title": "Group Anagrams",
       "language": "python",
-      "revision": 1,
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -432,8 +432,8 @@
         "reasoning_recall",
         "transfer_practice"
       ],
-      "updatedAt": "2026-08-09T07:38:12.597Z",
-      "sha256": "32db2cb56b789d34"
+      "updatedAt": "2026-08-10T12:22:18.538Z",
+      "sha256": "c3f356c073d19f5b"
     },
     {
       "id": "house-robber.python",
@@ -574,7 +574,7 @@
       "id": "letter-combinations-of-a-phone-number.python",
       "title": "Letter Combinations of a Phone Number",
       "language": "python",
-      "revision": 1,
+      "revision": 2,
       "modes": [
         "shadow_typing",
         "flow_recall",
@@ -582,8 +582,8 @@
         "reasoning_recall",
         "transfer_practice"
       ],
-      "updatedAt": "2026-08-09T06:47:08.163Z",
-      "sha256": "bc57472133ef1600"
+      "updatedAt": "2026-08-10T12:22:18.541Z",
+      "sha256": "700c0e4490cf16e0"
     },
     {
       "id": "linked-list-cycle-ii.python",
