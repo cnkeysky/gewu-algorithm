@@ -53,11 +53,21 @@ test("opencode session/request headers are opt-in per provider", () => {
 });
 
 test("GEWU_LLM_PROXY overrides the proxy explicitly; otherwise env defaults apply", () => {
-  assert.equal(resolveProxyOptions({}), undefined);
-  assert.equal(resolveProxyOptions({ HTTPS_PROXY: "http://127.0.0.1:7890" }), undefined);
+  assert.deepEqual(resolveProxyOptions({}), { mode: "env" });
+  assert.deepEqual(resolveProxyOptions({ HTTPS_PROXY: "http://127.0.0.1:7890" }), { mode: "env" });
   assert.deepEqual(
     resolveProxyOptions({ GEWU_LLM_PROXY: "http://proxy.example:8080", HTTPS_PROXY: "http://127.0.0.1:7890" }),
-    { httpProxy: "http://proxy.example:8080", httpsProxy: "http://proxy.example:8080" },
+    { mode: "explicit", httpProxy: "http://proxy.example:8080", httpsProxy: "http://proxy.example:8080" },
   );
-  assert.equal(resolveProxyOptions({ GEWU_LLM_PROXY: "  " }), undefined);
+  assert.deepEqual(resolveProxyOptions({ GEWU_LLM_PROXY: "  " }), { mode: "env" });
+});
+
+test("GEWU_LLM_PROXY=off|none|direct forces a direct connection", () => {
+  for (const value of ["off", "none", "direct", "OFF", "Direct"]) {
+    assert.deepEqual(
+      resolveProxyOptions({ GEWU_LLM_PROXY: value, HTTPS_PROXY: "http://127.0.0.1:7890" }),
+      { mode: "direct" },
+      `expected ${value} to force direct`,
+    );
+  }
 });

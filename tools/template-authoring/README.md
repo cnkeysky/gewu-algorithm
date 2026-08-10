@@ -63,42 +63,52 @@ GEWU_LLM_API_KEY=<relay key> \
 npm run smoke
 ```
 
-The OpenAI-compatible SDK appends `/chat/completions` to the base URL, so
-`https://api.example.com/v1` targets `.../v1/chat/completions`. The same
-variables go into the ignored `.env.local` for repeatable local runs; the
-relay key is accepted only through `GEWU_LLM_API_KEY` — provider keys like
-`DEEPSEEK_API_KEY` are never sent to a relay endpoint, so a real provider
-key cannot leak to an arbitrary gateway. The relay defaults to
-`GEWU_LLM_TOOL_CHOICE=auto`; OpenAI-compatible relays that accept a forced
-tool call should set `GEWU_LLM_TOOL_CHOICE=forced` so the model always
-returns structured output instead of finishing with plain text. Other
-providers are unaffected when the base URL is unset. Relay requests strip the
-OpenAI SDK fingerprint headers (`x-stainless-*`) and send a neutral user agent
-plus opencode-style `x-opencode-session` / `x-opencode-request` headers,
-because some gateways block SDK fingerprints and prefer that convention.
+The wire protocol follows the entry's `wireApi` in `providers.json`: the
+default relay entry speaks the OpenAI Responses API (`/responses`, what
+Codex-style gateways expect); `wireApi: "chat"` targets the standard
+`/chat/completions` shape. The same variables go into the ignored
+`.env.local` for repeatable local runs; the relay key is accepted only
+through `GEWU_LLM_API_KEY` — provider keys like `DEEPSEEK_API_KEY` are never
+sent to a relay endpoint, so a real provider key cannot leak to an arbitrary
+gateway. The relay defaults to `GEWU_LLM_TOOL_CHOICE=auto`;
+OpenAI-compatible relays that accept a forced tool call should set
+`GEWU_LLM_TOOL_CHOICE=forced` so the model always returns structured output
+instead of finishing with plain text. Other providers are unaffected when
+the base URL is unset. Relay requests strip the OpenAI SDK fingerprint
+headers (`x-stainless-*`) and send a neutral user agent; the opencode-style
+`x-opencode-session` / `x-opencode-request` headers are opt-in per entry
+(`opencodeHeaders: true` in `providers.json`), because only some Codex-style
+gateways prefer that convention.
 
 Provider configuration is a declarative key-value mapping. Built-in
 providers (deepseek, openai, moonshotai, xiaomi, and everything Pi-ai ships)
 are **derived from the Pi package** — ids, labels, models, and key env
 conventions come from Pi, so vendor changes are handled by updating Pi.
 Relays are our OpenAI-compatible extension and live in `providers.json`
-(`id -> { label, keyEnv, baseUrlEnv }`); adding a named relay is data-only:
-add an entry, set its env vars, and point `GEWU_LLM_PROVIDER` at it.
+(`id -> { label, keyEnv, baseUrlEnv, wireApi, opencodeHeaders }`); adding a
+named relay is data-only: add an entry, set its env vars, and point
+`GEWU_LLM_PROVIDER` at it. Relay transport honors `GEWU_LLM_PROXY`
+(`off`/`none`/`direct` forces a direct connection), otherwise
+`HTTPS_PROXY` / `HTTP_PROXY` (`NO_PROXY` applies), or connects directly when
+no proxy is configured.
 
 ### Generality and boundaries
 
 The relay provider is generic and configured entirely by environment
 variables; no endpoint URL is hardcoded. It works with any OpenAI-compatible
-`/v1/chat/completions` gateway:
+gateway (`/v1/chat/completions` with `wireApi: "chat"`, or `/v1/responses`
+with `wireApi: "responses"`):
 
-- **Protocol**: OpenAI-compatible chat completions only (Anthropic Messages
-  gateways are not supported by the generic relay);
+- **Protocol**: OpenAI-compatible chat completions or Responses per
+  `wireApi` (Anthropic Messages gateways are not supported by the generic
+  relay);
 - **Auth**: Bearer token via `GEWU_LLM_API_KEY` (relay-only; provider keys are
   never used for the relay);
 - **Models**: one model id per run, set via `GEWU_LLM_MODEL`; the relay's
   model list is not auto-discovered;
-- **Compatibility defaults**: DeepSeek-style (`max_tokens`, no `store`/`strict`,
-  `thinkingFormat: deepseek`) with `toolChoice=auto` and
+- **Compatibility defaults**: non-strict tool schemas (open gateways vary in
+  JSON-schema enforcement), DeepSeek-style chat defaults (`max_tokens`, no
+  `store`/`strict`, `thinkingFormat: deepseek`) with `toolChoice=auto` and
   `reasoning_effort: "none"` (thinking disabled via `GEWU_LLM_REASONING_EFFORT`),
   because reasoning-mode upstreams reject forced tool calls and often ignore
   `thinking: {type:"disabled"}`; set `GEWU_LLM_TOOL_CHOICE=forced` if the

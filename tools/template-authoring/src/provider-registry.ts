@@ -8,7 +8,8 @@
  *
  * **Relay providers are our OpenAI-compatible extension** and live in
  * `providers.json` as key-value entries: id -> { label, kind: "relay",
- * keyEnv, baseUrlEnv }. Adding a named relay is data-only.
+ * keyEnv, baseUrlEnv, wireApi?, opencodeHeaders? }. Adding a named relay is
+ * data-only.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

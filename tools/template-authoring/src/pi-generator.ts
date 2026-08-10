@@ -4,7 +4,7 @@ import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { validateToolCall } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
-import { EnvHttpProxyAgent, fetch as undiciFetch } from "undici";
+import { Agent, EnvHttpProxyAgent, fetch as undiciFetch, type Dispatcher } from "undici";
 import { isRelayProvider, providerEntry, providerRegistry, relayBaseUrl } from "./provider-registry.js";
 
 export type PracticeModeSelection =
@@ -107,17 +107,24 @@ export function buildRelayHeaders(
 
 /**
  * Resolves the proxy for relay transport. `GEWU_LLM_PROXY` is the explicit
- * override (applied to both http and https); when it is absent, undici's
- * EnvHttpProxyAgent falls back to HTTPS_PROXY / HTTP_PROXY (and honors
- * NO_PROXY in both cases). Returns undefined when only the environment-based
- * default should apply.
+ * override (applied to both http and https); the sentinel values
+ * `off` / `none` / `direct` force a direct connection even when
+ * `HTTPS_PROXY` / `HTTP_PROXY` are set; when the variable is absent, undici's
+ * EnvHttpProxyAgent falls back to the proxy env vars (honoring NO_PROXY).
  */
+export type RelayProxyConfig =
+  | { mode: "direct" }
+  | { mode: "explicit"; httpProxy: string; httpsProxy: string }
+  | { mode: "env" };
+
 export function resolveProxyOptions(
   environment: Record<string, string | undefined> = process.env,
-): { httpProxy?: string; httpsProxy?: string } | undefined {
+): RelayProxyConfig {
   const explicit = nonEmpty(environment.GEWU_LLM_PROXY);
-  if (!explicit) return undefined;
-  return { httpProxy: explicit, httpsProxy: explicit };
+  if (!explicit) return { mode: "env" };
+  const normalized = explicit.toLowerCase();
+  if (normalized === "off" || normalized === "none" || normalized === "direct") return { mode: "direct" };
+  return { mode: "explicit", httpProxy: explicit, httpsProxy: explicit };
 }
 
 /** Reads non-secret selection settings. Provider credentials stay in Pi-ai's env/auth layer. */
@@ -211,19 +218,26 @@ export class PiGenerator {
   /**
    * undici's EnvHttpProxyAgent routes through GEWU_LLM_PROXY when set, else
    * HTTPS_PROXY / HTTP_PROXY (honoring NO_PROXY), or connects directly when
-   * no proxy is configured. Node's built-in fetch ignores proxy env vars, and
-   * it also rejects a dispatcher from a different undici copy ("invalid
-   * onRequestStart method"), so relay requests always use undici's own fetch
-   * + this agent.
+   * no proxy is configured; GEWU_LLM_PROXY=off|none|direct forces a plain
+   * direct agent. Node's built-in fetch ignores proxy env vars, and it also
+   * rejects a dispatcher from a different undici copy ("invalid onRequestStart
+   * method"), so relay requests always use undici's own fetch + this agent.
    */
-  readonly #dispatcher: EnvHttpProxyAgent;
+  readonly #dispatcher: Dispatcher;
 
   constructor(options: PiGeneratorOptions, environment: Record<string, string | undefined> = process.env) {
     this.#options = options;
     this.#isRelay = isRelayProvider(options.provider);
     this.#wireApi = providerEntry(options.provider)?.wireApi ?? "chat";
     this.#models = modelCatalogFromEnvironment(environment);
-    this.#dispatcher = new EnvHttpProxyAgent(resolveProxyOptions(environment));
+    const proxy = resolveProxyOptions(environment);
+    if (proxy.mode === "direct") {
+      this.#dispatcher = new Agent();
+    } else if (proxy.mode === "explicit") {
+      this.#dispatcher = new EnvHttpProxyAgent({ httpProxy: proxy.httpProxy, httpsProxy: proxy.httpsProxy });
+    } else {
+      this.#dispatcher = new EnvHttpProxyAgent();
+    }
   }
 
   /** Some gateways block the OpenAI SDK fingerprint headers; the relay uses a
@@ -249,12 +263,11 @@ export class PiGenerator {
         // Leave the body untouched if it is not parseable JSON.
       }
     }
-    // Use undici's own fetch when routing through the proxy: Node's built-in
-    // fetch rejects a ProxyAgent from a different undici copy with
-    // "invalid onRequestStart method".
-    // undici's own Request/Response/Headers types differ from the DOM lib;
-    // both accept string | URL | Request and HeadersInit at runtime, so the
-    // casts only reconcile the type namespaces.
+    // Always use undici's own fetch: Node's built-in fetch ignores proxy env
+    // vars and rejects a dispatcher from a different undici copy. undici's
+    // Request/Response/Headers types differ from the DOM lib; both accept
+    // string | URL | Request and HeadersInit at runtime, so the casts only
+    // reconcile the type namespaces.
     return undiciFetch(
       input as unknown as Parameters<typeof undiciFetch>[0],
       { ...init, headers, body, dispatcher: this.#dispatcher } as unknown as Parameters<typeof undiciFetch>[1],

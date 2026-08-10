@@ -230,7 +230,9 @@ relay there, set its env vars, and point `GEWU_LLM_PROVIDER` at it — no code
 changes). The default relay entry speaks the OpenAI Responses API
 (`wireApi: "responses"`, what Codex-style gateways expect); chat-only gateways
 use `wireApi: "chat"`. Relay transport honors `GEWU_LLM_PROXY`, falling back
-to `HTTPS_PROXY` / `HTTP_PROXY`, or connects directly when neither is set.
+to `HTTPS_PROXY` / `HTTP_PROXY`, or connects directly when neither is set;
+`GEWU_LLM_PROXY=off` forces a direct connection even when proxy env vars are
+present.
 Switch by setting `GEWU_LLM_PROVIDER` / `GEWU_LLM_MODEL` and the matching API
 key, then restart the API (or re-run `npm run dev:prepare`).
 

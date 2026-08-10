@@ -113,10 +113,12 @@ allowed only with explicit migration notes (see
 - Relay transport is proxy-aware without new protocol code: requests route
   through an explicit `GEWU_LLM_PROXY` when set, otherwise honor
   `HTTPS_PROXY` / `HTTP_PROXY` (with `NO_PROXY` respected), and connect
-  directly when no proxy is configured — implemented with undici's
-  `EnvHttpProxyAgent` paired with undici's own fetch, because Node's built-in
-  fetch ignores proxy env vars and rejects a dispatcher from a different
-  undici copy. The opencode-style `x-opencode-session` /
+  directly when no proxy is configured; `GEWU_LLM_PROXY=off` (or
+  `none`/`direct`) forces a direct connection even when proxy env vars are
+  present — implemented with undici's `EnvHttpProxyAgent` / `Agent` paired
+  with undici's own fetch, because Node's built-in fetch ignores proxy env
+  vars and rejects a dispatcher from a different undici copy. The
+  opencode-style `x-opencode-session` /
   `x-opencode-request` headers are now opt-in per relay (`opencodeHeaders` in
   `providers.json`) instead of hardcoded, and relay tool schemas are sent
   non-strict (`supportsStrictMode: false`) since open gateways vary in their
@@ -167,10 +169,11 @@ allowed only with explicit migration notes (see
   Pi package (`getBuiltinProviders` / `builtinProviders` / `findEnvKeys`), so
   vendor changes are handled by updating Pi instead of hardcoded maps.
   `providers.json` now holds only our OpenAI-compatible relay extension
-  (`id -> { label, keyEnv, baseUrlEnv }`); adding a named relay is data-only.
-  `/api/providers`, the dev runner's prepare flow, and the batch runner all
-  read the same registry; the dev flow asks for the key env var when Pi does
-  not report it (zero hardcoded key-env mapping).
+  (`id -> { label, keyEnv, baseUrlEnv, wireApi, opencodeHeaders }`); adding
+  a named relay is data-only. `/api/providers`, the dev runner's prepare
+  flow, and the batch runner all read the same registry; the dev flow asks
+  for the key env var when Pi does not report it (zero hardcoded key-env
+  mapping).
 - The dev runner installs dependencies and builds the core **before**
   collecting LLM configuration, so built-in provider metadata (ids, labels,
   models, key env vars) always comes from the installed Pi package — no
