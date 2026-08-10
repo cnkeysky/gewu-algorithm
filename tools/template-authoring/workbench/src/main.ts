@@ -988,10 +988,14 @@ function practicePublishedUnit(draft: DraftRecord): void {
     if (select && unit) {
       select.value = unit.id;
       renderPracticeOptions();
-      practiceMessage(`Loaded "${unit.title}" — choose a mode to start.`);
     }
   });
-  void refreshPracticeData();
+  // The guidance message is written after the refresh finishes so the
+  // workspace summary (rendered mid-refresh) cannot clobber it.
+  void refreshPracticeData().then(() => {
+    const unit = practiceUnits.find((item) => item.id === draft.unitId);
+    if (unit) practiceMessage(`Loaded "${unit.title}" — choose a mode to start.`);
+  });
 }
 /** Real published units: accepted drafts bound to a unit id, deduplicated by
  * unit id (latest accepted revision wins). Legacy accepted drafts without a

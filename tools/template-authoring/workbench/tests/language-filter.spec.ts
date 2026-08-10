@@ -16,6 +16,12 @@ function draft(title: string, language: string, index: number) {
   };
 }
 
+test.beforeEach(async ({ page }) => {
+  // Hermetic: never let a real authoring API's published ledger leak into the
+  // problem library / Units rows; each test seeds its own drafts.
+  await page.route("**/api/published-units", (route) => route.fulfill({ json: { units: [] } }));
+});
+
 test("practice language selector defaults to a concrete catalog language", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Practice", exact: true }).click();

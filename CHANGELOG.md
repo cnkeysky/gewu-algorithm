@@ -22,6 +22,25 @@ allowed only with explicit migration notes (see
   verdict, so a pass-without-findings verdict still displays meaningful
   feedback instead of an empty section.
 
+### Changed
+
+- Pagination in every list (Drafts, Units, Review history, practice lists,
+  artifact findings) uses an anchored bar: prev/next stay fixed at the two
+  edges and page numbers center between them with fixed-width buttons, so the
+  controls never change width or drift as the page window slides.
+- The Units and Problem-library Practice buttons resolve the clicked unit by
+  its stable unit id instead of the row's draft id, so units listed from the
+  published ledger start practice correctly; units not loaded in the Core
+  stay disabled with a tooltip.
+- Clicking Practice in Units populates the Algorithm unit selector
+  immediately from the cached catalog and refreshes checkpoints /
+  recommendations / attempts in the background, so the practice view no
+  longer blocks on the slow RPCs.
+- Published corrected r2 revisions for `group-anagrams.python` and
+  `letter-combinations-of-a-phone-number.python` (reasoning-recall prompt
+  defects found by the re-run acceptance gate), and refreshed the content
+  pack ledger + release asset.
+
 ## [0.1.10] - 2026-08-10
 
 ### Added
