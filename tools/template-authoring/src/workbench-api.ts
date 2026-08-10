@@ -526,6 +526,14 @@ async function publishArtifact(draft: DraftRecord, reviews: ReviewRecord[]): Pro
   const publishedReviewsDir = join(destination, "reviews");
   await mkdir(publishedReviewsDir, { recursive: true });
   await writeFile(join(publishedReviewsDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+  // The true publish timestamp travels with the unit: the ledger and the web
+  // Units page read published.json, so a fresh clone (units:fetch) shows the
+  // real publish date instead of the extraction/mtime.
+  await writeFile(
+    join(destination, "published.json"),
+    `${JSON.stringify({ publishedAt: new Date().toISOString(), revision: nextRevision }, null, 2)}\n`,
+    "utf8",
+  );
   try {
     await validateArtifactWithRust(destination, false);
   } catch (error) {

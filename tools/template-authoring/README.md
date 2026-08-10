@@ -212,7 +212,12 @@ needs_revision history). Published units ship as a **content pack**:
 `units/index.json` (id, language, revision, modes, sha256) and a
 `gewu-units-*.tar.gz` for `gh release upload <tag> <tarball>`; a fresh clone
 runs `npm run units:fetch` to extract the pack for practice, and batch dedup
-works from the ledger alone. A generated artifact can be edited in the Artifact
+works from the ledger alone. Each unit carries `published.json` with the true
+publish timestamp (the ledger and the web Units page read it, so dates survive
+clones). The local authoring state — unpublished drafts and their review
+feedback (the review queue) — is exported with `npm run drafts:export` to a
+portable JSON (dates preserved) and restored with
+`npm run drafts:import <file>`. A generated artifact can be edited in the Artifact
 inspector modal (opened from Drafts or Review history) and saved through
 `PUT /api/drafts/:id/artifact`; the Rust validator must pass again and
 previous LLM reviews are cleared before another review.

@@ -16,6 +16,8 @@
     "stamp:published": "node scripts/stamp-published.mjs",
     "units:pack": "node scripts/units-pack.mjs",
     "units:fetch": "node scripts/units-fetch.mjs",
+    "drafts:export": "node scripts/drafts-export.mjs",
+    "drafts:import": "node scripts/drafts-import.mjs",
     "batch": "npm run build && node dist/batch-authoring.js",
     "rule-dedup": "npm run build && node dist/rule-dedup.js",
     "workbench:api": "npm run build && node dist/workbench-api.js",

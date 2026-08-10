@@ -42,12 +42,20 @@ function reviewSummary(reviews) {
 function backfillReviews(unitDir, unitId) {
   const revision = latestRevisionDir(unitDir);
   const unitReviews = join(unitDir, revision, "reviews");
-  if (existsSync(join(unitReviews, "summary.json"))) return;
+  if (existsSync(join(unitReviews, "summary.json")) && existsSync(join(unitDir, revision, "published.json"))) return;
   if (!existsSync(dbPath)) return;
   const db = new DatabaseSync(dbPath, { readOnly: true });
   try {
     const draft = db.prepare("SELECT id, artifact_path FROM drafts WHERE unit_id = ? AND status = 'accepted' ORDER BY created_at DESC LIMIT 1").get(unitId);
     if (!draft?.artifact_path) return;
+    // Backfill the true publish timestamp (the store's accept time) so the
+    // ledger and frontend show the real date even for pre-fix units.
+    if (!existsSync(join(unitDir, revision, "published.json"))) {
+      const created = db.prepare("SELECT created_at FROM drafts WHERE id = ?").get(draft.id)?.created_at;
+      if (typeof created === "string") {
+        writeFileSync(join(unitDir, revision, "published.json"), `${JSON.stringify({ publishedAt: created, revision: Number(revision.slice(1)) }, null, 2)}\n`);
+      }
+    }
     const artifactReviews = join(repoRoot, String(draft.artifact_path), "reviews");
     if (existsSync(artifactReviews)) {
       mkdirSync(unitReviews, { recursive: true });
@@ -77,6 +85,16 @@ function latestRevisionDir(unitDir) {
   return latest;
 }
 
+function unitUpdatedAt(unitDir, revision) {
+  try {
+    const published = JSON.parse(readFileSync(join(unitDir, revision, "published.json"), "utf8"));
+    if (typeof published.publishedAt === "string" && published.publishedAt) return published.publishedAt;
+  } catch {
+    // Fall back below.
+  }
+  return statSync(unitDir).mtime.toISOString();
+}
+
 if (!existsSync(contentRoot)) {
   console.error(`no published content at ${contentRoot}; publish units or run npm run units:fetch first`);
   process.exit(1);
@@ -100,7 +118,7 @@ for (const entry of readdirSync(contentRoot, { withFileTypes: true })) {
     language: typeof manifest.language === "string" && manifest.language ? manifest.language : "python",
     revision: Number(revision.slice(1)),
     modes: Object.keys(practice),
-    updatedAt: statSync(unitDir).mtime.toISOString(),
+    updatedAt: unitUpdatedAt(unitDir, revision),
     sha256,
   });
 }

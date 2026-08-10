@@ -340,9 +340,14 @@ committed ledger, so reruns skip published problems without regenerating
 duplicates. Each published unit carries its **full review record** — the LLM
 pre-review role reports and the acceptance gate report under `reviews/`, plus
 `reviews/summary.json` (acceptance rationale and needs_revision history) — so
-reviewers see the LLM/human feedback behind it. The approval state machine,
-the human-over-LLM hierarchy, and the published-unit correction model are
-documented in
+reviewers see the LLM/human feedback behind it. A `published.json` in each
+unit carries the true publish timestamp, so dates survive
+`units:fetch`/clones. Unpublished drafts (the local review queue) stay in the
+workbench; `npm run drafts:export` dumps all drafts + reviews (dates
+preserved) to a portable JSON for backup/migration/review, and
+`npm run drafts:import <file>` restores it idempotently. The approval state
+machine, the human-over-LLM hierarchy, and the published-unit correction
+model are documented in
 [`docs/architecture/approval-flow.md`](docs/architecture/approval-flow.md).
 
 Problem statements are Markdown and images are **URL references by default**

@@ -180,6 +180,13 @@ allowed only with explicit migration notes (see
   `/api/published-units` (ledger-backed) with local accepted drafts, and batch
   reruns skip problems already covered by a published unit even on an empty
   store.
+- Dates are preserved end-to-end: each published unit carries
+  `published.json` with the true publish timestamp, and the ledger + web Units
+  page read it instead of the content-root mtime (which would show the
+  extraction time after `units:fetch`). The local authoring state (unpublished
+  drafts + review feedback) is exportable with `npm run drafts:export` and
+  restorable with `npm run drafts:import` — all `created_at` timestamps are
+  preserved.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring
