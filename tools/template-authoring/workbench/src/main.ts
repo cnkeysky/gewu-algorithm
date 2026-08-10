@@ -672,12 +672,15 @@ function observeTextElement(element: HTMLElement): void {
 }
 async function refreshPracticeData(): Promise<void> {
   try {
-    const [units, checkpoints, recommendations, attempts] = await Promise.all([
-      practiceRpc<PracticeUnit[]>("gewu/listUnits"),
-      practiceRpc<{ checkpoints: Checkpoint[] }>("gewu/listCheckpoints"),
-      practiceRpc<Recommendation[]>("gewu/reviewRecommendations"),
-      practiceRpc<{ attempts: Attempt[] }>("gewu/recentAttempts", { limit: 50 }),
-    ]);
+    const unitsPromise = practiceRpc<PracticeUnit[]>("gewu/listUnits");
+    const checkpointsPromise = practiceRpc<{ checkpoints: Checkpoint[] }>("gewu/listCheckpoints");
+    const recommendationsPromise = practiceRpc<Recommendation[]>("gewu/reviewRecommendations");
+    const attemptsPromise = practiceRpc<{ attempts: Attempt[] }>("gewu/recentAttempts", { limit: 50 });
+
+    // The unit catalog drives the Algorithm unit dropdown and the connection
+    // badge: render it as soon as it arrives instead of waiting for the slow
+    // RPCs (recent attempts in particular).
+    const units = await unitsPromise;
     practiceUnits = units;
     document.querySelector<HTMLElement>("#home-unit-id")!.textContent = units[0]?.id ?? "your.algorithm";
     renderPracticeLanguageFilter();
@@ -686,27 +689,31 @@ async function refreshPracticeData(): Promise<void> {
     const shouldRecoverSession = practiceWasDisconnected;
     setPracticeConnection(true);
     practiceWasDisconnected = false;
-    const uniqueCheckpoints = new Map<string, Checkpoint>();
-    for (const checkpoint of checkpoints.checkpoints) {
-      const key = `${checkpoint.unit_id}:${checkpoint.revision}:${checkpoint.mode}:${checkpoint.implementation ?? ""}:${checkpoint.practice_id ?? ""}`;
-      if (!uniqueCheckpoints.has(key)) uniqueCheckpoints.set(key, checkpoint);
-    }
-    checkpointItems = [...uniqueCheckpoints.values()];
-    recommendationItems = recommendations;
-    attemptItems = attempts.attempts;
-    renderPracticeLists();
     if (document.querySelector<HTMLElement>("#practice-session")!.hidden) practiceMessage(practiceWorkspaceSummary());
     if (practiceReconnectTimer !== undefined) { window.clearTimeout(practiceReconnectTimer); practiceReconnectTimer = undefined; }
-    if (shouldRecoverSession && activePracticeSession && activePracticeSnapshot?.status === "active" && !reconnectingPractice) {
-      const matching = checkpointItems.find((item) => item.unit_id === activePracticeSnapshot?.unit_id && item.revision === activePracticeSnapshot.revision && item.mode === activePracticeSession?.mode && (!activePracticeSnapshot.practice_id || item.practice_id === activePracticeSnapshot.practice_id) && (!activePracticeSnapshot.implementation || item.implementation === activePracticeSnapshot.implementation));
-      if (matching && matching.id !== activePracticeSession.session_id) {
-        reconnectingPractice = true;
-        try {
-          const resumed = await practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: matching.id });
-          if (resumed.session) { activePracticeSession = { session_id: resumed.session.session_id, mode: resumed.session.mode }; renderPracticeSession(resumed.session); practiceMessage("Core reconnected; interrupted practice resumed."); }
-        } finally { reconnectingPractice = false; }
+
+    // Render each list as its own RPC resolves, so a slow call no longer
+    // blocks the faster ones.
+    void checkpointsPromise.then(({ checkpoints }) => {
+      const uniqueCheckpoints = new Map<string, Checkpoint>();
+      for (const checkpoint of checkpoints) {
+        const key = `${checkpoint.unit_id}:${checkpoint.revision}:${checkpoint.mode}:${checkpoint.implementation ?? ""}:${checkpoint.practice_id ?? ""}`;
+        if (!uniqueCheckpoints.has(key)) uniqueCheckpoints.set(key, checkpoint);
       }
-    }
+      checkpointItems = [...uniqueCheckpoints.values()];
+      renderPracticeLists("checkpoints");
+      if (shouldRecoverSession && activePracticeSession && activePracticeSnapshot?.status === "active" && !reconnectingPractice) {
+        const matching = checkpointItems.find((item) => item.unit_id === activePracticeSnapshot?.unit_id && item.revision === activePracticeSnapshot.revision && item.mode === activePracticeSession?.mode && (!activePracticeSnapshot.practice_id || item.practice_id === activePracticeSnapshot.practice_id) && (!activePracticeSnapshot.implementation || item.implementation === activePracticeSnapshot.implementation));
+        if (matching && matching.id !== activePracticeSession.session_id) {
+          reconnectingPractice = true;
+          void practiceRpc<{ session: PracticeSession | null }>("gewu/resumeCheckpoint", { checkpoint_id: matching.id }).then((resumed) => {
+            if (resumed.session) { activePracticeSession = { session_id: resumed.session.session_id, mode: resumed.session.mode }; renderPracticeSession(resumed.session); practiceMessage("Core reconnected; interrupted practice resumed."); }
+          }).finally(() => { reconnectingPractice = false; });
+        }
+      }
+    }).catch(() => {});
+    void recommendationsPromise.then((items) => { recommendationItems = items; renderPracticeLists("recommendations"); }).catch(() => {});
+    void attemptsPromise.then(({ attempts }) => { attemptItems = attempts; renderPracticeLists("attempts"); }).catch(() => {});
   } catch (error) {
     setPracticeConnection(false, "Rust Core is unavailable. Retrying automatically.");
     if (practiceReconnectTimer === undefined) practiceReconnectTimer = window.setTimeout(() => { practiceReconnectTimer = undefined; void refreshPracticeData(); }, 1500);
