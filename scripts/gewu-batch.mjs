@@ -89,6 +89,9 @@ flags:
                     sole reviewer); add 'review' for the three pre-review roles
   --concurrency N   parallel problems (default 1)
   --repair-rounds N regenerate from review feedback after needs_revision (default 1)
+  --max-failures N    circuit breaker: quarantine a draft for manual review
+                      after N failed generate/validate attempts (default 3;
+                      --force/--regenerate bypass it)
   --timeout-minutes N per-request timeout for LLM-backed API calls (default 60)
   --request-delay-ms N pause between LLM-backed calls to respect gateway rate
                     limits (default 0; relays behind Cloudflare-style security
@@ -140,6 +143,7 @@ let problemsFile;
 let steps;
 let concurrency = "1";
 let repairRounds = "1";
+let maxFailures = "3";
 let autoAccept = false;
 let force = false;
 let yes = false;
@@ -169,6 +173,7 @@ for (let i = 0; i < args.length; i += 1) {
   else if (arg === "--steps") steps = args[++i];
   else if (arg === "--concurrency") concurrency = args[++i];
   else if (arg === "--repair-rounds") repairRounds = args[++i];
+  else if (arg === "--max-failures") maxFailures = args[++i];
   else if (arg === "--timeout-minutes") timeoutMinutes = args[++i];
   else if (arg === "--request-delay-ms") requestDelayMs = args[++i];
   else if (arg === "--regenerate") regenerate = args[++i];
@@ -456,6 +461,7 @@ async function doRun() {
     "--api", `http://127.0.0.1:${apiPort}`,
     "--concurrency", concurrency,
     "--repair-rounds", repairRounds,
+    "--max-failures", maxFailures,
     "--timeout-minutes", timeoutMinutes,
     "--request-delay-ms", requestDelayMs,
     "--report", resolve(repo, report),

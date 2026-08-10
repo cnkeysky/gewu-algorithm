@@ -90,6 +90,9 @@ type Options = {
   select: string[];
   regenerate: string[];
   repairRounds: number;
+  /** Circuit breaker: a draft whose failureCount reaches this is quarantined
+   * (reported needs_review) instead of being auto-retried forever. */
+  maxFailures: number;
   autoAccept: boolean;
   llmApprove?: string;
   creatorModels: string[];
@@ -119,10 +122,23 @@ export function defaultApproverSpec(
   return "deepseek:deepseek-v4-flash";
 }
 
+/**
+ * Circuit breaker (industry pattern): when a draft has failed
+ * `failureCount >= maxFailures` times, the automated batch quarantines it for
+ * human review instead of silently burning another generation. Explicit
+ * operator intent (`--force` / `--regenerate`) bypasses the breaker.
+ */
+export function quarantineReason(failureCount: number, maxFailures: number): string | undefined {
+  if (failureCount >= maxFailures) {
+    return `draft failed ${failureCount} time(s) (max ${maxFailures}); requires manual review — retry in the web workbench or with --force/--regenerate`;
+  }
+  return undefined;
+}
+
 class UsageError extends Error {}
 
 function printUsage(): void {
-  console.error("usage: node dist/batch-authoring.js --problems <file.json|tsv> [--api url] [--steps draft,generate,validate,review,accept] [--concurrency n] [--force] [--yes] [--select id1,id2] [--repair-rounds n] [--auto-accept] [--language python] [--variants 1] [--modes ...] [--assistance ...] [--request-delay-ms n] [--report path]");
+  console.error("usage: node dist/batch-authoring.js --problems <file.json|tsv> [--api url] [--steps draft,generate,validate,review,accept] [--concurrency n] [--force] [--yes] [--select id1,id2] [--repair-rounds n] [--max-failures n] [--auto-accept] [--language python] [--variants 1] [--modes ...] [--assistance ...] [--request-delay-ms n] [--report path]");
 }
 
 function fail(message: string): never {
@@ -158,6 +174,8 @@ export function parseOptions(args: string[]): Options {
   if (!Number.isInteger(timeoutMinutes) || timeoutMinutes < 1) fail("--timeout-minutes must be a positive integer");
   const requestDelayMs = Number(optionValue(args, "--request-delay-ms") ?? process.env.GEWU_BATCH_REQUEST_DELAY_MS ?? "0");
   if (!Number.isInteger(requestDelayMs) || requestDelayMs < 0) fail("--request-delay-ms must be a non-negative integer");
+  const maxFailures = Number(optionValue(args, "--max-failures") ?? "3");
+  if (!Number.isInteger(maxFailures) || maxFailures < 1) fail("--max-failures must be a positive integer");
   const selectValue = optionValue(args, "--select");
   const regenerateValue = optionValue(args, "--regenerate");
   return {
@@ -171,6 +189,7 @@ export function parseOptions(args: string[]): Options {
     select: selectValue ? selectValue.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean) : [],
     regenerate: regenerateValue ? regenerateValue.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean) : [],
     repairRounds: Number(optionValue(args, "--repair-rounds") ?? "1"),
+    maxFailures,
     autoAccept: args.includes("--auto-accept"),
     llmApprove: optionValue(args, "--llm-approve"),
     creatorModels: optionValue(args, "--creator-models")?.split(",").map((item) => item.trim()).filter(Boolean) ?? [],
@@ -399,18 +418,18 @@ type DraftIndexes = {
   acceptedByFingerprint: Map<string, AcceptedUnit>;
   /** Newest non-accepted draft per problem+language, reused on re-runs so
    * failed/interrupted attempts are retried instead of accumulating. */
-  existing: Map<string, { id: string; status: string }>;
-  existingByFingerprint: Map<string, { id: string; status: string }>;
+  existing: Map<string, { id: string; status: string; failureCount: number }>;
+  existingByFingerprint: Map<string, { id: string; status: string; failureCount: number }>;
 };
 
 async function loadDraftIndexes(options: Options): Promise<DraftIndexes> {
   const result = await apiRequest(options, "GET", "/api/drafts");
   if (!result.ok) throw new Error(`cannot list drafts: ${draftError(result)}`);
-  const drafts = (result.body as { drafts?: Array<{ id: string; problem: string; status: string; language?: string; modes?: string[]; unitId?: string }> }).drafts ?? [];
+  const drafts = (result.body as { drafts?: Array<{ id: string; problem: string; status: string; language?: string; modes?: string[]; unitId?: string; failureCount?: number }> }).drafts ?? [];
   const accepted = new Map<string, AcceptedUnit>();
   const acceptedByFingerprint = new Map<string, AcceptedUnit>();
-  const existing = new Map<string, { id: string; status: string }>();
-  const existingByFingerprint = new Map<string, { id: string; status: string }>();
+  const existing = new Map<string, { id: string; status: string; failureCount: number }>();
+  const existingByFingerprint = new Map<string, { id: string; status: string; failureCount: number }>();
   for (const draft of drafts) {
     const problem = String(draft.problem ?? "").trim();
     if (!problem) continue;
@@ -427,8 +446,9 @@ async function loadDraftIndexes(options: Options): Promise<DraftIndexes> {
       if (fpPrevious) for (const mode of fpPrevious.modes) unit.modes.add(mode);
       acceptedByFingerprint.set(fingerprintKey, unit);
     } else {
-      if (!existing.has(key)) existing.set(key, { id: draft.id, status: String(draft.status ?? "") });
-      if (!existingByFingerprint.has(fingerprintKey)) existingByFingerprint.set(fingerprintKey, { id: draft.id, status: String(draft.status ?? "") });
+      const existingDraft = { id: draft.id, status: String(draft.status ?? ""), failureCount: Number(draft.failureCount ?? 0) };
+      if (!existing.has(key)) existing.set(key, existingDraft);
+      if (!existingByFingerprint.has(fingerprintKey)) existingByFingerprint.set(fingerprintKey, existingDraft);
     }
   }
   // Published units are a dedup source on fresh clones: the local store may
@@ -582,6 +602,12 @@ async function processProblem(
       // creating a duplicate entry on every re-run.
       const existing = indexes.existing.get(key) ?? indexes.existingByFingerprint.get(fingerprintKey);
       if (existing) {
+        if (!options.force && !matchesRequested(problem, options.regenerate)) {
+          const quarantined = quarantineReason(existing.failureCount, options.maxFailures);
+          if (quarantined) {
+            return { ...base, status: "needs_review", error: quarantined, draftId: existing.id };
+          }
+        }
         // Optimistic concurrency: the index is a snapshot, so a draft may have
         // changed (or been accepted) since it was loaded. The server refuses
         // the reuse when the observed status no longer matches.

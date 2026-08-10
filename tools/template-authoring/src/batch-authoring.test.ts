@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { coverageKey, defaultApproverSpec, draftKey, loadProblems, mergePublishedUnits, parseOptions, problemKey, publishedUnitKey, reconcileResults, resolveLanguage, selectProblems } from "./batch-authoring.js";
+import { coverageKey, defaultApproverSpec, draftKey, loadProblems, mergePublishedUnits, parseOptions, problemKey, publishedUnitKey, quarantineReason, reconcileResults, resolveLanguage, selectProblems } from "./batch-authoring.js";
 import { ledgerPath } from "./paths.js";
 
 test("parseOptions applies defaults and overrides", () => {
@@ -16,6 +16,7 @@ test("parseOptions applies defaults and overrides", () => {
   assert.equal(defaults.yes, false);
   assert.deepEqual(defaults.select, []);
   assert.equal(defaults.repairRounds, 1);
+  assert.equal(defaults.maxFailures, 3);
   assert.equal(defaults.autoAccept, false);
   assert.equal(defaults.language, "python");
   assert.equal(defaults.languageProvided, false);
@@ -31,6 +32,7 @@ test("parseOptions applies defaults and overrides", () => {
     "--steps", "generate,validate,review", "--concurrency", "4", "--resume",
     "--force", "--yes", "--select", "two-sum,3sum", "--repair-rounds", "2", "--auto-accept", "--language", "java",
     "--request-delay-ms", "2000",
+    "--max-failures", "5",
     "--variants", "2", "--llm-approve", "openai:gpt-4.1", "--creator-models", "deepseek:deepseek-v4-flash,openai:gpt-4.1", "--modes", "shadow_typing,code_recall", "--assistance", "comments",
   ]);
   assert.equal(custom.api, "http://127.0.0.1:9999");
@@ -50,6 +52,14 @@ test("parseOptions applies defaults and overrides", () => {
   assert.deepEqual(custom.modes, ["shadow_typing", "code_recall"]);
   assert.deepEqual(custom.assistance, ["comments"]);
   assert.equal(custom.requestDelayMs, 2000);
+  assert.equal(custom.maxFailures, 5);
+  assert.throws(() => parseOptions(["--problems", "hot100.json", "--max-failures", "0"]), /positive integer/);
+});
+
+test("quarantineReason opens the circuit at the failure cap", () => {
+  assert.equal(quarantineReason(2, 3), undefined);
+  assert.match(quarantineReason(3, 3)!, /failed 3 time\(s\) \(max 3\).*manual review/);
+  assert.match(quarantineReason(7, 3)!, /failed 7 time\(s\)/);
 });
 
 test("loadProblems parses JSON arrays and TSV", async () => {

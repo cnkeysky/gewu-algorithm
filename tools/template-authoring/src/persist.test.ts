@@ -14,7 +14,8 @@ function openDb() {
       id TEXT PRIMARY KEY, task_id TEXT, slug TEXT, title TEXT NOT NULL, problem TEXT NOT NULL,
       provider TEXT NOT NULL, model TEXT NOT NULL, language TEXT NOT NULL, variants INTEGER NOT NULL,
       modes_json TEXT NOT NULL, assistance_json TEXT NOT NULL, status TEXT NOT NULL,
-      created_at TEXT NOT NULL, unit_id TEXT, artifact_path TEXT, published_path TEXT, error TEXT
+      created_at TEXT NOT NULL, unit_id TEXT, artifact_path TEXT, published_path TEXT, error TEXT,
+      failure_count INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE reviews (
       id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, role TEXT NOT NULL, verdict TEXT NOT NULL,
@@ -42,6 +43,7 @@ function draft(id: string, status = "queued") {
     assistance: [],
     status,
     createdAt: "2026-08-09T00:00:00.000Z",
+    failureCount: 0,
   };
 }
 
@@ -81,6 +83,26 @@ test("reviews upsert independently and deletion removes only the target rows", (
     assert.equal(db.prepare("SELECT COUNT(*) n FROM drafts WHERE id='a'").get()!.n, 0);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM drafts WHERE id='b'").get()!.n, 1);
     assert.equal(db.prepare("SELECT COUNT(*) n FROM reviews WHERE draft_id='b'").get()!.n, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("failure count persists and resets through upsert and compare-and-set", () => {
+  const { db, dir } = openDb();
+  try {
+    upsertDraft(db, { ...draft("a", "failed"), failureCount: 3 });
+    const row = db.prepare("SELECT failure_count FROM drafts WHERE id='a'").get() as { failure_count: number };
+    assert.equal(row.failure_count, 3);
+    // casUpsert carries the count and only applies on the expected status.
+    const applied = casUpsertDraft(db, { ...draft("a", "queued"), failureCount: 4 }, "generated");
+    assert.equal(applied, false);
+    const applied2 = casUpsertDraft(db, { ...draft("a", "failed"), failureCount: 4 }, "failed");
+    assert.equal(applied2, true);
+    assert.equal((db.prepare("SELECT failure_count FROM drafts WHERE id='a'").get() as { failure_count: number }).failure_count, 4);
+    // Success resets to zero.
+    upsertDraft(db, { ...draft("a", "generated"), failureCount: 0, error: undefined });
+    assert.equal((db.prepare("SELECT failure_count FROM drafts WHERE id='a'").get() as { failure_count: number }).failure_count, 0);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

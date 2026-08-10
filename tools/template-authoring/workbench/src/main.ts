@@ -801,6 +801,8 @@ interface DraftRecord {
   publishedPath?: string;
   unitId?: string;
   error?: string;
+  /** Consecutive failed generate/validate attempts (circuit-breaker count). */
+  failureCount?: number;
 }
 interface ReviewRecord { id: string; draftId: string; role: string; verdict: "pending" | "pass" | "needs_revision" | "reject"; artifactHash: string | null; reportPath?: string; rationale?: string; createdAt: string; }
 interface ArtifactPayload { draft: DraftRecord; files: Record<string, string>; reviews: Array<ReviewRecord & { report?: { verdict?: string; findings?: Array<{ rule_id: string; severity: string; path: string; problem: string; evidence: string; suggested_change: string }> } }> }
@@ -899,6 +901,10 @@ function variantLabel(value: { unit_id?: string; mode?: string; implementation?:
 }
 function statusLabel(status: DraftRecord["status"]): string { return ({ draft: "Draft", queued: "Queued", generated: "Generated", validated: "Contract valid", llm_reviewed: "LLM approved", needs_revision: "Needs revision", revision_requested: "Awaiting regeneration", accepted: "Human approved", failed: "Generation failed" })[status]; }
 function acceptanceLabel(draft: DraftRecord): string {
+  if (draft.status === "failed") {
+    const failures = draft.failureCount ?? 0;
+    return failures > 1 ? `Generation failed ×${failures}` : "Generation failed";
+  }
   if (draft.status !== "accepted") return statusLabel(draft.status);
   const reviews = readReviews().filter((review) => review.draftId === draft.id);
   const human = reviews.some((review) => review.role === "human_acceptance");
@@ -1282,7 +1288,7 @@ document.addEventListener("click", (event) => {
     event.stopPropagation();
     const id = generateButton.dataset.generateId;
     if (!lockAction("generate", id)) return;
-    void fetch(`/api/drafts/${id}/generate`, { method: "POST" }).then(async (response) => {
+    void fetch(`/api/drafts/${id}/generate`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resetFailures: true }) }).then(async (response) => {
       const payload = await response.json() as { error?: string; status?: string };
       notify(response.ok ? "Template generated. Run Validate contract next." : `Generation failed: ${shortError(payload.error) || "unknown error"}`, !response.ok);
       if (response.ok) { await syncFromApi(); renderDraftsView(); }

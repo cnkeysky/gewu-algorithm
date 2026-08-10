@@ -132,6 +132,13 @@ allowed only with explicit migration notes (see
   so one key variable can back several providers; the provider's own key env
   wins when set, and providers outside the alias table never read
   `GEWU_LLM_API_KEY`.
+- Repeated generation failures are handled with a circuit breaker instead of
+  silent infinite retries: drafts persist a `failure_count` (incremented on
+  failed generate/validate, reset on success), the batch CLI quarantines a
+  draft at `--max-failures` (default 3) and reports it as needs review, and
+  an explicit human retry (`--force` / `--regenerate`, or the web workbench's
+  "Retry generation") resets the counter. The Drafts list shows the failure
+  count on failed entries.
 - The artifact manifest's `validation` fields are stamped after real checks:
   `schema`/`code` pass when the deterministic Rust validation passes, and
   `content_review`/`transfer_review` pass when the LLM acceptance gate

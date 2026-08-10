@@ -25,6 +25,9 @@ export interface PersistedDraft {
   artifactPath?: string;
   publishedPath?: string;
   error?: string;
+  /** Consecutive failed generate/validate attempts (circuit-breaker count).
+   * Reset to 0 on success or an explicit human retry. */
+  failureCount: number;
 }
 
 export interface PersistedReview {
@@ -73,8 +76,8 @@ export function releaseClaim(database: DatabaseSync, draftId: string, operation:
 }
 
 export function upsertDraft(database: DatabaseSync, draft: PersistedDraft): void {
-  database.prepare(`INSERT INTO drafts (id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET task_id=excluded.task_id, slug=excluded.slug, title=excluded.title, problem=excluded.problem, provider=excluded.provider, model=excluded.model, language=excluded.language, variants=excluded.variants, modes_json=excluded.modes_json, assistance_json=excluded.assistance_json, status=excluded.status, created_at=excluded.created_at, unit_id=excluded.unit_id, artifact_path=excluded.artifact_path, published_path=excluded.published_path, error=excluded.error`)
+  database.prepare(`INSERT INTO drafts (id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error, failure_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET task_id=excluded.task_id, slug=excluded.slug, title=excluded.title, problem=excluded.problem, provider=excluded.provider, model=excluded.model, language=excluded.language, variants=excluded.variants, modes_json=excluded.modes_json, assistance_json=excluded.assistance_json, status=excluded.status, created_at=excluded.created_at, unit_id=excluded.unit_id, artifact_path=excluded.artifact_path, published_path=excluded.published_path, error=excluded.error, failure_count=excluded.failure_count`)
     .run(
       draft.id,
       draft.taskId ?? null,
@@ -93,6 +96,7 @@ export function upsertDraft(database: DatabaseSync, draft: PersistedDraft): void
       draft.artifactPath ?? null,
       draft.publishedPath ?? null,
       draft.error ?? null,
+      draft.failureCount ?? 0,
     );
 }
 
@@ -104,7 +108,7 @@ export function upsertDraft(database: DatabaseSync, draft: PersistedDraft): void
  * stale snapshot they came from.
  */
 export function casUpsertDraft(database: DatabaseSync, draft: PersistedDraft, expectedStatus: string): boolean {
-  const result = database.prepare(`UPDATE drafts SET task_id=?, slug=?, title=?, problem=?, provider=?, model=?, language=?, variants=?, modes_json=?, assistance_json=?, status=?, created_at=?, unit_id=?, artifact_path=?, published_path=?, error=? WHERE id=? AND status=?`)
+  const result = database.prepare(`UPDATE drafts SET task_id=?, slug=?, title=?, problem=?, provider=?, model=?, language=?, variants=?, modes_json=?, assistance_json=?, status=?, created_at=?, unit_id=?, artifact_path=?, published_path=?, error=?, failure_count=? WHERE id=? AND status=?`)
     .run(
       draft.taskId ?? null,
       draft.slug ?? null,
@@ -122,6 +126,7 @@ export function casUpsertDraft(database: DatabaseSync, draft: PersistedDraft, ex
       draft.artifactPath ?? null,
       draft.publishedPath ?? null,
       draft.error ?? null,
+      draft.failureCount ?? 0,
       draft.id,
       expectedStatus,
     );

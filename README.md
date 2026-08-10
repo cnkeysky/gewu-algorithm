@@ -299,6 +299,10 @@ TSV (`title\tproblem\turl`) is also accepted. Useful flags:
 - `--yes` — skip the duplicate prompts (default when the CLI is not a TTY).
 - `--repair-rounds n` — after a failed LLM pre-review, regenerate from the
   review feedback up to `n` times (default 1).
+- `--max-failures n` — circuit breaker: a draft whose generate/validate
+  attempts fail `n` times is quarantined and reported as needs review instead
+  of being auto-retried forever (default 3; `--force` / `--regenerate`
+  bypass it, and the web workbench's manual retry resets the counter).
 - `--regenerate <ids>` — force regeneration for the given ids/slugs/titles as
   new revisions even when their requested modes are already covered.
 - `--timeout-minutes n` — per-request timeout for LLM-backed API calls

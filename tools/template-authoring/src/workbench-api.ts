@@ -57,7 +57,8 @@ database.exec(`
     id TEXT PRIMARY KEY, task_id TEXT, title TEXT NOT NULL, problem TEXT NOT NULL,
     provider TEXT NOT NULL, model TEXT NOT NULL, language TEXT NOT NULL, variants INTEGER NOT NULL,
     modes_json TEXT NOT NULL, assistance_json TEXT NOT NULL, status TEXT NOT NULL,
-    created_at TEXT NOT NULL, unit_id TEXT, artifact_path TEXT, published_path TEXT
+    created_at TEXT NOT NULL, unit_id TEXT, artifact_path TEXT, published_path TEXT,
+    failure_count INTEGER NOT NULL DEFAULT 0
   );
   CREATE TABLE IF NOT EXISTS reviews (
     id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, role TEXT NOT NULL, verdict TEXT NOT NULL,
@@ -75,6 +76,7 @@ try { database.exec("ALTER TABLE reviews ADD COLUMN rationale TEXT"); } catch { 
 try { database.exec("ALTER TABLE reviews ADD COLUMN report_path TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE drafts ADD COLUMN error TEXT"); } catch { /* Existing database already has the column. */ }
 try { database.exec("ALTER TABLE drafts ADD COLUMN slug TEXT"); } catch { /* Existing database already has the column. */ }
+try { database.exec("ALTER TABLE drafts ADD COLUMN failure_count INTEGER NOT NULL DEFAULT 0"); } catch { /* Existing database already has the column. */ }
 database.exec("CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
 database.prepare("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)").run("authoring_schema", "2");
 
@@ -97,6 +99,7 @@ type DraftRecord = {
   artifactPath?: string;
   publishedPath?: string;
   error?: string;
+  failureCount: number;
 };
 type ReviewRecord = {
   id: string;
@@ -134,10 +137,10 @@ class DraftInputError extends Error {
 }
 
 function loadState(): State {
-  const drafts = database.prepare("SELECT id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error FROM drafts ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
+  const drafts = database.prepare("SELECT id, task_id, slug, title, problem, provider, model, language, variants, modes_json, assistance_json, status, created_at, unit_id, artifact_path, published_path, error, failure_count FROM drafts ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
   const reviews = database.prepare("SELECT id, draft_id, role, verdict, artifact_hash, report_path, rationale, created_at FROM reviews ORDER BY created_at DESC, rowid DESC").all() as Array<Record<string, unknown>>;
   return {
-    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, slug: row.slug ? String(row.slug) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), unitId: row.unit_id ? String(row.unit_id) : undefined, artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined, error: row.error ? String(row.error) : undefined })),
+    drafts: drafts.map((row) => ({ id: String(row.id), taskId: row.task_id ? String(row.task_id) : undefined, slug: row.slug ? String(row.slug) : undefined, title: String(row.title), problem: String(row.problem), provider: String(row.provider), model: String(row.model), language: String(row.language), variants: Number(row.variants), modes: JSON.parse(String(row.modes_json)) as string[], assistance: JSON.parse(String(row.assistance_json)) as string[], status: row.status as DraftStatus, createdAt: String(row.created_at), unitId: row.unit_id ? String(row.unit_id) : undefined, artifactPath: row.artifact_path ? String(row.artifact_path) : undefined, publishedPath: row.published_path ? String(row.published_path) : undefined, error: row.error ? String(row.error) : undefined, failureCount: Number(row.failure_count ?? 0) })),
     reviews: reviews.filter((row) => row.role !== "all").map((row) => ({ id: String(row.id), draftId: String(row.draft_id), role: String(row.role), verdict: row.verdict as ReviewRecord["verdict"], artifactHash: row.artifact_hash ? String(row.artifact_hash) : null, reportPath: row.report_path ? String(row.report_path) : undefined, rationale: row.rationale ? String(row.rationale) : undefined, createdAt: String(row.created_at) })),
   };
 }
@@ -654,6 +657,7 @@ function draftFrom(value: unknown): DraftRecord {
     status: "queued",
     createdAt: now,
     unitId: typeof value.unitId === "string" && value.unitId ? value.unitId : undefined,
+    failureCount: 0,
   };
 }
 
@@ -767,6 +771,10 @@ const server = createServer(async (request, response) => {
       updated.artifactPath = undefined;
       updated.publishedPath = undefined;
       updated.error = undefined;
+      // Keep the circuit-breaker count on automated reuse: a draft that keeps
+      // failing must not silently retry forever. Explicit human overrides
+      // reset it through /generate { resetFailures: true } instead.
+      updated.failureCount = draft.failureCount;
       validatePersistedDraft(updated);
       // Compare-and-set at the storage layer: the update only lands if the
       // row still has the status the caller observed (or the current status
@@ -804,6 +812,12 @@ const server = createServer(async (request, response) => {
       const generationOverrides = isRecord(generationPayload) && (typeof generationPayload.provider === "string" || typeof generationPayload.model === "string")
         ? { provider: typeof generationPayload.provider === "string" ? generationPayload.provider : undefined, model: typeof generationPayload.model === "string" ? generationPayload.model : undefined }
         : undefined;
+      // An explicit human retry (web "Retry generation") closes the circuit:
+      // the failure counter starts over, so a person can override the
+      // automated quarantine. Automated drivers (batch reuse) never send it.
+      if (isRecord(generationPayload) && generationPayload.resetFailures === true) {
+        draft.failureCount = 0;
+      }
       try {
         const generated = await generateDraft(draft, state.reviews, generationOverrides);
         draft.status = "generated";
@@ -811,6 +825,7 @@ const server = createServer(async (request, response) => {
         draft.provider = generated.provider;
         draft.model = generated.model;
         draft.error = undefined;
+        draft.failureCount = 0;
         await pruneUnreferencedArtifacts(draft, state.reviews);
         await saveState(state);
         return send(response, 200, { status: "generated", provider: generated.provider, model: generated.model, artifactPath: generated.artifactPath });
@@ -818,6 +833,7 @@ const server = createServer(async (request, response) => {
         draft.status = "failed";
         draft.error = error instanceof Error ? error.message : String(error);
         draft.artifactPath = undefined;
+        draft.failureCount = (draft.failureCount ?? 0) + 1;
         await saveState(state);
         return send(response, 422, { status: "failed", error: draft.error, draft });
       } finally {
@@ -834,17 +850,20 @@ const server = createServer(async (request, response) => {
       if (errors.length > 0) {
         draft.status = "failed";
         draft.error = errors.join("; ");
+        draft.failureCount = (draft.failureCount ?? 0) + 1;
         await saveState(state);
         return send(response, 422, { status: "failed", errors, draft });
       }
       try { await validateArtifactWithRust(artifactAbsolutePath(draft), false); } catch (error) {
         draft.status = "failed";
         draft.error = error instanceof Error ? error.message : String(error);
+        draft.failureCount = (draft.failureCount ?? 0) + 1;
         await saveState(state);
         return send(response, 422, { status: "failed", errors: [draft.error], draft });
       }
       draft.status = "validated";
       draft.error = undefined;
+      draft.failureCount = 0;
       stampManifestWith(draft, "deterministic_validation");
       await saveState(state);
       return send(response, 200, { status: "passed", draft });
@@ -984,6 +1003,7 @@ const server = createServer(async (request, response) => {
         status: "queued",
         createdAt: now,
         unitId: source.unitId ?? publishedId,
+        failureCount: 0,
       };
       state.drafts = [fork, ...state.drafts];
       await saveState(state);
