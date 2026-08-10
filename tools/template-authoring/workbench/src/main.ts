@@ -632,6 +632,12 @@ function renderPracticeSession(session: PracticeSession, skipEditorSync = false)
   }
 }
 async function updateShadowEditor(container: HTMLElement, session: PracticeSession, sessionChanged = false, showGuidance = true, skipEditorSync = false): Promise<void> {
+  // Normalize at ingestion: the Core contract is LF-only (normalize_source
+  // rejects non-LF and converts \r\n/\r to \n), so the editor must never see
+  // a stray CR — from a legacy checkpoint or an external source — that could
+  // flip Monaco's EOL and turn inserted newlines into Core-rejected CRLF.
+  const acceptedText = session.accepted_text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const targetText = session.target_text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   if (!shadowEditor && !shadowEditorLoading) {
     container.addEventListener("pointerdown", () => {
       if (shadowEditor) shadowEditor.focus();
@@ -639,16 +645,16 @@ async function updateShadowEditor(container: HTMLElement, session: PracticeSessi
     }, { once: true });
   }
   if (shadowEditor && !skipEditorSync) {
-    shadowEditor.update(session.accepted_text, session.target_text, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
+    shadowEditor.update(acceptedText, targetText, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
     if (sessionChanged && session.status === "active") shadowEditor.focus();
     return;
   }
   if (shadowEditor && skipEditorSync) return;
   if (!shadowEditorLoading) {
-    shadowEditorLoading = import("./shadow-editor").then(({ mountShadowEditor }) => mountShadowEditor(container, shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", showGuidance, applyShadowEdit));
+    shadowEditorLoading = import("./shadow-editor").then(({ mountShadowEditor }) => mountShadowEditor(container, acceptedText, targetText, session.language, session.status !== "active", showGuidance, applyShadowEdit));
   }
   shadowEditor = await shadowEditorLoading;
-  shadowEditor.update(shadowAcceptedText, shadowTargetText, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
+  shadowEditor.update(acceptedText, targetText, session.language, session.status !== "active", showGuidance, sessionChanged, sessionChanged);
   if (sessionChanged && session.status === "active") shadowEditor.focus();
   if (shadowEditorPendingFocus) {
     shadowEditorPendingFocus = false;
