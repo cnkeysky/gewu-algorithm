@@ -140,6 +140,24 @@ export function shouldRecheckAcceptance(
   );
 }
 
+/**
+ * Stable identity for the acceptance gate's artifact-hash bookkeeping. Prefer
+ * the hash recorded by the pre-review roles; when the artifact was never
+ * pre-reviewed (batch drafts go generate -> validate -> accept directly), fall
+ * back to a deterministic hash of the artifact path so the gate still records
+ * and de-duplicates its judgments per artifact.
+ */
+export function acceptanceArtifactHash(
+  reviews: Array<{ draftId: string; artifactHash: string | null }>,
+  draftId: string,
+  artifactPath?: string,
+): string | null {
+  const fromReviews = reviews.find((review) => review.draftId === draftId)?.artifactHash ?? null;
+  if (fromReviews) return fromReviews;
+  if (artifactPath) return createHash("sha256").update(artifactPath).digest("hex");
+  return null;
+}
+
 function parseRole(value: string | undefined): ReviewRole {
   if (value && (ROLES as readonly string[]).includes(value)) return value as ReviewRole;
   throw new Error(`review role must be one of: ${ROLES.join(", ")}`);

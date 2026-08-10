@@ -11,7 +11,7 @@ import { PiGenerator, modelCatalogFromEnvironment, optionsFromEnvironment, type 
 import { assertDraftTransition, draftReuseGuard } from "./draft-lifecycle.js";
 import { applyContentTransition, assertPublishable, type ContentTransitionId } from "./manifest-lifecycle.js";
 import { providerRegistry } from "./provider-registry.js";
-import { acceptanceContextReviews, buildAcceptanceTask, reviewTemplateDraft, shouldRecheckAcceptance } from "./review-template.js";
+import { acceptanceArtifactHash, acceptanceContextReviews, buildAcceptanceTask, reviewTemplateDraft, shouldRecheckAcceptance } from "./review-template.js";
 import { builtinTaskRegistry } from "./task-registry.js";
 import { applyTrustedDraftState, applyTrustedProvenance, materializeSourceTemplates } from "./generate-template.js";
 import { dbPath, devPidsDir, ledgerPath, repoRoot, storageRoot, toolsRoot } from "./paths.js";
@@ -369,6 +369,7 @@ async function runModelAcceptance(
   reviews: ReviewRecord[],
   overrides?: { provider?: string; model?: string },
   reportFileName = "llm_acceptance.json",
+  artifactHash?: string | null,
 ): Promise<{ review: ReviewRecord; rationale: string }> {
   const root = artifactAbsolutePath(draft);
   const manifest = await readFile(join(root, "unit.json"), "utf8");
@@ -421,7 +422,7 @@ async function runModelAcceptance(
       draftId: draft.id,
       role: "llm_acceptance",
       verdict,
-      artifactHash: latestArtifactHash(reviews, draft.id),
+      artifactHash: artifactHash ?? latestArtifactHash(reviews, draft.id),
       reportPath: relative(repoRoot, join(reviewsDir, reportFileName)),
       createdAt: new Date().toISOString(),
     },
@@ -889,8 +890,8 @@ const server = createServer(async (request, response) => {
         // rejection is a judgment call, so a single unconfirmed rejection gets
         // one fresh independent re-read (see shouldRecheckAcceptance).
         const wasDeterministicallyValidated = draft.status === "validated" || draft.status === "llm_reviewed";
-        const artifactHash = latestArtifactHash(state.reviews, draft.id);
-        const first = await runModelAcceptance(draft, state.reviews, overrides);
+        const artifactHash = acceptanceArtifactHash(state.reviews, draft.id, draft.artifactPath);
+        const first = await runModelAcceptance(draft, state.reviews, overrides, "llm_acceptance.json", artifactHash);
         let finalReview = first.review;
         let finalRationale = first.rationale;
         const recheck: { firstVerdict?: string; secondVerdict?: string } = { firstVerdict: first.review.verdict };
@@ -900,7 +901,7 @@ const server = createServer(async (request, response) => {
         ) {
           // Fresh context: the first gate report is not in state.reviews yet,
           // and the gate never reads its own prior reports anyway.
-          const second = await runModelAcceptance(draft, state.reviews, overrides, "llm_acceptance.recheck.json");
+          const second = await runModelAcceptance(draft, state.reviews, overrides, "llm_acceptance.recheck.json", artifactHash);
           recheck.secondVerdict = second.review.verdict;
           state.reviews = [second.review, first.review, ...state.reviews];
           finalReview = second.review;

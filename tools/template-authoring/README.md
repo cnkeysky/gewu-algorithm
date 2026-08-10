@@ -227,7 +227,10 @@ publish timestamp (the ledger and the web Units page read it, so dates survive
 clones). The local authoring state — unpublished drafts and their review
 feedback (the review queue) — is exported with `npm run drafts:export` to a
 portable JSON (dates preserved) and restored with
-`npm run drafts:import <file>`. A generated artifact can be edited in the Artifact
+`npm run drafts:import <file>`. If a stale-writer race ever clobbers a
+published draft's row back to `failed` (two authoring API instances sharing
+one store), `npm run drafts:reconcile` restores the row to `accepted` from the
+published root (slug + language match; `--dry-run` previews). A generated artifact can be edited in the Artifact
 inspector modal (opened from Drafts or Review history) and saved through
 `PUT /api/drafts/:id/artifact`; the Rust validator must pass again and
 previous LLM reviews are cleared before another review.

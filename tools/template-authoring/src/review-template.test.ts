@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { acceptanceContextReviews, buildAcceptanceTask, shouldRecheckAcceptance } from "./review-template.js";
+import { acceptanceArtifactHash, acceptanceContextReviews, buildAcceptanceTask, shouldRecheckAcceptance } from "./review-template.js";
 
 test("acceptance task embeds the problem and every pre-review finding", () => {
   const task = buildAcceptanceTask(
@@ -59,4 +59,18 @@ test("a single unconfirmed gate rejection gets one fresh re-read", () => {
     shouldRecheckAcceptance(true, [...reviews, { draftId: "a", role: "llm_acceptance", artifactHash: "h1" }], "a", "h2"),
     true,
   );
+});
+
+test("acceptance artifact hash falls back to a deterministic path hash when unreviewed", () => {
+  // Pre-review hash wins when present.
+  const reviews = [{ draftId: "a", role: "algorithm_correctness", artifactHash: "h1" }];
+  assert.equal(acceptanceArtifactHash(reviews, "a", "/tmp/artifact-a"), "h1");
+  // Batch drafts reach the gate without pre-reviews: the path hash is stable
+  // per artifact, so the gate still records and de-duplicates its judgments.
+  const pathHash = acceptanceArtifactHash([], "a", "/tmp/artifact-a");
+  assert.match(pathHash ?? "", /^[0-9a-f]{64}$/);
+  assert.equal(acceptanceArtifactHash([], "a", "/tmp/artifact-a"), pathHash);
+  assert.equal(acceptanceArtifactHash([], "a", "/tmp/artifact-b") === pathHash, false);
+  // No reviews and no path -> no identity (recheck stays disabled).
+  assert.equal(acceptanceArtifactHash([], "a"), null);
 });
