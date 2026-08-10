@@ -6,6 +6,8 @@ allowed only with explicit migration notes (see
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-08-10
+
 ### Added
 
 - Drafts carry an optional canonical `slug`; batch deduplication is identity

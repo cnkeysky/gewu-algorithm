@@ -22,7 +22,7 @@ Validation, Revision, and Review
 
 ## Status
 
-The project is at an **internal v0.1.9** level. The Rust Core, the Web
+The project is at an **internal v0.1.10** level. The Rust Core, the Web
 workbench (authoring and practice), and the VS Code adapter are implemented and
 covered by automated tests. Template authoring uses staged LLM generation with
 deterministic contract validation and a reviewed publication gate.
@@ -377,6 +377,8 @@ npm run test:e2e                  # auto-starts a fresh Core and Vite
 ## Releases
 
 - [`CHANGELOG.md`](CHANGELOG.md) tracks versions and compatibility notes.
+- `v0.1.10` (reliable LLM gate, relay/proxy transport, batch circuit breaker) is tagged; see
+  [`docs/development/release-v0.1.10.md`](docs/development/release-v0.1.10.md).
 - `v0.1.9` (layered approval and coherent workflow display) is tagged; see
   [`docs/development/release-v0.1.9.md`](docs/development/release-v0.1.9.md).
 - `v0.1.8` (published-unit library and consistent list layout) is tagged; see

@@ -61,6 +61,21 @@
       "sha256": "d12d6724df5bbab4"
     },
     {
+      "id": "binary-tree-level-order-traversal.python",
+      "title": "Binary Tree Level Order Traversal",
+      "language": "python",
+      "revision": 2,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:16:26.809Z",
+      "sha256": "f7fc34fe27266e8d"
+    },
+    {
       "id": "binary-tree-maximum-path-sum.python",
       "title": "Binary Tree Maximum Path Sum",
       "language": "python",
@@ -74,6 +89,21 @@
       ],
       "updatedAt": "2026-08-09T07:43:03.213Z",
       "sha256": "b34c99940e01522a"
+    },
+    {
+      "id": "binary-tree-right-side-view.python",
+      "title": "Binary Tree Right Side View",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:40:04.783Z",
+      "sha256": "5efdb4884dad0537"
     },
     {
       "id": "climbing-stairs.python",
@@ -91,6 +121,21 @@
       "sha256": "92aee0e9d8821106"
     },
     {
+      "id": "coin-change.python",
+      "title": "Coin Change - Minimum Coins to Make Amount",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:58:36.769Z",
+      "sha256": "0b1f29bc9f00616b"
+    },
+    {
       "id": "combination-sum.python",
       "title": "Combination Sum (Unlimited Repetition)",
       "language": "python",
@@ -104,6 +149,21 @@
       ],
       "updatedAt": "2026-08-09T07:12:35.571Z",
       "sha256": "f39725152e17c7ed"
+    },
+    {
+      "id": "construct-binary-tree-from-preorder-and-inorder-traversal.python",
+      "title": "Construct Binary Tree from Preorder and Inorder Traversal",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:28:46.003Z",
+      "sha256": "fbcdc5bf74ec7c28"
     },
     {
       "id": "container-with-most-water.python",
@@ -136,6 +196,36 @@
       "sha256": "d03a0aaa9a9e6f04"
     },
     {
+      "id": "copy-list-with-random-pointer.python",
+      "title": "Copy List with Random Pointer",
+      "language": "python",
+      "revision": 2,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:34:47.739Z",
+      "sha256": "aa9dec9492e399f1"
+    },
+    {
+      "id": "course-schedule.python",
+      "title": "Course Schedule",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:43:44.575Z",
+      "sha256": "db369a3225bae3c0"
+    },
+    {
       "id": "daily-temperatures.python",
       "title": "Daily Temperatures",
       "language": "python",
@@ -149,6 +239,36 @@
       ],
       "updatedAt": "2026-08-09T07:44:34.806Z",
       "sha256": "537ad2c08471baa6"
+    },
+    {
+      "id": "decode-string.python",
+      "title": "Decode String",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:01:09.084Z",
+      "sha256": "514f37258178a586"
+    },
+    {
+      "id": "diameter-of-binary-tree.python",
+      "title": "Diameter of Binary Tree",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:03:32.496Z",
+      "sha256": "e90236bc0f043139"
     },
     {
       "id": "edit-distance.python",
@@ -196,6 +316,21 @@
       "sha256": "1700ce7d90b7a762"
     },
     {
+      "id": "find-median-from-data-stream.python",
+      "title": "Median Finder with Two Heaps",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T06:51:43.226Z",
+      "sha256": "fba9ed5d0c3e4383"
+    },
+    {
       "id": "find-minimum-in-rotated-sorted-array.python",
       "title": "Find Minimum in Rotated Sorted Array",
       "language": "python",
@@ -211,6 +346,21 @@
       "sha256": "21b0bad37d63bb71"
     },
     {
+      "id": "find-the-duplicate-number.python",
+      "title": "Find the Duplicate Number",
+      "language": "python",
+      "revision": 2,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:56:12.725Z",
+      "sha256": "8d42541f46dd7607"
+    },
+    {
       "id": "first-missing-positive.python",
       "title": "First Missing Positive",
       "language": "python",
@@ -224,6 +374,36 @@
       ],
       "updatedAt": "2026-08-09T07:14:38.959Z",
       "sha256": "18fa5352e347a08a"
+    },
+    {
+      "id": "flatten-binary-tree-to-linked-list.python",
+      "title": "Flatten Binary Tree to Linked List",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:28:28.350Z",
+      "sha256": "79f6e323dac497c7"
+    },
+    {
+      "id": "gas-station.python",
+      "title": "Gas Station Circuit",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:37:10.196Z",
+      "sha256": "077232638a5d0cd3"
     },
     {
       "id": "generate-parentheses.python",
@@ -256,6 +436,66 @@
       "sha256": "32db2cb56b789d34"
     },
     {
+      "id": "house-robber.python",
+      "title": "House Robber",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:38:11.869Z",
+      "sha256": "d90a0d1d42690f6d"
+    },
+    {
+      "id": "implement-trie-prefix-tree.python",
+      "title": "Implement Trie (Prefix Tree)",
+      "language": "python",
+      "revision": 2,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:45:36.353Z",
+      "sha256": "58c4d5a9fe6b614b"
+    },
+    {
+      "id": "intersection-of-two-linked-lists.python",
+      "title": "Intersection of Two Linked Lists",
+      "language": "python",
+      "revision": 2,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:35:31.236Z",
+      "sha256": "7b844d7987204d40"
+    },
+    {
+      "id": "invert-binary-tree.python",
+      "title": "Invert Binary Tree",
+      "language": "python",
+      "revision": 2,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:45:52.813Z",
+      "sha256": "19f2a0cfb78b683f"
+    },
+    {
       "id": "jump-game-ii.python",
       "title": "Jump Game II",
       "language": "python",
@@ -284,6 +524,36 @@
       ],
       "updatedAt": "2026-08-09T07:42:08.800Z",
       "sha256": "b2b0546361f14f8f"
+    },
+    {
+      "id": "kth-largest-element-in-an-array.python",
+      "title": "Kth Largest Element in an Array",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T06:33:55.053Z",
+      "sha256": "d1e3cbab3ea50fee"
+    },
+    {
+      "id": "kth-smallest-element-in-a-bst.python",
+      "title": "Kth Smallest Element in a Binary Search Tree",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T06:38:08.435Z",
+      "sha256": "1c8517b6d19cff30"
     },
     {
       "id": "largest-rectangle-in-histogram.python",
@@ -316,6 +586,21 @@
       "sha256": "bc57472133ef1600"
     },
     {
+      "id": "linked-list-cycle-ii.python",
+      "title": "Linked List Cycle Entry",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T06:18:12.813Z",
+      "sha256": "93606cf37c6b0825"
+    },
+    {
       "id": "linked-list-cycle.python",
       "title": "Linked List Cycle Detection",
       "language": "python",
@@ -329,6 +614,51 @@
       ],
       "updatedAt": "2026-08-09T07:43:12.116Z",
       "sha256": "5eb8a9f83c33abb6"
+    },
+    {
+      "id": "longest-common-subsequence.python",
+      "title": "Longest Common Subsequence",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:05:41.315Z",
+      "sha256": "6dea75dddd45618c"
+    },
+    {
+      "id": "longest-consecutive-sequence.python",
+      "title": "Longest Consecutive Sequence",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:32:23.006Z",
+      "sha256": "2b09dc9fcb7eaac8"
+    },
+    {
+      "id": "longest-increasing-subsequence.python",
+      "title": "Longest Increasing Subsequence",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:56:52.214Z",
+      "sha256": "8221cf12e872b3db"
     },
     {
       "id": "longest-palindromic-substring.python",
@@ -376,6 +706,21 @@
       "sha256": "211f6e389d712bfc"
     },
     {
+      "id": "lowest-common-ancestor-of-a-binary-tree.python",
+      "title": "Lowest Common Ancestor of a Binary Tree",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:48:47.031Z",
+      "sha256": "c185b4caf8bd7331"
+    },
+    {
       "id": "lru-cache.python",
       "title": "LRU Cache",
       "language": "python",
@@ -389,6 +734,36 @@
       ],
       "updatedAt": "2026-08-09T07:43:15.127Z",
       "sha256": "d6f3bc69ddfd2829"
+    },
+    {
+      "id": "majority-element.python",
+      "title": "Majority Element",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T06:24:50.669Z",
+      "sha256": "86ed8128628c9ad9"
+    },
+    {
+      "id": "maximum-depth-of-binary-tree.python",
+      "title": "Maximum Depth of Binary Tree",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T05:49:08.472Z",
+      "sha256": "7f1d516a8b48d7e4"
     },
     {
       "id": "maximum-product-subarray.python",
@@ -481,6 +856,21 @@
       "sha256": "6e8dcee9a2527cc2"
     },
     {
+      "id": "min-stack.python",
+      "title": "Min Stack",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T06:21:36.036Z",
+      "sha256": "6a9bd474d2a3f0ab"
+    },
+    {
       "id": "minimum-path-sum.python",
       "title": "Minimum Path Sum",
       "language": "python",
@@ -509,6 +899,21 @@
       ],
       "updatedAt": "2026-08-09T07:42:31.539Z",
       "sha256": "bd471a1db5f3c9d6"
+    },
+    {
+      "id": "move-zeroes.python",
+      "title": "Move Zeroes",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T06:46:24.507Z",
+      "sha256": "ecc96ad24c9f7803"
     },
     {
       "id": "n-queens.python",
@@ -541,6 +946,36 @@
       "sha256": "c3c7a975adf64569"
     },
     {
+      "id": "number-of-islands.python",
+      "title": "Number of Islands",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:41:11.084Z",
+      "sha256": "cb92240e68fcc569"
+    },
+    {
+      "id": "palindrome-linked-list.python",
+      "title": "Palindrome Linked List",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:48:34.561Z",
+      "sha256": "691fefd96c1cac3e"
+    },
+    {
       "id": "palindrome-partitioning.python",
       "title": "Palindrome Partitioning",
       "language": "python",
@@ -554,6 +989,36 @@
       ],
       "updatedAt": "2026-08-09T07:43:07.821Z",
       "sha256": "ca770cc3bd225e75"
+    },
+    {
+      "id": "partition-equal-subset-sum.python",
+      "title": "Partition Equal Subset Sum",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T06:58:54.420Z",
+      "sha256": "c3e14ea0c1a8760d"
+    },
+    {
+      "id": "partition-labels.python",
+      "title": "Partition Labels",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:06:38.722Z",
+      "sha256": "aa04b523ae30d289"
     },
     {
       "id": "pascals-triangle.python",
@@ -571,6 +1036,36 @@
       "sha256": "8d0091e8e4303077"
     },
     {
+      "id": "path-sum-iii.python",
+      "title": "Path Sum III — Count downward paths with a given sum in a binary tree",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:03:17.913Z",
+      "sha256": "878b9f38c942e141"
+    },
+    {
+      "id": "perfect-squares.python",
+      "title": "Perfect Squares",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:54:28.591Z",
+      "sha256": "dc8c8a9358dc9661"
+    },
+    {
       "id": "permutations.python",
       "title": "Permutations of a Distinct-Integer Array",
       "language": "python",
@@ -584,6 +1079,21 @@
       ],
       "updatedAt": "2026-08-09T07:34:18.924Z",
       "sha256": "f1b03b158b6c01f1"
+    },
+    {
+      "id": "product-of-array-except-self.python",
+      "title": "Product of Array Except Self",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:51:22.248Z",
+      "sha256": "6da7bafc0e0ee824"
     },
     {
       "id": "remove-nth-node-from-end-of-list.python",
@@ -601,6 +1111,21 @@
       "sha256": "262eb7ada133394a"
     },
     {
+      "id": "reverse-linked-list.python",
+      "title": "Reverse Linked List",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:42:31.919Z",
+      "sha256": "cb38d054c2a450c6"
+    },
+    {
       "id": "reverse-nodes-in-k-group.python",
       "title": "Reverse Nodes in k-Group",
       "language": "python",
@@ -614,6 +1139,21 @@
       ],
       "updatedAt": "2026-08-09T07:31:04.755Z",
       "sha256": "bd96b4c294b3c86d"
+    },
+    {
+      "id": "rotate-array.python",
+      "title": "Rotate Array",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:37:03.544Z",
+      "sha256": "c6288fec8c843de5"
     },
     {
       "id": "rotate-image.python",
@@ -644,6 +1184,36 @@
       ],
       "updatedAt": "2026-08-09T07:44:37.478Z",
       "sha256": "14024d6da9eb980a"
+    },
+    {
+      "id": "search-a-2d-matrix-ii.python",
+      "title": "Search a 2D Matrix II",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:53:49.091Z",
+      "sha256": "3a9f41b42e1aa681"
+    },
+    {
+      "id": "search-a-2d-matrix.python",
+      "title": "Search a Sorted Matrix",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T05:46:40.752Z",
+      "sha256": "443faf64733a739b"
     },
     {
       "id": "search-in-rotated-sorted-array.python",
@@ -706,6 +1276,21 @@
       "sha256": "07a3c8dfbffe9151"
     },
     {
+      "id": "sliding-window-maximum.python",
+      "title": "Sliding Window Maximum",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T07:52:13.568Z",
+      "sha256": "0c4cee4514c7a68f"
+    },
+    {
       "id": "sort-colors.python",
       "title": "Sort Colors",
       "language": "python",
@@ -751,6 +1336,21 @@
       "sha256": "7623b8beedc41113"
     },
     {
+      "id": "subarray-sum-equals-k.python",
+      "title": "Subarray Sum Equals K",
+      "language": "python",
+      "revision": 2,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:05:59.057Z",
+      "sha256": "6745d72156c5f420"
+    },
+    {
       "id": "subsets.python",
       "title": "Subsets",
       "language": "python",
@@ -794,6 +1394,21 @@
       ],
       "updatedAt": "2026-08-09T07:42:42.421Z",
       "sha256": "8c96b4fa145543ca"
+    },
+    {
+      "id": "top-k-frequent-elements.python",
+      "title": "Top K Frequent Elements",
+      "language": "python",
+      "revision": 1,
+      "modes": [
+        "shadow_typing",
+        "flow_recall",
+        "code_recall",
+        "reasoning_recall",
+        "transfer_practice"
+      ],
+      "updatedAt": "2026-08-10T08:24:32.059Z",
+      "sha256": "a13c00027b323ac1"
     },
     {
       "id": "trapping-rain-water.python",
