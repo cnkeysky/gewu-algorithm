@@ -1,6 +1,7 @@
 import { Type, createProvider, envApiKeyAuth, type Context, type Model, type MutableModels, type Tool } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { validateToolCall } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
 import { isRelayProvider, providerEntry, providerRegistry, relayBaseUrl } from "./provider-registry.js";
@@ -72,7 +73,7 @@ export interface PiGeneratorOptions {
   readonly maxStructuredAttempts?: number;
   /** "forced" pins the structured tool call; "auto" lets the model decide
    * (required for reasoning-mode relays that reject forced tool_choice). */
-  readonly toolChoice?: "auto" | "forced";
+  readonly toolChoice?: "auto" | "forced" | "required";
   /** Optional `reasoning_effort` value injected into relay requests. Some
    * reasoning-mode gateways ignore `thinking: {type:"disabled"}` but honor
    * `reasoning_effort: "none"`, which is the relay default. */
@@ -114,10 +115,11 @@ export function modelCatalogFromEnvironment(
     if (entry.kind !== "relay") continue;
     const baseUrl = relayBaseUrl(entry, environment);
     if (!baseUrl) continue;
-    const relayModel: Model<"openai-completions"> = {
+    const responses = entry.wireApi === "responses";
+    const relayModel: Model<"openai-completions" | "openai-responses"> = {
       id: modelId,
       name: `${entry.label} (${modelId})`,
-      api: "openai-completions",
+      api: responses ? "openai-responses" : "openai-completions",
       provider: entry.id,
       baseUrl,
       reasoning: false,
@@ -125,15 +127,17 @@ export function modelCatalogFromEnvironment(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: 128_000,
       maxTokens: 16_384,
-      compat: {
-        // DeepSeek-style upstreams (thinking mode) reject store/strict fields
-        // and use max_tokens; thinkingFormat tells Pi-ai to speak DeepSeek's
-        // reasoning_content convention, including multi-turn echoes.
-        supportsStore: false,
-        maxTokensField: "max_tokens",
-        supportsStrictMode: false,
-        thinkingFormat: "deepseek",
-      },
+      compat: responses
+        ? { supportsStrictMode: true }
+        : {
+            // DeepSeek-style upstreams (thinking mode) reject store/strict
+            // fields and use max_tokens; thinkingFormat tells Pi-ai to speak
+            // DeepSeek's reasoning_content convention.
+            supportsStore: false,
+            maxTokensField: "max_tokens",
+            supportsStrictMode: false,
+            thinkingFormat: "deepseek",
+          },
     };
     models.setProvider(
       createProvider({
@@ -142,7 +146,7 @@ export function modelCatalogFromEnvironment(
         baseUrl,
         auth: { apiKey: envApiKeyAuth(entry.label, [entry.keyEnv ?? "GEWU_LLM_API_KEY"]) },
         models: [relayModel],
-        api: openAICompletionsApi(),
+        api: responses ? openAIResponsesApi() : openAICompletionsApi(),
       }),
     );
   }
@@ -153,12 +157,14 @@ export class PiGenerator {
   readonly #models: MutableModels;
   readonly #options: PiGeneratorOptions;
   readonly #isRelay: boolean;
+  readonly #wireApi: "chat" | "responses";
   readonly #relaySession = randomUUID();
   #relayRequest = 0;
 
   constructor(options: PiGeneratorOptions, environment: Record<string, string | undefined> = process.env) {
     this.#options = options;
     this.#isRelay = isRelayProvider(options.provider);
+    this.#wireApi = providerEntry(options.provider)?.wireApi ?? "chat";
     this.#models = modelCatalogFromEnvironment(environment);
   }
 
@@ -174,7 +180,9 @@ export class PiGenerator {
     this.#relayRequest += 1;
     headers.set("x-opencode-request", String(this.#relayRequest));
     let body = init?.body;
-    if (this.#options.reasoningEffort && typeof body === "string" && headers.get("content-type")?.includes("application/json")) {
+    // The chat body carries reasoning_effort directly; the Responses API sets
+    // it via options (reasoningEffort) and would reject a chat-style field.
+    if (this.#wireApi === "chat" && this.#options.reasoningEffort && typeof body === "string" && headers.get("content-type")?.includes("application/json")) {
       try {
         const parsed = JSON.parse(body) as Record<string, unknown>;
         if (!("reasoning_effort" in parsed)) parsed.reasoning_effort = this.#options.reasoningEffort;
@@ -225,8 +233,13 @@ export class PiGenerator {
         response = await this.#models.complete(model, context, {
           maxTokens: this.#options.maxTokens,
           temperature: 0,
-          toolChoice: this.#options.toolChoice === "auto" ? "auto" : { type: "function", function: { name: tool.name } },
+          toolChoice: this.#options.toolChoice === "auto"
+            ? "auto"
+            : this.#options.toolChoice === "required"
+              ? "required"
+              : { type: "function", function: { name: tool.name } },
           ...(this.#isRelay ? { fetch: this.#relayFetch } : {}),
+          ...(this.#isRelay && this.#wireApi === "responses" && this.#options.reasoningEffort ? { reasoningEffort: this.#options.reasoningEffort } : {}),
           signal: AbortSignal.timeout(this.#options.timeoutMs ?? 60_000),
         });
         // Only transient failures (429/5xx/network) deserve another attempt;
@@ -305,9 +318,8 @@ function parsePositiveInteger(value: string | undefined): number | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function parseToolChoice(value: string | undefined): "auto" | "forced" | undefined {
-  if (value === "auto") return "auto";
-  if (value === "forced") return "forced";
+function parseToolChoice(value: string | undefined): "auto" | "forced" | "required" | undefined {
+  if (value === "auto" || value === "forced" || value === "required") return value;
   return undefined;
 }
 

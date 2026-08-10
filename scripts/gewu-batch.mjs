@@ -300,6 +300,10 @@ function startApi() {
 }
 
 function stopPid(pid) {
+  // Never kill the current process or its parent: a stale pid file whose pid
+  // was reused (or belongs to another pid namespace) must not take down the
+  // runner itself.
+  if (pid === process.pid || pid === process.ppid) return;
   try {
     if (isWin) process.kill(pid, "SIGKILL");
     else process.kill(-pid, "SIGTERM");
@@ -333,7 +337,14 @@ function listenersOnPort(port) {
 function stopApi() {
   // The API records its own pid on startup (api-<port>.pid), so stop works
   // for APIs started outside this runner too; fall back to the runner pid.
-  const candidates = [pidOf(apiName), Number(readFileSync(join(pidDir, `api-${apiPort}.pid`), "utf8") || 0)];
+  let selfPid = 0;
+  try {
+    selfPid = Number(readFileSync(join(pidDir, `api-${apiPort}.pid`), "utf8") || 0);
+  } catch {
+    // No self-recorded pid (e.g. an API started before the feature); the
+    // port sweep below still finds it when the process is visible.
+  }
+  const candidates = [pidOf(apiName), selfPid];
   for (const pid of candidates) {
     if (pid > 0 && alive(pid)) {
       stopPid(pid);

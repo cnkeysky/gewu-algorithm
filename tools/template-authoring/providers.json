@@ -3,6 +3,7 @@
     "label": "Relay (OpenAI-compatible)",
     "kind": "relay",
     "keyEnv": "GEWU_LLM_API_KEY",
-    "baseUrlEnv": "GEWU_LLM_BASE_URL"
+    "baseUrlEnv": "GEWU_LLM_BASE_URL",
+    "wireApi": "responses"
   }
 }

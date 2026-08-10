@@ -17,6 +17,7 @@ import { builtinProviders, getBuiltinProviders } from "@earendil-works/pi-ai/pro
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
 
 export type ProviderKind = "builtin" | "relay";
+export type WireApi = "chat" | "responses";
 
 export interface ProviderEntry {
   id: string;
@@ -24,6 +25,9 @@ export interface ProviderEntry {
   kind: ProviderKind;
   keyEnv?: string;
   baseUrlEnv?: string;
+  /** Wire protocol for relay providers: "chat" (openai-completions, default)
+   * or "responses" (OpenAI Responses API, used by Codex-style gateways). */
+  wireApi?: WireApi;
   source: "pi" | "relay";
 }
 
@@ -71,6 +75,7 @@ export function providerRegistry(): Map<string, ProviderEntry> {
       kind,
       keyEnv: value.keyEnv,
       baseUrlEnv: value.baseUrlEnv,
+      wireApi: value.wireApi === "responses" ? "responses" : "chat",
       source: "relay",
     });
   }
