@@ -6,6 +6,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
+    sync::OnceLock,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -49,6 +50,11 @@ pub struct Core {
     sessions: BTreeMap<String, ActiveSession>,
     last_checkpoint_save: HashMap<String, u64>,
     next_session: u64,
+    /// Unit catalog cached after the first load: content roots are static for
+    /// the life of the process, so re-walking and re-parsing every unit on
+    /// each request (e.g. `recent_attempts` resolving one unit per attempt)
+    /// was the hot path behind multi-second practice RPCs.
+    units: OnceLock<Vec<AlgorithmUnit>>,
 }
 
 enum ActiveSession {
@@ -111,6 +117,7 @@ impl Core {
             sessions: BTreeMap::new(),
             last_checkpoint_save: HashMap::new(),
             next_session: 1,
+            units: OnceLock::new(),
         })
     }
 
@@ -494,13 +501,14 @@ impl Core {
     }
     pub fn recent_attempts(&self, limit: usize) -> Result<Vec<AttemptSummary>, CoreError> {
         let values = self.store.list_attempts(limit)?;
+        let units = self.load_units()?;
         values
             .into_iter()
             .map(|value| {
-                let language = self
-                    .find_unit(&value.unit_id)
-                    .ok()
-                    .and_then(|unit| resolved_language(&unit, value.implementation.as_deref()));
+                let language = units
+                    .iter()
+                    .find(|unit| unit.id.as_str() == value.unit_id)
+                    .and_then(|unit| resolved_language(unit, value.implementation.as_deref()));
                 stored_attempt_view(value, language)
             })
             .collect::<Result<Vec<_>, _>>()
@@ -773,11 +781,20 @@ impl Core {
     }
     fn find_unit(&self, id: &str) -> Result<AlgorithmUnit, CoreError> {
         self.load_units()?
-            .into_iter()
+            .iter()
             .find(|unit| unit.id.as_str() == id)
+            .cloned()
             .ok_or_else(|| CoreError::UnknownUnit(id.to_owned()))
     }
     fn load_units(&self) -> Result<Vec<AlgorithmUnit>, CoreError> {
+        if let Some(units) = self.units.get() {
+            return Ok(units.clone());
+        }
+        let units = self.scan_units()?;
+        let _ = self.units.set(units.clone());
+        Ok(units)
+    }
+    fn scan_units(&self) -> Result<Vec<AlgorithmUnit>, CoreError> {
         let mut paths = Vec::new();
         for root in &self.content_roots {
             collect_unit_paths(root, &mut paths)?;
