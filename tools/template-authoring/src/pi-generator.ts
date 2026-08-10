@@ -127,6 +127,32 @@ export function resolveProxyOptions(
   return { mode: "explicit", httpProxy: explicit, httpsProxy: explicit };
 }
 
+/**
+ * Opt-in generic-key alias: with `GEWU_LLM_KEY_FALLBACK=1`, a provider whose
+ * own key env var is unset falls back to `GEWU_LLM_API_KEY`, so one key var
+ * can back several built-in providers. The table is deliberately tiny and
+ * explicit (identity/auth still come from Pi); providers not listed keep
+ * their canonical key env only.
+ */
+const GENERIC_KEY_FALLBACK_ENVS: Record<string, string> = {
+  "xiaomi-token-plan-cn": "XIAOMI_TOKEN_PLAN_CN_API_KEY",
+};
+
+export function genericKeyFallbackMappings(
+  environment: Record<string, string | undefined> = process.env,
+): Array<[string, string]> {
+  if (environment.GEWU_LLM_KEY_FALLBACK !== "1") return [];
+  const genericKey = nonEmpty(environment.GEWU_LLM_API_KEY);
+  if (!genericKey) return [];
+  const mappings: Array<[string, string]> = [];
+  for (const [providerId, canonicalEnv] of Object.entries(GENERIC_KEY_FALLBACK_ENVS)) {
+    if (providerRegistry().has(providerId) && !nonEmpty(environment[canonicalEnv])) {
+      mappings.push([canonicalEnv, genericKey]);
+    }
+  }
+  return mappings;
+}
+
 /** Reads non-secret selection settings. Provider credentials stay in Pi-ai's env/auth layer. */
 export function optionsFromEnvironment(
   environment: Record<string, string | undefined> = process.env,
@@ -156,6 +182,12 @@ export function optionsFromEnvironment(
 export function modelCatalogFromEnvironment(
   environment: Record<string, string | undefined> = process.env,
 ): MutableModels {
+  // Apply the opt-in generic-key fallback before building the catalog so the
+  // provider's env resolution sees the mapped key.
+  for (const [canonicalEnv, key] of genericKeyFallbackMappings(environment)) {
+    process.env[canonicalEnv] = key;
+    environment[canonicalEnv] = key;
+  }
   const models = builtinModels();
   const modelId = nonEmpty(environment.GEWU_LLM_MODEL) ?? "deepseek-chat";
   for (const entry of providerRegistry().values()) {

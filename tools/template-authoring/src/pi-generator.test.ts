@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRelayHeaders, isTransientPiError, resolveProxyOptions, validateGenerationProfile, type GenerationProfile } from "./pi-generator.js";
+import { buildRelayHeaders, genericKeyFallbackMappings, isTransientPiError, resolveProxyOptions, validateGenerationProfile, type GenerationProfile } from "./pi-generator.js";
 
 const BASE: GenerationProfile = {
   practice_modes: ["shadow_typing"],
@@ -70,4 +70,19 @@ test("GEWU_LLM_PROXY=off|none|direct forces a direct connection", () => {
       `expected ${value} to force direct`,
     );
   }
+});
+
+test("GEWU_LLM_KEY_FALLBACK maps GEWU_LLM_API_KEY to a built-in provider's key env", () => {
+  // Opt-in flag required.
+  assert.deepEqual(genericKeyFallbackMappings({ GEWU_LLM_API_KEY: "k", XIAOMI_TOKEN_PLAN_CN_API_KEY: "own" }), []);
+  // The provider's own key env wins when set.
+  assert.deepEqual(
+    genericKeyFallbackMappings({ GEWU_LLM_KEY_FALLBACK: "1", GEWU_LLM_API_KEY: "k", XIAOMI_TOKEN_PLAN_CN_API_KEY: "own" }),
+    [],
+  );
+  // Falls back to the generic key only for listed built-in providers.
+  const mappings = genericKeyFallbackMappings({ GEWU_LLM_KEY_FALLBACK: "1", GEWU_LLM_API_KEY: "k" });
+  assert.deepEqual(mappings, [["XIAOMI_TOKEN_PLAN_CN_API_KEY", "k"]]);
+  // No generic key -> no mapping.
+  assert.deepEqual(genericKeyFallbackMappings({ GEWU_LLM_KEY_FALLBACK: "1" }), []);
 });

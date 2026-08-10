@@ -126,6 +126,12 @@ allowed only with explicit migration notes (see
   way: `const`/`enum` nodes carry a `type`, every object's `required` covers
   all of its properties, and the `sources` map's `minProperties` (already
   enforced by the validator) was dropped.
+- An opt-in generic-key alias (`GEWU_LLM_KEY_FALLBACK=1`) maps
+  `GEWU_LLM_API_KEY` onto a built-in provider's own key env when that env var
+  is unset (currently `xiaomi-token-plan-cn` → `XIAOMI_TOKEN_PLAN_CN_API_KEY`),
+  so one key variable can back several providers; the provider's own key env
+  wins when set, and providers outside the alias table never read
+  `GEWU_LLM_API_KEY`.
 - The artifact manifest's `validation` fields are stamped after real checks:
   `schema`/`code` pass when the deterministic Rust validation passes, and
   `content_review`/`transfer_review` pass when the LLM acceptance gate

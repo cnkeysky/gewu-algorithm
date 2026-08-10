@@ -76,6 +76,11 @@ schemes are out of scope for the generic relay and need a dedicated adapter or
 extension. No endpoint URL is hardcoded; the relay model carries
 DeepSeek-style compatibility defaults, and a relaxed per-call timeout
 (`GEWU_LLM_TIMEOUT_MS`) is recommended for reasoning-mode upstreams.
+An opt-in generic-key alias (`GEWU_LLM_KEY_FALLBACK=1`) lets `GEWU_LLM_API_KEY`
+back a built-in provider whose own key env var is unset (currently only
+`xiaomi-token-plan-cn` is aliased to `XIAOMI_TOKEN_PLAN_CN_API_KEY`); the
+provider's own key env always wins when set, and providers not in the alias
+table never read `GEWU_LLM_API_KEY`.
 Built-in providers (everything Pi-ai ships) are derived from the Pi package —
 ids, labels, models, and key env conventions — so vendor changes are handled
 by updating Pi.
