@@ -18,8 +18,10 @@ A custom OpenAI-compatible relay (declared in `providers.json`; the default
 entry is `GEWU_LLM_PROVIDER=relay` + `GEWU_LLM_BASE_URL`) is configuration,
 not a new integration target: it reuses the same adapter smoke, generation,
 and review layers. A relay is qualified only by running those layers against
-it with real credentials; a working built-in provider smoke test is not
-evidence the relay works.
+it with real credentials — and with the same transport settings used in
+production (`GEWU_LLM_PROXY`, or `HTTPS_PROXY` / `HTTP_PROXY` when behind a
+gateway); a working built-in provider smoke test is not evidence the relay
+works.
 
 ## Test Layers
 

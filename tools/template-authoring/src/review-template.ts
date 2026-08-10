@@ -14,7 +14,7 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
   required: ["verdict", "findings"],
   properties: {
-    verdict: { enum: ["pass", "needs_revision", "reject", "human_review_required"] },
+    verdict: { type: "string", enum: ["pass", "needs_revision", "reject", "human_review_required"] },
     findings: {
       type: "array",
       items: {
@@ -23,7 +23,7 @@ const OUTPUT_SCHEMA: Record<string, unknown> = {
         required: ["rule_id", "severity", "path", "problem", "evidence", "suggested_change"],
         properties: {
           rule_id: { type: "string" },
-          severity: { enum: ["info", "minor", "major", "critical"] },
+          severity: { type: "string", enum: ["info", "minor", "major", "critical"] },
           path: { type: "string" },
           problem: { type: "string" },
           evidence: { type: "string" },
@@ -39,7 +39,7 @@ const ACCEPTANCE_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
   required: ["verdict", "rationale", "findings"],
   properties: {
-    verdict: { enum: ["pass", "needs_revision"] },
+    verdict: { type: "string", enum: ["pass", "needs_revision"] },
     rationale: { type: "string" },
     findings: {
       type: "array",
@@ -49,7 +49,7 @@ const ACCEPTANCE_SCHEMA: Record<string, unknown> = {
         required: ["rule_id", "severity", "path", "problem", "evidence", "suggested_change"],
         properties: {
           rule_id: { type: "string" },
-          severity: { enum: ["info", "minor", "major", "critical"] },
+          severity: { type: "string", enum: ["info", "minor", "major", "critical"] },
           path: { type: "string" },
           problem: { type: "string" },
           evidence: { type: "string" },

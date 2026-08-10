@@ -46,19 +46,37 @@ opt-in extensions rather than silently flattened into the common task contract.
 
 Relay providers are our OpenAI-compatible extension and are enabled by
 configuration, not code: `providers.json` declares each relay as a key-value
-entry (`id -> { label, keyEnv, baseUrlEnv }`), the default entry being
-`relay` with `GEWU_LLM_PROVIDER=relay`, `GEWU_LLM_BASE_URL`, and
-`GEWU_LLM_API_KEY`. `GEWU_LLM_MODEL` picks the model. The credential comes
-only from the entry's `keyEnv` — provider keys like `DEEPSEEK_API_KEY` are
-never sent to a relay. It covers the common `/v1/chat/completions` gateway
-shape — Bearer auth, one model id per run, and OpenAI-compatible parameters.
-Anthropic-Messages-only gateways and custom auth schemes are out of scope for
-the generic relay and need a dedicated adapter or extension. No endpoint URL
-is hardcoded; the relay model carries DeepSeek-style compatibility defaults,
-and a relaxed per-call timeout (`GEWU_LLM_TIMEOUT_MS`) is recommended for
-reasoning-mode upstreams. Built-in providers (everything Pi-ai ships) are
-derived from the Pi package — ids, labels, models, and key env conventions —
-so vendor changes are handled by updating Pi.
+entry (`id -> { label, keyEnv, baseUrlEnv, wireApi?, opencodeHeaders? }`), the
+default entry being `relay` with `GEWU_LLM_PROVIDER=relay`,
+`GEWU_LLM_BASE_URL`, and `GEWU_LLM_API_KEY`. `GEWU_LLM_MODEL` picks the model.
+The credential comes only from the entry's `keyEnv` — provider keys like
+`DEEPSEEK_API_KEY` are never sent to a relay. Bearer auth, one model id per
+run, and OpenAI-compatible parameters are supported on two wire protocols:
+
+- `wireApi: "responses"` (default for the built-in relay entry, matching
+  Codex-style gateways) talks to the OpenAI Responses API;
+- `wireApi: "chat"` talks to the standard `/v1/chat/completions` shape used by
+  DeepSeek, Moonshot/Kimi, Zhipu/GLM, Xiaomi MiMo, and most sub2api-style
+  gateways.
+
+Tool schemas are sent non-strict (`supportsStrictMode: false`): open gateways
+vary in their JSON-schema enforcement, and our contracts legitimately use
+features outside OpenAI's strict subset (e.g. open `sources` maps). Pi-ai
+still validates every returned tool call and repairs violations with
+feedback. `opencodeHeaders: true` adds the `x-opencode-session` /
+`x-opencode-request` headers that some Codex-style gateways recommend; generic
+relays leave it off. Relay transport routes through an explicit
+`GEWU_LLM_PROXY` when set, otherwise honors `HTTPS_PROXY` / `HTTP_PROXY`
+(`NO_PROXY` applies either way), and connects directly when no proxy is
+configured — implemented with undici's `EnvHttpProxyAgent` because Node's
+built-in fetch ignores proxy env vars. Anthropic-Messages-only gateways and
+custom auth schemes are out of scope for the generic relay and need a
+dedicated adapter or extension. No endpoint URL is hardcoded; the relay model
+carries DeepSeek-style compatibility defaults, and a relaxed per-call timeout
+(`GEWU_LLM_TIMEOUT_MS`) is recommended for reasoning-mode upstreams.
+Built-in providers (everything Pi-ai ships) are derived from the Pi package —
+ids, labels, models, and key env conventions — so vendor changes are handled
+by updating Pi.
 
 ## Generation Pipeline
 

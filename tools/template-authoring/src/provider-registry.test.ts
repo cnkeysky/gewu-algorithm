@@ -23,6 +23,10 @@ test("relay entry maps to our OpenAI-compatible relay support", () => {
   assert.equal(relay!.kind, "relay");
   assert.equal(relay!.keyEnv, "GEWU_LLM_API_KEY");
   assert.equal(relay!.baseUrlEnv, "GEWU_LLM_BASE_URL");
+  // Codex-style gateways default to the Responses wire protocol; opencode
+  // session/request headers are opt-in per entry (providers.json).
+  assert.equal(relay!.wireApi, "responses");
+  assert.equal(relay!.opencodeHeaders, true);
   assert.equal(isRelayProvider("relay"), true);
   assert.equal(relayBaseUrl(relay!, { GEWU_LLM_BASE_URL: "https://api.example.com/v1" }), "https://api.example.com/v1");
   assert.equal(relayBaseUrl(relay!, {}), undefined);
@@ -35,6 +39,7 @@ test("relay entries are the only thing providers.json declares", () => {
   const relays = [...registry.values()].filter((entry) => entry.kind === "relay");
   assert.ok(relays.length >= 1);
   assert.equal(relays.every((entry) => entry.source === "relay" && entry.baseUrlEnv), true);
+  assert.equal(relays.every((entry) => entry.wireApi === "chat" || entry.wireApi === "responses"), true);
   const builtins = [...registry.values()].filter((entry) => entry.kind === "builtin");
   assert.ok(builtins.length > 10, `expected Pi to provide many built-ins, got ${builtins.length}`);
   assert.ok(builtins.length > relays.length);

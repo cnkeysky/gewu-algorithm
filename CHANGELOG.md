@@ -110,6 +110,20 @@ allowed only with explicit migration notes (see
   text; reuse of a failed/needs-revision draft keeps its
   needs_revision/reject reviews so the next generation is informed by the
   previous gate rationale.
+- Relay transport is proxy-aware without new protocol code: requests route
+  through an explicit `GEWU_LLM_PROXY` when set, otherwise honor
+  `HTTPS_PROXY` / `HTTP_PROXY` (with `NO_PROXY` respected), and connect
+  directly when no proxy is configured — implemented with undici's
+  `EnvHttpProxyAgent` paired with undici's own fetch, because Node's built-in
+  fetch ignores proxy env vars and rejects a dispatcher from a different
+  undici copy. The opencode-style `x-opencode-session` /
+  `x-opencode-request` headers are now opt-in per relay (`opencodeHeaders` in
+  `providers.json`) instead of hardcoded, and relay tool schemas are sent
+  non-strict (`supportsStrictMode: false`) since open gateways vary in their
+  JSON-schema enforcement. Generation/review schemas were tightened along the
+  way: `const`/`enum` nodes carry a `type`, every object's `required` covers
+  all of its properties, and the `sources` map's `minProperties` (already
+  enforced by the validator) was dropped.
 - The artifact manifest's `validation` fields are stamped after real checks:
   `schema`/`code` pass when the deterministic Rust validation passes, and
   `content_review`/`transfer_review` pass when the LLM acceptance gate

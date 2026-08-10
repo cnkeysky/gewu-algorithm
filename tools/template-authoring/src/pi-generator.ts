@@ -4,6 +4,7 @@ import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { validateToolCall } from "@earendil-works/pi-ai";
 import { randomUUID } from "node:crypto";
+import { EnvHttpProxyAgent, fetch as undiciFetch } from "undici";
 import { isRelayProvider, providerEntry, providerRegistry, relayBaseUrl } from "./provider-registry.js";
 
 export type PracticeModeSelection =
@@ -80,6 +81,45 @@ export interface PiGeneratorOptions {
   readonly reasoningEffort?: string;
 }
 
+/**
+ * Builds the relay request headers. Always strips OpenAI SDK fingerprint
+ * headers (some gateways block them) and sets a neutral user agent; opencode
+ * session/request headers are opt-in per provider (providers.json
+ * `opencodeHeaders`), because only Codex-style gateways recommend them.
+ */
+export function buildRelayHeaders(
+  base: HeadersInit | undefined,
+  session: string,
+  requestNumber: number,
+  opencodeHeaders: boolean,
+): Headers {
+  const headers = new Headers(base);
+  for (const key of [...headers.keys()]) {
+    if (key.toLowerCase().startsWith("x-stainless-")) headers.delete(key);
+  }
+  headers.set("user-agent", "gewu-template-authoring/relay");
+  if (opencodeHeaders) {
+    headers.set("x-opencode-session", session);
+    headers.set("x-opencode-request", String(requestNumber));
+  }
+  return headers;
+}
+
+/**
+ * Resolves the proxy for relay transport. `GEWU_LLM_PROXY` is the explicit
+ * override (applied to both http and https); when it is absent, undici's
+ * EnvHttpProxyAgent falls back to HTTPS_PROXY / HTTP_PROXY (and honors
+ * NO_PROXY in both cases). Returns undefined when only the environment-based
+ * default should apply.
+ */
+export function resolveProxyOptions(
+  environment: Record<string, string | undefined> = process.env,
+): { httpProxy?: string; httpsProxy?: string } | undefined {
+  const explicit = nonEmpty(environment.GEWU_LLM_PROXY);
+  if (!explicit) return undefined;
+  return { httpProxy: explicit, httpsProxy: explicit };
+}
+
 /** Reads non-secret selection settings. Provider credentials stay in Pi-ai's env/auth layer. */
 export function optionsFromEnvironment(
   environment: Record<string, string | undefined> = process.env,
@@ -128,7 +168,15 @@ export function modelCatalogFromEnvironment(
       contextWindow: 128_000,
       maxTokens: 16_384,
       compat: responses
-        ? { supportsStrictMode: true }
+        ? {
+            // Open, general-purpose relays often serve arbitrary OpenAI-compatible
+            // endpoints (aggregators, self-hosted gateways) that may not implement
+            // OpenAI's strict JSON-schema subset (additionalProperties schemas,
+            // minProperties, const without type, etc.). Keep the tool call
+            // non-strict so the full schema is honored; pi-ai still validates the
+            // returned tool arguments and repairs them with feedback.
+            supportsStrictMode: false,
+          }
         : {
             // DeepSeek-style upstreams (thinking mode) reject store/strict
             // fields and use max_tokens; thinkingFormat tells Pi-ai to speak
@@ -160,25 +208,35 @@ export class PiGenerator {
   readonly #wireApi: "chat" | "responses";
   readonly #relaySession = randomUUID();
   #relayRequest = 0;
+  /**
+   * undici's EnvHttpProxyAgent routes through GEWU_LLM_PROXY when set, else
+   * HTTPS_PROXY / HTTP_PROXY (honoring NO_PROXY), or connects directly when
+   * no proxy is configured. Node's built-in fetch ignores proxy env vars, and
+   * it also rejects a dispatcher from a different undici copy ("invalid
+   * onRequestStart method"), so relay requests always use undici's own fetch
+   * + this agent.
+   */
+  readonly #dispatcher: EnvHttpProxyAgent;
 
   constructor(options: PiGeneratorOptions, environment: Record<string, string | undefined> = process.env) {
     this.#options = options;
     this.#isRelay = isRelayProvider(options.provider);
     this.#wireApi = providerEntry(options.provider)?.wireApi ?? "chat";
     this.#models = modelCatalogFromEnvironment(environment);
+    this.#dispatcher = new EnvHttpProxyAgent(resolveProxyOptions(environment));
   }
 
   /** Some gateways block the OpenAI SDK fingerprint headers; the relay uses a
    * neutral user agent and opencode-style session/request headers instead. */
   readonly #relayFetch: typeof fetch = (input, init) => {
-    const headers = new Headers(init?.headers);
-    for (const key of [...headers.keys()]) {
-      if (key.toLowerCase().startsWith("x-stainless-")) headers.delete(key);
-    }
-    headers.set("user-agent", "gewu-template-authoring/relay");
-    headers.set("x-opencode-session", this.#relaySession);
-    this.#relayRequest += 1;
-    headers.set("x-opencode-request", String(this.#relayRequest));
+    const entry = providerEntry(this.#options.provider);
+    if (entry?.opencodeHeaders) this.#relayRequest += 1;
+    const headers = buildRelayHeaders(
+      init?.headers,
+      this.#relaySession,
+      this.#relayRequest,
+      entry?.opencodeHeaders === true,
+    );
     let body = init?.body;
     // The chat body carries reasoning_effort directly; the Responses API sets
     // it via options (reasoningEffort) and would reject a chat-style field.
@@ -191,7 +249,16 @@ export class PiGenerator {
         // Leave the body untouched if it is not parseable JSON.
       }
     }
-    return fetch(input, { ...init, headers, body });
+    // Use undici's own fetch when routing through the proxy: Node's built-in
+    // fetch rejects a ProxyAgent from a different undici copy with
+    // "invalid onRequestStart method".
+    // undici's own Request/Response/Headers types differ from the DOM lib;
+    // both accept string | URL | Request and HeadersInit at runtime, so the
+    // casts only reconcile the type namespaces.
+    return undiciFetch(
+      input as unknown as Parameters<typeof undiciFetch>[0],
+      { ...init, headers, body, dispatcher: this.#dispatcher } as unknown as Parameters<typeof undiciFetch>[1],
+    ) as Promise<Response>;
   };
 
   async generate(task: DraftTask): Promise<DraftArtifact> {

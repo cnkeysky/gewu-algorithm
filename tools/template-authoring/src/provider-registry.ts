@@ -28,6 +28,9 @@ export interface ProviderEntry {
   /** Wire protocol for relay providers: "chat" (openai-completions, default)
    * or "responses" (OpenAI Responses API, used by Codex-style gateways). */
   wireApi?: WireApi;
+  /** Adds opencode-style x-opencode-session / x-opencode-request headers,
+   * recommended by some Codex-style gateways (providers.json opt-in). */
+  opencodeHeaders?: boolean;
   source: "pi" | "relay";
 }
 
@@ -76,6 +79,7 @@ export function providerRegistry(): Map<string, ProviderEntry> {
       keyEnv: value.keyEnv,
       baseUrlEnv: value.baseUrlEnv,
       wireApi: value.wireApi === "responses" ? "responses" : "chat",
+      opencodeHeaders: value.opencodeHeaders === true,
       source: "relay",
     });
   }

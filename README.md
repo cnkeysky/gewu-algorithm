@@ -225,10 +225,14 @@ Xiaomi, and everything Pi-ai ships — ids, labels, models, and key env
 conventions are Pi's, so vendor changes are handled by updating Pi), and
 **relay providers are our OpenAI-compatible extension** declared in
 `tools/template-authoring/providers.json` (a key-value mapping
-`id -> { label, keyEnv, baseUrlEnv }`; add a named relay there, set its env
-vars, and point `GEWU_LLM_PROVIDER` at it — no code changes). Switch by
-setting `GEWU_LLM_PROVIDER` / `GEWU_LLM_MODEL` and the matching API key, then
-restart the API (or re-run `npm run dev:prepare`).
+`id -> { label, keyEnv, baseUrlEnv, wireApi, opencodeHeaders }`; add a named
+relay there, set its env vars, and point `GEWU_LLM_PROVIDER` at it — no code
+changes). The default relay entry speaks the OpenAI Responses API
+(`wireApi: "responses"`, what Codex-style gateways expect); chat-only gateways
+use `wireApi: "chat"`. Relay transport honors `GEWU_LLM_PROXY`, falling back
+to `HTTPS_PROXY` / `HTTP_PROXY`, or connects directly when neither is set.
+Switch by setting `GEWU_LLM_PROVIDER` / `GEWU_LLM_MODEL` and the matching API
+key, then restart the API (or re-run `npm run dev:prepare`).
 
 Duplicate protection is on by default: a problem whose accepted unit already
 covers the requested modes is skipped — in an interactive terminal you are
