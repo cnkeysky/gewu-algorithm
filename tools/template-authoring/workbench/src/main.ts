@@ -481,7 +481,15 @@ async function practiceRpc<T>(method: string, params: unknown = {}): Promise<T> 
     throw error;
   }
 }
-function practiceMessage(text: string, error = false): void { const target = document.querySelector<HTMLParagraphElement>("#practice-message")!; target.textContent = text; target.className = `form-message ${error ? "error" : "success"}`; }
+let practiceMessageSticky = false;
+/** Error and explicit action confirmations are sticky: a background refresh's
+ * workspace summary must not clobber them while the user is mid-action. */
+function practiceMessage(text: string, error = false, sticky = false): void {
+  practiceMessageSticky = error || sticky;
+  const target = document.querySelector<HTMLParagraphElement>("#practice-message")!;
+  target.textContent = text;
+  target.className = `form-message ${error ? "error" : "success"}`;
+}
 function practiceWorkspaceSummary(): string {
   const parts: string[] = [];
   if (checkpointItems.length) parts.push(`${checkpointItems.length} interrupted`);
@@ -700,6 +708,9 @@ async function refreshPracticeData(): Promise<void> {
 
     // Render each list as its own RPC resolves, so a slow call no longer
     // blocks the faster ones.
+    const refreshSummaryMessage = () => {
+      if (document.querySelector<HTMLElement>("#practice-session")!.hidden && !practiceMessageSticky) practiceMessage(practiceWorkspaceSummary());
+    };
     void checkpointsPromise.then(({ checkpoints }) => {
       const uniqueCheckpoints = new Map<string, Checkpoint>();
       for (const checkpoint of checkpoints) {
@@ -708,6 +719,7 @@ async function refreshPracticeData(): Promise<void> {
       }
       checkpointItems = [...uniqueCheckpoints.values()];
       renderPracticeLists("checkpoints");
+      refreshSummaryMessage();
       if (shouldRecoverSession && activePracticeSession && activePracticeSnapshot?.status === "active" && !reconnectingPractice) {
         const matching = checkpointItems.find((item) => item.unit_id === activePracticeSnapshot?.unit_id && item.revision === activePracticeSnapshot.revision && item.mode === activePracticeSession?.mode && (!activePracticeSnapshot.practice_id || item.practice_id === activePracticeSnapshot.practice_id) && (!activePracticeSnapshot.implementation || item.implementation === activePracticeSnapshot.implementation));
         if (matching && matching.id !== activePracticeSession.session_id) {
@@ -718,8 +730,8 @@ async function refreshPracticeData(): Promise<void> {
         }
       }
     }).catch(() => {});
-    void recommendationsPromise.then((items) => { recommendationItems = items; renderPracticeLists("recommendations"); }).catch(() => {});
-    void attemptsPromise.then(({ attempts }) => { attemptItems = attempts; renderPracticeLists("attempts"); }).catch(() => {});
+    void recommendationsPromise.then((items) => { recommendationItems = items; renderPracticeLists("recommendations"); refreshSummaryMessage(); }).catch(() => {});
+    void attemptsPromise.then(({ attempts }) => { attemptItems = attempts; renderPracticeLists("attempts"); refreshSummaryMessage(); }).catch(() => {});
   } catch (error) {
     setPracticeConnection(false, "Rust Core is unavailable. Retrying automatically.");
     if (practiceReconnectTimer === undefined) practiceReconnectTimer = window.setTimeout(() => { practiceReconnectTimer = undefined; void refreshPracticeData(); }, 1500);
@@ -1027,7 +1039,7 @@ function practicePublishedUnit(draft: DraftRecord): void {
   // workspace summary (rendered mid-refresh) cannot clobber it.
   void refreshPracticeData().then(() => {
     const unit = practiceUnits.find((item) => item.id === draft.unitId);
-    if (unit) practiceMessage(`Loaded "${unit.title}" — choose a mode to start.`);
+    if (unit) practiceMessage(`Loaded "${unit.title}" — choose a mode to start.`, false, true);
   });
 }
 /** Real published units: accepted drafts bound to a unit id, deduplicated by
