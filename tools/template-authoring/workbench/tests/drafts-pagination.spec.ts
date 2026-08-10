@@ -59,6 +59,28 @@ test("pagination keeps the fixed height across pages", async ({ page }) => {
   expect(secondHeight).toBe(firstHeight);
 });
 
+test("pagination prev/next buttons never move as the page window slides", async ({ page }) => {
+  // 60 drafts -> 10 pages, so the middle slot window changes size as the
+  // page advances (1,2,3... -> ...8,9,10). The prev/next buttons must stay
+  // anchored so the mouse does not have to chase them.
+  await seedDrafts(page, 60);
+  await openDrafts(page);
+  const prev = page.locator(".draft-list [data-page-prev='drafts']");
+  const next = page.locator(".draft-list [data-page-next='drafts']");
+  const positions: Array<{ prevX: number; nextX: number }> = [];
+  const measure = async () => {
+    positions.push({ prevX: (await prev.boundingBox())!.x, nextX: (await next.boundingBox())!.x });
+  };
+  await measure();
+  for (let step = 0; step < 8; step += 1) {
+    await next.click();
+    await measure();
+  }
+  expect(positions.length).toBe(9);
+  expect(new Set(positions.map((p) => p.prevX)).size).toBe(1);
+  expect(new Set(positions.map((p) => p.nextX)).size).toBe(1);
+});
+
 test("empty state fills the same fixed height", async ({ page }) => {
   await seedDrafts(page, 0);
   await openDrafts(page);
