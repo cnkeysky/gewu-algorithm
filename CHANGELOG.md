@@ -187,6 +187,13 @@ allowed only with explicit migration notes (see
   drafts + review feedback) is exportable with `npm run drafts:export` and
   restorable with `npm run drafts:import` — all `created_at` timestamps are
   preserved.
+- Repository layout is centralized: `src/paths.ts` (compiled modules) and
+  `scripts/gewu-paths.mjs` (Node scripts) are the single source of truth for
+  repo/tools/storage/db/ledger paths, replacing scattered `../../..` literals.
+  Unit tests stay co-located in `src/` (a mainstream convention), but the
+  shipped build now excludes `*.test.ts` via `tsconfig.build.json` — `npm run
+  build` emits a clean runtime `dist/` (no test files) while `npm test`
+  compiles the full source.
 - Unified GEWU service discovery: `dev:stop` now sweeps every port recorded in
   the shared `.gewu-dev/pids` directory (all `*.port` files and `api-<port>.pid`
   names), not just the three dev-stack ports, so it stops a batch authoring
