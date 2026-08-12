@@ -10,7 +10,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use gewu_domain::{AlgorithmUnit, CodeRecallAssistance, CodeRecallLayout, ContentStatus};
+use gewu_domain::{AlgorithmUnit, CodeRecallAssistance, CodeRecallLayout, ContentStatus, ReasoningAspect};
 use gewu_practice::{
     CharacterRange, CodeRecallConfig, CodeRecallEvent, CodeRecallGuidance, CodeRecallSession,
     ElapsedTime, FlowRecallConfig, FlowRecallEvent, FlowRecallSession, ReasoningRecallConfig,
@@ -1509,19 +1509,18 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         });
     }
     for definition in &unit.practice.code_recall {
-        let short = unit
-            .id
-            .as_str()
-            .rsplit('.')
-            .next()
-            .unwrap_or(unit.id.as_str());
-        let variant_name = definition
-            .id
-            .strip_prefix(&format!("{short}-"))
-            .unwrap_or(definition.id.as_str());
+        // Code-recall variants are distinguished by their exercise layout and
+        // assistance level; the model-generated ids ("recall-1", "recall-1-3")
+        // carry no meaning, so the label reflects what the learner actually
+        // does instead of the id.
+        let layout_label = variant_title(code_layout_label(definition.layout));
+        let label = match definition.assistance {
+            CodeRecallAssistance::None => layout_label,
+            other => format!("{} · {}", layout_label, variant_title(assistance_label(other))),
+        };
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
-            label: variant_title(variant_name),
+            label,
             language: unit
                 .implementations
                 .first()
@@ -1537,11 +1536,18 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
             .implementation
             .as_deref()
             .and_then(|key| unit.implementations.iter().find(|item| item.key == key));
+        let aspect_label = match definition.aspect {
+            ReasoningAspect::Mechanism => "Mechanism",
+            ReasoningAspect::Invariant => "Invariant",
+            ReasoningAspect::TradeOff => "Trade off",
+            ReasoningAspect::Boundary => "Boundary",
+            ReasoningAspect::FailureCondition => "Failure condition",
+        };
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
             label: match implementation {
-                Some(item) => format!("{} · {}", variant_title(&definition.id), item.key),
-                None => variant_title(&definition.id),
+                Some(item) => format!("{aspect_label} · {}", item.key),
+                None => aspect_label.to_owned(),
             },
             language: implementation
                 .map(|item| item.language.clone())
@@ -1561,11 +1567,12 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
             .implementation
             .as_deref()
             .and_then(|key| unit.implementations.iter().find(|item| item.key == key));
+        let pattern_label = variant_title(&definition.pattern);
         options.push(PracticeOptionDto {
             id: definition.id.clone(),
             label: match implementation {
-                Some(item) => format!("{} · {}", variant_title(&definition.id), item.key),
-                None => variant_title(&definition.id),
+                Some(item) => format!("{pattern_label} · {}", item.key),
+                None => pattern_label,
             },
             language: implementation
                 .map(|item| item.language.clone())
@@ -1580,10 +1587,21 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
             selector: PracticeSelectorDto::PracticeId,
         });
     }
+    // Distinct exercise definitions can share a layout + assistance (two cloze
+    // items, for example). Disambiguate identical labels instead of confusing
+    // the learner with duplicate options.
+    let mut seen_labels: HashMap<String, u32> = HashMap::new();
+    for option in &mut options {
+        let count = seen_labels.entry(option.label.clone()).or_insert(0);
+        *count += 1;
+        if *count > 1 {
+            option.label = format!("{} · {}", option.label, count);
+        }
+    }
     options
 }
 fn variant_title(id: &str) -> String {
-    id.split('-')
+    id.split(['-', '_'])
         .filter(|part| !part.is_empty())
         .map(|part| {
             let mut chars = part.chars();

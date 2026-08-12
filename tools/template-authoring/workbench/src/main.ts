@@ -705,7 +705,6 @@ async function refreshPracticeData(): Promise<void> {
     renderPracticeLanguageFilter();
     renderPracticeUnits();
     renderPracticeOptions();
-    syncPracticeFormToActiveSession();
     const shouldRecoverSession = practiceWasDisconnected;
     setPracticeConnection(true);
     practiceWasDisconnected = false;
@@ -1338,7 +1337,13 @@ document.addEventListener("click", (event) => {
   if (navigation) {
     const view = navigation.dataset.view ?? navigation.dataset.go ?? "new";
     showView(view);
-    if (view === "practice") void refreshPracticeData();
+    if (view === "practice") {
+      void refreshPracticeData();
+      // Sync the workspace form to the active session once when entering the
+      // view (not on every background refresh, which fought the user's own
+      // selection changes).
+      void ensurePracticeUnitsLoaded().then(() => syncPracticeFormToActiveSession());
+    }
   }
   const viewArtifact = target.closest<HTMLButtonElement>("[data-view-artifact-id]");
   if (viewArtifact) {
@@ -1877,6 +1882,10 @@ document.querySelector<HTMLButtonElement>("#session-stop")!.addEventListener("cl
 });
 document.querySelector<HTMLButtonElement>("#practice-back")!.addEventListener("click", () => {
   setPracticeFocus(false);
+  // The form initially mirrors the active session when returning to the
+  // workspace, then the user is free to change the selection for the next
+  // session — background refreshes must not re-pin it.
+  void ensurePracticeUnitsLoaded().then(() => syncPracticeFormToActiveSession());
   // Refresh first so the workspace summary reflects the real list state
   // (for example a checkpoint saved during the active session).
   void refreshPracticeData();
