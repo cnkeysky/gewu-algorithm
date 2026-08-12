@@ -10,7 +10,9 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use gewu_domain::{AlgorithmUnit, CodeRecallAssistance, CodeRecallLayout, ContentStatus, ReasoningAspect};
+use gewu_domain::{
+    AlgorithmUnit, CodeRecallAssistance, CodeRecallLayout, ContentStatus, ReasoningAspect,
+};
 use gewu_practice::{
     CharacterRange, CodeRecallConfig, CodeRecallEvent, CodeRecallGuidance, CodeRecallSession,
     ElapsedTime, FlowRecallConfig, FlowRecallEvent, FlowRecallSession, ReasoningRecallConfig,
@@ -1516,7 +1518,11 @@ fn practice_options_for(unit: &AlgorithmUnit) -> Vec<PracticeOptionDto> {
         let layout_label = variant_title(code_layout_label(definition.layout));
         let label = match definition.assistance {
             CodeRecallAssistance::None => layout_label,
-            other => format!("{} · {}", layout_label, variant_title(assistance_label(other))),
+            other => format!(
+                "{} · {}",
+                layout_label,
+                variant_title(assistance_label(other))
+            ),
         };
         options.push(PracticeOptionDto {
             id: definition.id.clone(),

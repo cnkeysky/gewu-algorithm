@@ -190,7 +190,7 @@ test("comment-to-code exposes reviewed comments and keeps the full-code editor",
   // implementation key.
   await page.locator("#practice-back").click();
   await page.locator("#refresh-checkpoints").click();
-  await expect(page.locator("#practice-attempts")).toContainText("code recall · Comments");
+  await expect(page.locator("#practice-attempts")).toContainText("code recall · Comment To Code · Comments");
   await expect(page.locator("#practice-attempts")).not.toContainText("implementation · python-teaching");
 });
 
@@ -292,7 +292,7 @@ test("practice variant selection survives refreshes and starts", async ({ page }
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
   await page.waitForTimeout(700);
   await expect(variant).toHaveValue("bfs-comment-guided-frontier");
-  await expect(page.locator("#session-context")).toContainText("Comment Guided Frontier");
+  await expect(page.locator("#session-context")).toContainText("Comment Guided · Comments");
 });
 
 test("focused workspace has a top toolbar with equal-height split and draggable divider", async ({ page }) => {
@@ -381,7 +381,7 @@ test("cloze recall renders fixed context and submits the active slot", async ({ 
   await page.locator("#practice-mode").selectOption("code_recall");
   await page.locator("#practice-id").selectOption("bfs-cloze-frontier");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
-  await expect(page.locator("#session-context")).toContainText("Cloze Frontier");
+  await expect(page.locator("#session-context")).toContainText("Cloze · Cloze");
   await expect(page.locator("#session-cloze-template")).toBeVisible();
   await expect(page.locator("#session-answer")).toBeVisible();
   await page.locator("#session-answer").fill("queue.popleft()");
@@ -398,7 +398,7 @@ test("comment-guided recall presents a reviewed cue and scores one code slot", a
   await page.locator("#practice-mode").selectOption("code_recall");
   await page.locator("#practice-id").selectOption("bfs-comment-guided-frontier");
   await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
-  await expect(page.locator("#session-context")).toContainText("Comment Guided Frontier");
+  await expect(page.locator("#session-context")).toContainText("Comment Guided · Comments");
   await expect(page.locator("#session-scaffold li")).toHaveText("Remove the next FIFO frontier node.");
   await expect(page.locator("#session-cloze-template")).toBeVisible();
   await expect(page.locator("#session-editor-shell")).toBeHidden();
@@ -445,7 +445,10 @@ test("all recall modes keep restart and stop state transitions bound", async ({ 
     if (variant) await page.locator("#practice-id").selectOption(variant);
     await page.locator("#practice-start").getByRole("button", { name: /Start practice/ }).click();
     await expect(page.locator("#session-context")).toContainText(mode.replaceAll("_", " "));
-    if (variant) await expect(page.locator("#session-context")).toContainText(variant.replaceAll("-", " "), { ignoreCase: true });
+    if (variant) {
+      const selectedLabel = (await page.locator("#practice-id option:checked").textContent()) ?? "";
+      await expect(page.locator("#session-context")).toContainText(selectedLabel.trim(), { ignoreCase: true });
+    }
     await page.locator("#session-reveal").click();
     await expect(page.locator("#session-prompt")).not.toHaveText("Prompt hidden until Reveal");
     await page.locator("#session-restart").click();
